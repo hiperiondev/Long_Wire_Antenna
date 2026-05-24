@@ -97,20 +97,3 @@ A handy quick-reference guide containing:
 * Core material recommendations (e.g., FT-240-43).
 * Winding ratios (8 primary / 24 secondary turns).
 * The underlying math and formulas driving the Avoidance Score.
-
----
-
-## 🧮 Formulas Used
-
-**Wavelength Calculation:**
-
-
-$$\frac{\lambda}{2} = \text{VF} \times \frac{150}{f_{\text{center (MHz)}}}$$
-
-**Avoidance Score Logic:**
-For the number of half-waves $R = \frac{L}{\lambda/2}$:
-
-1. Find fractional part: $\text{frac} = R \pmod 1$
-2. Distance from $\lambda/2$: $\text{dist}_{\text{half}} = \min(\text{frac}, 1 - \text{frac})$
-3. Distance from $\lambda/4$: $\text{dist}_{\text{qtr}} = |\text{frac} - 0.5|$
-4. Band Score = $\min(\text{dist}_{\text{half}}, \text{dist}_{\text{qtr}})$
