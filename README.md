@@ -540,19 +540,19 @@ The CMC can be built from:
 
 ## 7. Supported HF Bands
 
-| Band Name | Range (MHz) | Status | Default |
-|---|---|---|---|
-| 160 m | 1.800 – 2.000 | Optional | NO |
-| 80 m | 3.500 – 3.800 | Optional | NO |
-| 60 m | 5.3515 – 5.3665 | Optional | NO |
-| **40 m** | **7.000 – 7.300** | **Core band** | YES |
-| **30 m** | **10.100 – 10.150** | **Core band** | YES |
-| **20 m** | **14.000 – 14.350** | **Core band** | YES |
-| **17 m** | **18.068 – 18.168** | **Core band** | YES |
-| **15 m** | **21.000 – 21.450** | **Core band** | YES |
-| **12 m** | **24.890 – 24.990** | **Core band** | YES |
-| **10 m** | **28.000 – 29.700** | **Core band** | YES |
-| 6 m | 50.000 – 54.000 | Optional | NO |
+| Band Name | Range (MHz) | 
+|---|---|
+| **160 m** | **1.800 – 2.000** |
+| **80 m** | **3.500 – 3.800** |
+| **60 m** | **5.3515 – 5.3665** | 
+| **40 m** | **7.000 – 7.300** |
+| **30 m** | **10.100 – 10.150** |
+| **20 m** | **14.000 – 14.350** | 
+| **17 m** | **18.068 – 18.168** | 
+| **15 m** | **21.000 – 21.450** | 
+| **12 m** | **24.890 – 24.990** |
+| **10 m** | **28.000 – 29.700** | 
+| **6 m** | **50.000 – 54.000** |
 
 > **Note:** 60 m is included with its current ITU channelized allocation (5 channels at 5.3515–5.3665 MHz). Check your national regulator for specific channelized access rules.
 
