@@ -90,7 +90,7 @@ In practice, because a long wire must cover many bands simultaneously, an exact 
 Other common UnUn ratios include:
 - **4:1** — useful when the wire presents impedances in the 100–250 Ω range
 - **16:1** — for high-impedance wires
-- **49:1** (7:1 turns ratio, "1:49") — widely used for End-Fed Half-Wave (EFHW) antennas
+- **49:1** (7:1 turns ratio) — widely used for End-Fed Half-Wave (EFHW) antennas, where feedpoint impedance is very high (~2500–5000 Ω). Note: some commercial products label this as "1:49" using a coax-to-antenna direction convention, which is the inverse of the impedance-ratio convention used throughout this document.
 
 This calculator sweeps **all ratios from 4:1 to 69:1** to find the optimal choice for each wire length and band combination.
 
@@ -157,7 +157,7 @@ A counterpoise is a wire (or set of wires) connected to the ground terminal of t
 2. A "second element" that, combined with the radiating wire, forms the complete antenna system
 3. A low-inductance path to prevent RF from flowing on the outside of the coaxial braid back into the shack
 
-**Recommended counterpoise length:** λ/4 of the lowest active band. This is the length at which the counterpoise itself presents a high impedance, minimizing the current flowing through it (and therefore minimizing losses). Multiples of λ/4 at higher frequencies are also effective.
+**Recommended counterpoise length:** λ/4 of the lowest active band. A λ/4 conductor is at current-maximum resonance and presents a low impedance at its base, providing an efficient RF return path to the antenna feedpoint. This minimises ground-loss resistance and ensures the return current is carried by the counterpoise rather than by lossy soil or the coaxial shield. Multiples of λ/4 at higher frequencies are also effective.
 
 **Multiple radials:** Using several counterpoise wires of different lengths (e.g., λ/4 at 40 m, λ/4 at 20 m) improves system efficiency across all bands. The counterpoise should be kept as straight as possible and elevated slightly above ground if practical. Coiling or routing it back toward the shack degrades performance.
 
@@ -377,20 +377,22 @@ Z_wire (Ω) ≈ 50 × 80^cos²(π × L / λ½)
 ```
 
 This is a **heuristic empirical model**, not a rigorous analytical solution. It produces:
-- Z ≈ 50 Ω at λ/4 (cos²(π×0.25) = cos²(π/4) ≈ 0.5; 80^0.5 ≈ 8.9; 50×8.9/... — adjusted)
-- Z → high values as L/λ½ → integer (λ/2 resonance)
-- Z ≈ 450 Ω near 3λ/8 (optimal for 9:1 UnUn)
+- Z ≈ 50 Ω at λ/4: when L = λ/4, the ratio L/λ½ = 0.5, so cos²(π × 0.5) = cos²(π/2) = 0; therefore 80^0 = 1 and Z = 50 × 1 = 50 Ω ✓
+- Z → high values as L/λ½ → any integer n (λ/2 resonances): cos²(π × n) = cos²(nπ) = 1; Z = 50 × 80 = 4000 Ω ✓
+- Z ≈ 450 Ω near 3λ/8: L/λ½ = 0.75, cos²(π × 0.75) = cos²(3π/4) = 0.5; Z = 50 × 80^0.5 ≈ 50 × 8.94 ≈ 447 Ω ✓
 
 **Note:** Real feedpoint impedance varies significantly with installation geometry, height, ground conductivity, and other environmental factors. NEC-based simulation (e.g., EZNEC, 4NEC2) should be used for precision engineering. This model is suitable for **preliminary design** and **comparative ranking** of wire lengths.
 
 ### 5.4 VSWR Calculation
 
-After impedance transformation by the UnUn:
+After impedance transformation by the UnUn (valid for the resistive-only heuristic model; reactive components are not included):
 
 ```
 Z_coax = Z_wire / ratio_UnUn
 VSWR = MAX(Z_coax / 50,  50 / Z_coax)
 ```
+
+> **Note:** This formula assumes Z_wire is purely resistive. In practice the feedpoint impedance has a reactive component (capacitive or inductive) at non-resonant lengths. The actual VSWR may therefore be higher than calculated, particularly at frequencies where the wire has significant reactance. A VNA or antenna analyzer is needed to measure the true complex impedance.
 
 For a 9:1 UnUn with Z_wire = 450 Ω:
 ```
@@ -423,24 +425,26 @@ Adding 160 m or 80 m to the active bands changes the optimal lengths, since λ/2
 
 A 9:1 UnUn uses a **3:1 turns ratio** (since impedance ratio = turns ratio²: 3² = 9). It is typically wound as a trifilar (3-wire) autotransformer on a ferrite toroid core.
 
-**Winding topology:**
+**Winding topology (autotransformer):**
+
+The 9:1 UnUn is wound as a **trifilar autotransformer** — a single continuous winding with a tap, not an isolated primary/secondary transformer. All three trifilar wires are connected in series on the antenna side (full winding = secondary), while the coax uses only one-third of the full winding (the inner tap = primary). This shared-winding topology is what makes it an autotransformer.
 
 ```
-Antenna ──────────────── Entire winding (N turns total)
+Antenna ──────────────── Entire winding (3N turns total)
                           │
-                          ├── tap at N/3 turns (coax center conductor)
+                          ├── tap at N turns from ground end (coax center conductor)
                           │
-Counterpoise ──── Coax shield ──── One end of winding
+Counterpoise ──── Coax shield ──── Ground end of winding
 ```
 
 **Construction procedure (example for FT240-43 core):**
 
-1. Take three equal lengths of enameled copper wire (AWG 20–16 depending on power level). Twist them loosely together.
-2. Wind **9 trifilar turns** through the toroid core (totaling 27 individual conductor passes through the core).
-3. One set of 9 turns = the primary (coax side), connected to the coaxial feedline.
-4. Three sets of 9 turns in series = the secondary (antenna side), totaling 27 turns.
-5. Connect the far end of the primary to the junction of turns 1 and 2 of the secondary.
-6. Install in a weatherproof enclosure (PVC or ABS box), with SO-239 (UHF female) connector for coax and screw terminals for antenna wire and counterpoise.
+1. Cut three equal lengths of enameled copper wire (AWG 20–16 depending on power level). Twist them loosely together at ~3–5 twists per 10 cm to ensure tight magnetic coupling.
+2. Wind **9 trifilar turns** through the toroid core (each of the three wires passes through the core 9 times = 27 individual passes total, but only 9 magnetic turns).
+3. Connect all three wires in series to form the full 27-conductor-turn winding — this is the **antenna side** (high-impedance side, 9 × 50 = 450 Ω).
+4. The **coax center conductor** taps in at the junction between the first (lowest) 9-conductor-pass section and the remaining two sections. This one-third tap is the 9-turn tap from ground, giving a 3:1 voltage ratio (9:1 impedance ratio).
+5. The **coax shield** and **counterpoise** both connect to the grounded (cold) end of the winding.
+6. Install in a weatherproof enclosure (PVC or ABS box — do **not** use a metallic enclosure as it will short the magnetic field), with SO-239 (UHF female) connector for coax and screw terminals for antenna wire and counterpoise.
 
 **Alternative construction:** Some builders use **8 primary turns and 24 secondary turns** (ratio 3:1) with separate (bifilar or trifilar) windings — as described in many commercial kit instructions.
 
