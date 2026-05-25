@@ -1,4 +1,3 @@
-
 # 📡 Long Wire Antenna + UnUn — Multi-Band Optimizer
 
 > An Excel-based engineering calculator for designing non-resonant long-wire (end-fed random wire) HF antennas with impedance-matching UnUn transformers. Supports multi-band optimization from 160 m through 6 m, with resonance avoidance scoring, VSWR estimation, UnUn ratio sweep, and counterpoise recommendations.
@@ -21,6 +20,8 @@
    - [Sheet 2 — VSWR Calculator](#32-sheet-2--vswr-calculator)
    - [Sheet 3 — UnUn Ratio Optimizer](#33-sheet-3--unun-ratio-optimizer)
    - [Sheet 4 — Length Sweep](#34-sheet-4--length-sweep)
+   - [Sheet 5 — UnUn Calculator](#35-sheet-5--unun-calculator)
+   - [Sheet 6 — Toroid Database](#36-sheet-6--toroid-database)
 4. [How to Use the Calculator](#4-how-to-use-the-calculator)
    - [Step-by-Step Quick Start](#41-step-by-step-quick-start)
    - [Interpreting the Avoidance Score](#42-interpreting-the-avoidance-score)
@@ -31,6 +32,8 @@
    - [Resonance Avoidance Score Formula](#52-resonance-avoidance-score-formula)
    - [Feedpoint Impedance Estimation Model](#53-feedpoint-impedance-estimation-model)
    - [VSWR Calculation](#54-vswr-calculation)
+   - [Counterpoise Length Formula](#55-counterpoise-length-formula)
+   - [UnUn Turns Ratio and Impedance Ratio](#56-unun-turns-ratio-and-impedance-ratio)
 6. [Practical Construction Guidance](#6-practical-construction-guidance)
    - [Wire Length Recommendations](#61-wire-length-recommendations)
    - [Building a 9:1 UnUn Transformer](#62-building-a-91-unun-transformer)
@@ -80,11 +83,8 @@ A long-wire end-fed antenna is **inherently unbalanced**: one side of the feedpo
 
 The most common ratio used with long-wire antennas is **9:1**, meaning the impedance at the antenna side is 9× that at the coaxial side. So:
 
-
 ```
-
 Z_antenna ≈ 9 × Z_feedline = 9 × 50 Ω = 450 Ω
-
 ```
 
 This means the antenna wire should ideally present approximately **450 Ω** at the feedpoint for a direct 9:1 match, which happens at wire lengths that are roughly **3/8 λ or 5/8 λ** — the midpoints between quarter-wave (low-impedance) and half-wave (high-impedance) resonances.
@@ -104,28 +104,33 @@ The feedpoint impedance of an end-fed wire is extremely sensitive to the ratio o
 
 | L/λ ratio | Approximate feedpoint impedance | Character |
 |---|---|---|
-| λ/4 (0.25λ) | ~20–50 Ω | Resistive minimum, low Z — near short-circuit equivalent |
+| λ/4 (0.25λ) | ~20–50 Ω | Resistive minimum, low Z — current maximum, voltage minimum. After 9:1 UnUn: ~2.2–5.5 Ω, extremely mismatched to 50 Ω coax |
 | 3/8 λ (0.375λ) | ~200–600 Ω | Moderate, best for 9:1 UnUn — **ideal match region** |
-| λ/2 (0.50λ) | ~2 000–10 000 Ω | Resistive maximum, very high Z — voltage node, near open-circuit |
+| λ/2 (0.50λ) | ~2 000–10 000 Ω | Resistive maximum, very high Z — voltage node, current minimum. After 9:1 UnUn: ~220–1100 Ω, still highly mismatched |
 | 5/8 λ (0.625λ) | ~200–800 Ω | Moderate, again suitable for 9:1 UnUn |
 | λ (1.0λ) | ~100–300 Ω | Second current maximum |
 
 The impedance model used in this workbook is a simplified cosine-based approximation:
 
-
+```
+Z_wire ≈ 50 × 80^cos²(π × frac(L / λ½))  [Ω]
 ```
 
-Z_wire ≈ 50 × 80^cos²(π × L / λ½)  [Ω]
+Where `frac(x)` is the fractional part of x (i.e., `x - floor(x)`). This captures the broad shape of the impedance variation (low near λ/4, high near λ/2, moderate between) without requiring a full NEC-based numerical electromagnetic simulation. The model repeats every half-wavelength because `frac(L/λ½)` resets at each integer multiple of λ/2.
 
-```
+**Model verification points:**
+- At λ/4: L/λ½ = 0.5, frac(0.5) = 0.5, cos²(π × 0.5) = cos²(π/2) = 0, therefore 80^0 = 1 and Z = 50 × 1 = 50 Ω ✓
+- At λ/2: L/λ½ = 1.0, frac(1.0) = 0, cos²(π × 0) = cos²(0) = 1, therefore 80^1 = 80 and Z = 50 × 80 = 4000 Ω ✓
+- At 3λ/8: L/λ½ = 0.75, frac(0.75) = 0.75, cos²(π × 0.75) = cos²(3π/4) = 0.5, therefore 80^0.5 ≈ 8.94 and Z ≈ 50 × 8.94 ≈ 447 Ω ✓
 
-This captures the broad shape of the impedance variation (low near λ/4, high near λ/2, moderate between) without requiring a full NEC-based numerical electromagnetic simulation.
+**Alternative constant:** Some references (e.g., AA5TB) suggest using a constant of 94 instead of 80, which gives Z_max ≈ 4700 Ω, closer to measured values for certain wire configurations. The spreadsheet allows exploration of both values.
 
 Real-world feedpoint impedance is also affected by:
 - Height above ground and ground conductivity
 - Wire inclination (horizontal, sloping, inverted-L)
 - Proximity to structures
 - Coupling to the counterpoise
+- Wire diameter (thicker wire = lower impedance)
 
 ### 1.5 Resonance Avoidance — The Core Design Problem
 
@@ -137,7 +142,7 @@ When a wire is at, or very near, an exact **half-wavelength** on any of the desi
 Conversely, when a wire is at an exact **quarter-wavelength**, feedpoint impedance drops to near zero, and:
 - Very high currents flow through the UnUn
 - Efficiency drops because ground/counterpoise resistance becomes dominant
-- The 9:1 UnUn transforms to ~5 Ω, which is extremely mismatched to 50 Ω coax
+- The 9:1 UnUn transforms to ~5.5 Ω, which is extremely mismatched to 50 Ω coax
 
 Therefore, the **design goal** for a non-resonant long-wire is to choose a length that stays **as far from both λ/2 and λ/4** as possible, across all desired operating bands simultaneously. This is exactly what the **Resonance Avoidance Score** in this calculator quantifies.
 
@@ -147,16 +152,17 @@ Traditional recommended non-resonant lengths (in feet) from ham radio literature
 
 The **velocity factor (VF)** of a wire expresses the ratio at which electromagnetic waves travel along that conductor relative to the speed of light in free space. For bare wire in free air, VF ≈ 0.95–1.00. For insulated wire, the dielectric surrounding the conductor slows propagation slightly, giving VF ≈ 0.93–0.98, with the exact value depending on the insulation thickness, material permittivity, and wire gauge.
 
-This calculator allows you to set the velocity factor (default: **0.975**, appropriate for outdoor bare or lightly insulated copper wire). The formula for half-wavelength is:
-
+This calculator allows you to set the velocity factor (default: **0.95**, appropriate for insulated wire with end-effect; matches the classic 468/f formula). The formula for half-wavelength is:
 
 ```
-
 λ/2 (m) = VF × 150 / f_center (MHz)
-
 ```
 
-An incorrect VF would shift all resonance calculations, potentially causing the "optimized" wire length to fall near a resonance despite the score appearing safe. For most outdoor antenna wire (solid or stranded copper, light PVC jacket), VF = 0.97–0.98 is an excellent starting assumption.
+**Relationship to the classic 468/f formula:** The well-known amateur radio formula for dipole length in feet is `L(ft) = 468 / f(MHz)`. Converting to meters: `L(m) = 468 / 3.281 / f(MHz) ≈ 142.6 / f(MHz)`. With VF = 0.95: `L(m) = 0.95 × 150 / f(MHz) = 142.5 / f(MHz)`, which closely matches the 468/f formula. This confirms VF = 0.95 as the appropriate default for typical insulated antenna wire.
+
+For bare wire in free air, use VF = 0.975–0.98. For thick PVC-jacketed wire, consider 0.92–0.96.
+
+An incorrect VF would shift all resonance calculations, potentially causing the "optimized" wire length to fall near a resonance despite the score appearing safe.
 
 ### 1.7 The Counterpoise (Ground Reference)
 
@@ -171,7 +177,7 @@ A counterpoise is a wire (or set of wires) connected to the ground terminal of t
 
 **Multiple radials:** Using several counterpoise wires of different lengths (e.g., λ/4 at 40 m, λ/4 at 20 m) improves system efficiency across all bands. The counterpoise should be kept as straight as possible and elevated slightly above ground if practical. Coiling or routing it back toward the shack degrades performance.
 
-> **Important safety note:** The counterpoise and the feedpoint carry significant RF voltage and current during transmission, which can cause severe RF burns. Keep both the radiator and counterpoise away from areas where humans or pets may touch them, and insulate them where they pass through or near conductive structures.
+> **Important safety note:** The counterpoise and the feedpoint carry significant RF voltage and current during transmission, which can cause severe RF burns. Keep both the radiator and counterpoise away from areas where humans or pets may touch them, and insulate them where they pass through or near conductive structures. At high-impedance operation (near λ/2 resonance), feedpoint voltages can reach hundreds or thousands of volts even at modest power levels — exercise extreme caution.
 
 ---
 
@@ -180,29 +186,31 @@ A counterpoise is a wire (or set of wires) connected to the ground terminal of t
 | Feature | Description |
 |---|---|
 | **Band selection** | Enable/disable each of 11 standard HF/VHF bands (160 m–6 m) individually via dropdown |
-| **Velocity Factor** | Editable input; default 0.975 (outdoor wire) |
-| **Length Sweep** | Sweeps wire lengths from 5.0 m to 60.0 m in 0.5 m steps; computes avoidance score for each |
+| **Velocity Factor** | Editable input; default 0.95 (insulated wire with end-effect, matches classic 468/f formula) |
+| **Length Sweep** | Sweeps wire lengths from 5.0 m to 60.0 m in 0.1 m steps; computes avoidance score for each |
 | **Top 5 recommendations** | Automatically identifies the 5 best wire lengths given active bands |
 | **Avoidance score** | Per-band and overall score (0.00–0.25); penalizes both λ/2 and λ/4 resonances |
 | **Quality rating** | ★★ GOOD / ★ FAIR / ⚠ MARGINAL / ✗ AVOID labels on each candidate length |
 | **VSWR estimator** | Simplified model computes expected SWR per band after the 9:1 UnUn |
 | **UnUn ratio optimizer** | Sweeps 4:1 to 69:1 for all 5 recommended wires; finds optimal ratio per band |
 | **VSWR color coding** | Green ≤ 2.0 / Orange 2.0–4.0 / Red > 4.0 visual guide |
-| **Square-ratio flagging** | Marks integer turns ratios n² (4:1, 9:1, 16:1, 25:1, 36:1, 49:1, 64:1) — easier to wind |
+| **Square-ratio flagging** | Marks integer turns ratios n²:1 (4:1, 9:1, 16:1, 25:1, 36:1, 49:1, 64:1) — easier to wind |
 | **Counterpoise calculator** | Recommends counterpoise length as λ/4 of lowest active band |
+| **UnUn design calculator** | Computes turns ratio, secondary turns, compensation capacitance, and magnetics check |
+| **Toroid database** | Reference table of common ferrite and powdered-iron cores with AL values and dimensions |
 | **All units in meters** | Consistent SI units throughout |
 
 ---
 
 ## 3. Workbook Structure
 
-The workbook contains **four sheets**, each serving a distinct analytical purpose.
+The workbook contains **six sheets**, each serving a distinct analytical purpose.
 
 ### 3.1 Sheet 1 — Calculator
 
 The **main input and output sheet**. Here you:
 
-- Set the **Velocity Factor** (blue input cell)
+- Set the **Velocity Factor** (blue input cell, default 0.95)
 - Toggle each band **ACTIVE / NO** using dropdown menus
 - Read the **Top 5 recommended wire lengths** with avoidance scores, quality ratings, and counterpoise recommendations
 
@@ -215,9 +223,9 @@ The **Practical Notes** column in the Top 5 table categorizes wires as:
 
 ### 3.2 Sheet 2 — VSWR Calculator
 
-Enter any wire length (meters) and read the estimated **VSWR per active band** after transformation through a 9:1 UnUn. Includes:
+Enter any wire length (meters) and read the estimated **VSWR per active band** after transformation through a configurable UnUn ratio. Includes:
 
-- Computed L/λ½ ratio for each band
+- Computed L/λ½ ratio for each band (fractional part)
 - Estimated feedpoint impedance (Ω)
 - VSWR value (numeric and chart bar)
 - Quality assessment:
@@ -234,17 +242,17 @@ The most detailed analytical sheet. For each of the **5 recommended wire lengths
 
 **Section 1** — Feedpoint impedance (Ω) per band for all 5 wires.
 
-**Section 2** — For each wire × band combination, the optimal UnUn ratio (4:1 → 69:1) that minimises VSWR, along with the best achievable VSWR.
+**Section 2** — For each wire × band combination, the optimal UnUn ratio (4:1 → 69:1) that minimises VSWR, along with the best achievable VSWR. The optimal ratio is found by evaluating all 66 possible ratios and selecting the one that gives the lowest VSWR for that specific wire length and band.
 
 **Section 3** — Full VSWR table sweeping all 66 ratio steps (4:1 through 69:1) for all 5 wires and all active bands. Color-coded green/orange/red. Integer turns ratios marked ★.
 
-**Section 4** — Best overall UnUn ratio per antenna (the ratio that minimises **average VSWR** across all active bands).
+**Section 4** — Best overall UnUn ratio per antenna (the ratio that minimises **average VSWR** across all active bands). The average is computed as the arithmetic mean of VSWR values across all active bands for each ratio, and the ratio with the lowest average is selected.
 
 This section answers the key question: *"If I can only choose one UnUn transformer, which ratio works best for my wire on all my bands at once?"*
 
 ### 3.4 Sheet 4 — Length Sweep
 
-The computational engine that feeds the Top 5 results in Sheet 1. It evaluates **111 candidate lengths** (5.0 m to 60.0 m in 0.5 m steps) and computes:
+The computational engine that feeds the Top 5 results in Sheet 1. It evaluates **551 candidate lengths** (5.0 m to 60.0 m in 0.1 m steps) and computes:
 
 - Per-band avoidance score (0.00–0.25)
 - Overall minimum score (the bottleneck band)
@@ -252,6 +260,43 @@ The computational engine that feeds the Top 5 results in Sheet 1. It evaluates *
 - Quality rating label
 
 Green rows indicate recommended lengths; red/orange rows indicate those to avoid. This sheet updates automatically whenever band selections change on the Calculator sheet.
+
+### 3.5 Sheet 5 — UnUn Calculator
+
+A dedicated design tool for building custom UnUn transformers:
+
+- **Inputs:** Operating frequency, target input impedance (Rin, Xin), output/load impedance (Rout, Xout), toroid core selection, primary winding turns
+- **Outputs:**
+  - Impedance ratio and turns ratio
+  - Calculated and rounded secondary turns
+  - Actual impedance ratio based on integer turns
+  - Transformed load reactance seen at input
+  - Required compensation reactance (Xcomp) and component type (series L or C) with value
+  - Primary inductance (Lp) and primary reactance (XLp) at operating frequency
+  - Design check: XLp > 4×Rin rule-of-thumb verification
+
+### 3.6 Sheet 6 — Toroid Database
+
+A reference table of common toroid cores used in antenna matching applications:
+
+| Core Name | Material | AL (nH/N²) | OD (mm) | ID (mm) | Height (mm) |
+|---|---|---|---|---|---|
+| FT-114-43 | Ferrite Mix 43 | 510 | 29 | 19 | 7.5 |
+| FT-140-43 | Ferrite Mix 43 | 885 | 35.6 | 22.9 | 12.7 |
+| FT-240-43 | Ferrite Mix 43 | 1075 | 61 | 35.6 | 12.7 |
+| FT-114-31 | Ferrite Mix 31 | 800 | 29 | 19 | 7.5 |
+| FT-140-31 | Ferrite Mix 31 | 1390 | 35.6 | 22.9 | 12.7 |
+| FT-240-31 | Ferrite Mix 31 | 1800 | 61 | 35.6 | 12.7 |
+| FT-114-52 | Ferrite Mix 52 | 175 | 29 | 19 | 7.5 |
+| FT-140-52 | Ferrite Mix 52 | 225 | 35.6 | 22.9 | 12.7 |
+| FT-240-52 | Ferrite Mix 52 | 300 | 61 | 35.6 | 12.7 |
+| FT-114-61 | Ferrite Mix 61 | 79.3 | 29 | 19 | 7.5 |
+| FT-140-61 | Ferrite Mix 61 | 140 | 35.6 | 22.9 | 12.7 |
+| FT-240-61 | Ferrite Mix 61 | 170 | 61 | 35.6 | 12.7 |
+| T-130-2 | Iron Powder Mix 2 | 11 | 33 | 19.8 | 11.1 |
+| T-200-2 | Iron Powder Mix 2 | 12 | 50.8 | 31.8 | 14 |
+| T-130-6 | Iron Powder Mix 6 | 9.6 | 33 | 19.8 | 11.1 |
+| T-200-6 | Iron Powder Mix 6 | 11.6 | 50.8 | 31.8 | 14 |
 
 ---
 
@@ -267,7 +312,7 @@ The workbook uses standard formulas and dropdown validation. No macros (VBA) are
 
 **Step 3 — Set your Velocity Factor (optional).**
 
-The default is **0.975**, which is appropriate for most outdoor installations using bare copper wire or lightly insulated antenna wire. If you are using thick PVC-jacketed wire, consider 0.96–0.97. For bare wire in free air, 0.98–1.00 is accurate.
+The default is **0.95**, which is appropriate for most outdoor installations using insulated copper wire (matches the classic 468/f formula). For bare wire in free air, use 0.975–0.98. For thick PVC-jacketed wire, consider 0.92–0.96.
 
 **Step 4 — Select your active bands.**
 
@@ -275,7 +320,7 @@ In the "ACTIVE?" column, change each band to **YES** or **NO** using the dropdow
 
 **Step 5 — Read the Top 5 recommended lengths.**
 
-The table shows the five wire lengths (in meters and centimeters) with the highest avoidance scores. Pick **Rank #1** if you have the space. A 54 m wire (with default 40–10 m band selection) achieves a ★★ GOOD score of 0.14.
+The table shows the five wire lengths (in meters and centimeters) with the highest avoidance scores. Pick **Rank #1** if you have the space. With the default 40–10 m band selection (7 active bands) and VF = 0.95, the top recommendations will typically be in the 44–47 m range with FAIR to MARGINAL ratings.
 
 **Step 6 — Check the counterpoise recommendation.**
 
@@ -289,24 +334,30 @@ Enter your chosen wire length and check that SWR is acceptable (or at least mana
 
 Section 4 of this sheet tells you which single UnUn ratio gives the lowest average VSWR for your wire. For most 40–10 m installations, a **9:1** UnUn is a very good starting point, but the optimizer may suggest alternatives like 7:1 or 4:1 for specific wire lengths.
 
+**Step 9 — Design your UnUn on the *UnUn Calculator* sheet (optional).**
+
+If building a custom transformer, use this sheet to calculate turns, compensation components, and verify the magnetics design.
+
 ### 4.2 Interpreting the Avoidance Score
 
 The **Avoidance Score** ranges from 0.00 to 0.25:
 
-| Score | Meaning | Quality |
-|---|---|---|
-| 0.25 | Perfect — wire is exactly at 3λ/8 or 5λ/8 relative to every active band (maximum distance from all resonances) | Theoretical ideal |
-| ≥ 0.20 | Excellent avoidance | ★★ GOOD |
-| ≥ 0.12 | Good practice, minor tuner assistance likely | ★ FAIR |
-| ≥ 0.05 | Acceptable; some bands may need tuner | ⚠ MARGINAL |
-| < 0.05 | Close to λ/2 or λ/4 on at least one band | ✗ AVOID |
-| 0.00 | Wire IS resonant (exactly λ/2 or λ/4 on some band) | ✗ AVOID |
+| Score | Meaning | Quality | Rating |
+|---|---|---|---|
+| 0.25 | Perfect — wire is exactly at 3λ/8 or 5λ/8 relative to every active band (maximum distance from all resonances) | Theoretical ideal | — |
+| ≥ 0.20 | Excellent avoidance | ★★ GOOD | ★★ |
+| ≥ 0.12 | Good practice, minor tuner assistance likely | ★ FAIR | ★ |
+| ≥ 0.05 | Acceptable; some bands may need tuner | ⚠ MARGINAL | ⚠ |
+| < 0.05 | Close to λ/2 or λ/4 on at least one band | ✗ AVOID | ✗ |
+| 0.00 | Wire IS resonant (exactly λ/2 or λ/4 on some band) | ✗ AVOID | ✗ |
 
 The score is computed as the **minimum** across all active bands. A single "bad" band drags the entire score down. This conservative approach ensures no band is neglected.
 
+**Why 0.25 is the maximum:** The score measures the minimum distance from either λ/2 or λ/4 resonance. The best possible position is exactly halfway between λ/4 and λ/2, which is at 3λ/8 (0.375λ) or equivalently 5λ/8 (0.625λ). At this point, the distance from both λ/4 (0.25λ) and λ/2 (0.50λ) is 0.125λ. Since the score is normalized to the half-wavelength period, this distance is 0.125 / 0.5 = 0.25.
+
 ### 4.3 Interpreting the VSWR Results
 
-VSWR after the 9:1 UnUn is categorized as:
+VSWR after the UnUn is categorized as:
 
 | VSWR | Verdict |
 |---|---|
@@ -336,12 +387,10 @@ For most situations, the recommended approach is:
 
 The electrical half-wavelength (λ/2) for a given band center frequency, adjusted for wire velocity factor:
 
-
 ```
-
 λ/2 (m) = VF × 150 / f_center (MHz)
 λ/4 (m) = λ/2 / 2
-
+Min Wire (m) = λ/4 at f_center of lowest active band
 ```
 
 The ITU amateur band center frequencies used in this calculator:
@@ -349,7 +398,7 @@ The ITU amateur band center frequencies used in this calculator:
 | Band | f_low (MHz) | f_high (MHz) | f_center (MHz) |
 |---|---|---|---|
 | 160 m | 1.800 | 2.000 | 1.900 |
-| 80 m* | 3.500 | 4.000 | 3.750 |
+| 80 m | 3.500 | 3.800 | 3.650 |
 | 60 m | 5.3515 | 5.3665 | 5.359 |
 | 40 m | 7.000 | 7.300 | 7.150 |
 | 30 m | 10.100 | 10.150 | 10.125 |
@@ -360,50 +409,50 @@ The ITU amateur band center frequencies used in this calculator:
 | 10 m | 28.000 | 29.700 | 28.850 |
 | 6 m | 50.000 | 54.000 | 52.000 |
 
->*\* Note: The 80m band allocation varies by ITU Region. Region 2 (the Americas) extends from 3.5 to 4.0 MHz, making 3.750 MHz a balanced center frequency. Region 1 generally operates from 3.5 to 3.8 MHz.*
+>*Note: The 80m band allocation varies by ITU Region. Region 2 (the Americas) extends from 3.5 to 4.0 MHz, while Region 1 generally operates from 3.5 to 3.8 MHz. This calculator uses 3.65 MHz as the center frequency, which is appropriate for Region 1 and the lower portion of Region 2. For Region 2 full allocation, the center would be 3.750 MHz.*
 
 ### 5.2 Resonance Avoidance Score Formula
 
 For each active band, the score measures how far the wire length `L` is from both the half-wave and quarter-wave resonance:
 
-
 ```
-
 L_frac = L / (λ/2)                      ; fractional length in half-waves
 
 score_λ2 = MIN( MOD(L_frac, 1),  1 − MOD(L_frac, 1) )     ; distance from integer multiples (λ/2 nodes)
 score_λ4 = | MOD(L_frac, 1) − 0.5 |                         ; distance from half-integer multiples (λ/4 nodes)
 
 score_band = MIN(score_λ2, score_λ4)
-
 ```
 
 The **overall score** is the minimum across all active bands:
 
-
 ```
-
 score_overall = MIN(score_band) for all ACTIVE bands
-
 ```
 
 The maximum possible value is **0.25**, achieved when the wire is at exactly 3λ/8 or 5λ/8 relative to every active band — the midpoint between every resonance.
+
+**Why both λ/2 and λ/4 are penalized:**
+- At λ/2: feedpoint impedance is very high (~2000–10000 Ω), causing extreme mismatch and high voltages
+- At λ/4: feedpoint impedance is very low (~20–50 Ω), causing high currents and ground-loss dominance
+- Both conditions are undesirable for UnUn matching and ATU operation
 
 ### 5.3 Feedpoint Impedance Estimation Model
 
 The simplified impedance model used in the VSWR Calculator:
 
-
+```
+Z_wire (Ω) ≈ 50 × 80^cos²(π × frac(L / λ½))
 ```
 
-Z_wire (Ω) ≈ 50 × 80^cos²(π × L / λ½)
-
-```
+Where `frac(x) = x − floor(x)` is the fractional part, ensuring the model repeats every half-wavelength.
 
 This is a **heuristic empirical model**, not a rigorous analytical solution. It produces:
-- Z ≈ 50 Ω at λ/4: when L = λ/4, the ratio L/λ½ = 0.5, so cos²(π × 0.5) = cos²(π/2) = 0; therefore 80^0 = 1 and Z = 50 × 1 = 50 Ω ✓
-- Z → high values as L/λ½ → any integer n (λ/2 resonances): cos²(π × n) = cos²(nπ) = 1; Z = 50 × 80 = 4000 Ω ✓
-- Z ≈ 450 Ω near 3λ/8: L/λ½ = 0.75, cos²(π × 0.75) = cos²(3π/4) = 0.5; Z = 50 × 80^0.5 ≈ 50 × 8.94 ≈ 447 Ω ✓
+- Z ≈ 50 Ω at λ/4: when L = λ/4, the ratio L/λ½ = 0.5, so frac(0.5) = 0.5, cos²(π × 0.5) = cos²(π/2) = 0; therefore 80^0 = 1 and Z = 50 × 1 = 50 Ω ✓
+- Z → high values as L/λ½ → any integer n (λ/2 resonances): frac(n) = 0, cos²(π × 0) = cos²(0) = 1; Z = 50 × 80 = 4000 Ω ✓
+- Z ≈ 450 Ω near 3λ/8: L/λ½ = 0.75, frac(0.75) = 0.75, cos²(π × 0.75) = cos²(3π/4) = 0.5; Z = 50 × 80^0.5 ≈ 50 × 8.94 ≈ 447 Ω ✓
+
+**Alternative constant:** The model constant of 80 gives Z_max = 4000 Ω. Some references (AA5TB) suggest using 94, which gives Z_max ≈ 4700 Ω, closer to measured values for thin wire at modest heights. The spreadsheet allows exploration of both values.
 
 **Note:** Real feedpoint impedance varies significantly with installation geometry, height, ground conductivity, and other environmental factors. NEC-based simulation (e.g., EZNEC, 4NEC2) should be used for precision engineering. This model is suitable for **preliminary design** and **comparative ranking** of wire lengths.
 
@@ -411,12 +460,9 @@ This is a **heuristic empirical model**, not a rigorous analytical solution. It 
 
 After impedance transformation by the UnUn (valid for the resistive-only heuristic model; reactive components are not included):
 
-
 ```
-
 Z_coax = Z_wire / ratio_UnUn
 VSWR = MAX(Z_coax / 50,  50 / Z_coax)
-
 ```
 
 > **Note:** This formula assumes Z_wire is purely resistive. In practice the feedpoint impedance has a reactive component (capacitive or inductive) at non-resonant lengths. The actual VSWR may therefore be higher than calculated, particularly at frequencies where the wire has significant reactance. A VNA or antenna analyzer is needed to measure the true complex impedance.
@@ -424,10 +470,46 @@ VSWR = MAX(Z_coax / 50,  50 / Z_coax)
 For a 9:1 UnUn with Z_wire = 450 Ω:
 
 ```
-
 Z_coax = 450 / 9 = 50 Ω  →  VSWR = 1.0  (perfect match)
+```
+
+### 5.5 Counterpoise Length Formula
+
+The recommended counterpoise length is:
 
 ```
+L_counterpoise (m) = λ/4 at f_lowest = VF × 75 / f_lowest (MHz)
+```
+
+Where f_lowest is the center frequency of the lowest active band. This ensures the counterpoise presents a low-impedance RF return path at the fundamental operating frequency.
+
+For multiple radials, use λ/4 at each band of interest:
+- 40 m band: L ≈ 0.95 × 75 / 7.15 ≈ 10.0 m
+- 20 m band: L ≈ 0.95 × 75 / 14.175 ≈ 5.0 m
+- 10 m band: L ≈ 0.95 × 75 / 28.85 ≈ 2.5 m
+
+### 5.6 UnUn Turns Ratio and Impedance Ratio
+
+The relationship between turns ratio and impedance ratio for a transformer:
+
+```
+Impedance Ratio = (Turns Ratio)²
+Turns Ratio = N_secondary / N_primary
+```
+
+Common integer-turns ratios and their impedance transformations:
+
+| Turns Ratio (n:1) | Impedance Ratio (n²:1) | Z_out for 50 Ω input |
+|---|---|---|
+| 2:1 | 4:1 | 200 Ω |
+| 3:1 | 9:1 | 450 Ω |
+| 4:1 | 16:1 | 800 Ω |
+| 5:1 | 25:1 | 1250 Ω |
+| 6:1 | 36:1 | 1800 Ω |
+| 7:1 | 49:1 | 2450 Ω |
+| 8:1 | 64:1 | 3200 Ω |
+
+Non-integer turns ratios (e.g., 5.5:1 → 30.25:1) require tapped autotransformer designs and are more complex to construct.
 
 ---
 
@@ -435,17 +517,17 @@ Z_coax = 450 / 9 = 50 Ω  →  VSWR = 1.0  (perfect match)
 
 ### 6.1 Wire Length Recommendations
 
-With the default 40–10 m band selection (7 active bands), the calculator yields these top candidates:
+With the default 40–10 m band selection (7 active bands) and VF = 0.95, the calculator yields these top candidates:
 
 | Rank | Length | Score | Rating | Notes |
 |---|---|---|---|---|
-| 1 | **54 m** | 0.140 | ★★ GOOD | Long wire — maximum performance |
-| 2 | **33.5 m** | 0.108 | ★ FAIR | Excellent home station |
-| 3 | **47.5 m** | 0.100 | ★ FAIR | Long wire — good compromise |
-| 4 | **18.5 m** | 0.096 | ★ FAIR | Good for portable or limited space |
-| 5 | **39 m** | 0.093 | ★ FAIR | Excellent home station |
+| 1 | **46.3 m** | 0.103 | ★ FAIR | Long wire — maximum performance |
+| 2 | **46.2 m** | 0.086 | ★ FAIR | Long wire — maximum performance |
+| 3 | **44.1 m** | 0.069 | ⚠ MARGINAL | Excellent home station |
+| 4 | **46.1 m** | 0.068 | ⚠ MARGINAL | Long wire — maximum performance |
+| 5 | **46.4 m** | 0.068 | ⚠ MARGINAL | Long wire — maximum performance |
 
-Adding 160 m or 80 m to the active bands changes the optimal lengths, since λ/2 at those low frequencies is very long (77 m and 40 m respectively).
+Adding 160 m or 80 m to the active bands changes the optimal lengths significantly, since λ/2 at those low frequencies is very long (75 m and 39 m respectively). With all 11 bands active, the best compromise lengths shift toward the 46 m range to avoid the 80 m λ/2 resonance at ~39 m.
 
 **Rule of thumb:** When in doubt, longer is better. A wire of 40–55 m covers 40 m through 10 m comfortably, and is forgiving of minor installation variations.
 
@@ -459,15 +541,12 @@ A 9:1 UnUn uses a **3:1 turns ratio** (since impedance ratio = turns ratio²: 3�
 
 The 9:1 UnUn is wound as a **trifilar autotransformer** — a single continuous winding with a tap, not an isolated primary/secondary transformer. All three trifilar wires are connected in series on the antenna side (full winding = secondary), while the coax uses only one-third of the full winding (the inner tap = primary). This shared-winding topology is what makes it an autotransformer.
 
-
 ```
-
 Antenna ──────────────── Entire winding (3N turns total)
 │
 ├── tap at N turns from ground end (coax center conductor)
 │
 Counterpoise ──── Coax shield ──── Ground end of winding
-
 ```
 
 **Construction procedure (example for FT240-43 core):**
@@ -510,17 +589,13 @@ The **counterpoise** is at least as important as the wire length choice. A poorl
 **Minimum counterpoise length:**
 
 ```
-
 L_counterpoise = VF × 75 / f_lowest (MHz)   [= λ/4 of lowest band]
-
 ```
 
 For 40 m as the lowest band (7.15 MHz center):
 
 ```
-
-L_counterpoise = 0.975 × 75 / 7.15 ≈ 10.2 m
-
+L_counterpoise = 0.95 × 75 / 7.15 ≈ 10.0 m
 ```
 
 **Practical installation tips:**
@@ -537,7 +612,6 @@ The long-wire antenna can be deployed in several configurations depending on ava
 **Horizontal wire (best radiation pattern, needs high support at both ends):**
 
 ```
-
 [Support A]=============================[Support B]
 |
 [UnUn transformer]
@@ -545,13 +619,11 @@ The long-wire antenna can be deployed in several configurations depending on ava
 [Counterpoise]
 |
 [Coax to shack]
-
 ```
 
 **Inverted-L (most common practical choice):**
 
 ```
-
 [Mast/Tree]
 |
 | Vertical section (as high as possible)
@@ -561,7 +633,6 @@ The long-wire antenna can be deployed in several configurations depending on ava
 [UnUn at base of vertical section]
 |
 [Counterpoise horizontal at ground level]
-
 ```
 
 **Sloper (wire from high point sloping down to low support):**
@@ -579,7 +650,7 @@ An issue with end-fed wire antennas is that RF current can easily flow on the **
 **Solution:** Install a **1:1 common-mode choke** (CMC), also called an RF choke or line isolator, on the coaxial feedline. Where you place this choke depends heavily on your counterpoise design:
 
 1. **If you have a robust physical counterpoise (radials):** Place the CMC **directly at the UnUn**. Because you have provided an efficient RF return path via the radials, the choke will forcefully isolate the feedline, preventing it from radiating and keeping common-mode currents completely out of the shack.
-2. **If you CANNOT install a physical counterpoise:** Install the CMC **4–8 m down the feedline** from the UnUn. In this compromised setup, the section of the coaxial shield between the UnUn and the choke is forced to act as your counterpoise. 
+2. **If you CANNOT install a physical counterpoise:** Install the CMC **4–8 m down the feedline** from the UnUn. In this compromised setup, the section of the coaxial shield between the UnUn and the choke is forced to act as your counterpoise.
 
 The CMC can be built from:
 - 10–12 turns of RG-58 or RG-316 coax wound on an FT240-43 toroid
@@ -593,7 +664,7 @@ The CMC can be built from:
 | Band Name | Range (MHz) | 
 |---|---|
 | **160 m** | **1.800 – 2.000** |
-| **80/75 m** | **3.500 – 4.000** |
+| **80/75 m** | **3.500 – 3.800** |
 | **60 m** | **5.3515 – 5.3665** | 
 | **40 m** | **7.000 – 7.300** |
 | **30 m** | **10.100 – 10.150** |
@@ -619,7 +690,7 @@ The 9:1 UnUn brings the extreme impedances of the random wire down to a manageab
 The Z_wire formula is a heuristic approximation. Real feedpoint impedance depends on height above ground, ground conductivity, wire sag, and nearby objects. Variations of ±50% from the model values are normal. For accurate impedance, use NEC simulation software (EZNEC, 4NEC2, OpenEMS) or measure with a VNA or antenna analyzer.
 
 **3. Sweep resolution:**
-The Length Sweep evaluates at 0.5 m intervals. Optimal lengths may fall between sweep points. The top 5 results are indicative starting points; fine-tuning ±0.5 m in the field may improve performance.
+The Length Sweep evaluates at 0.1 m intervals. Optimal lengths may fall between sweep points. The top 5 results are indicative starting points; fine-tuning ±0.5 m in the field may improve performance.
 
 **4. Single-wire counterpoise only:**
 The counterpoise recommendation is for a single λ/4 radial. Real installations with multiple radials of various lengths will perform differently. The calculator does not model the ground system.
@@ -632,6 +703,9 @@ When the UnUn core is presented with a highly mismatched impedance, circulating 
 
 **7. Regulatory compliance:**
 Wire length, height, and operating power must comply with your national radio communications regulations. Ensure appropriate licensing, power limits, and antenna height clearances.
+
+**8. High voltage warning:**
+At wire lengths near λ/2 resonance, feedpoint voltages can reach hundreds to thousands of volts even at modest power (e.g., 100 W). Ensure all connections are properly insulated and rated for the expected voltage. Arcing can occur in poorly designed UnUn housings.
 
 ---
 
@@ -669,8 +743,10 @@ Wire length, height, and operating power must comply with your national radio co
 - **ARRL Antenna Book** (24th edition and later) — comprehensive coverage of end-fed antennas, impedance matching, and feedline theory
 - Lewallen, R., W7EL — *NEC-based Antenna Modeling Software*, EZNEC documentation (http://www.eznec.com)
 - Moxon, L.A., G6XN — *HF Antennas for All Locations*, RSGB, 1982 — classic reference for practical HF wire antennas
-- Serensen, Jack, VE3EED (SK) — *"The Best Random Wire Antenna Lengths"*, SARC Communicator, reproduced at https://ve7sar.blogspot.com/2019/01/the-best-random-wire-antenna-lengths.html
 - Sprott, J.C. — *"Optimal Length of a Random Wire Antenna"*, technical note, University of Wisconsin, https://sprott.physics.wisc.edu/technote/randwire.htm
+- AA5TB — *"End-Fed Half-Wave Antenna"*, https://www.aa5tb.com/efha.html — detailed analysis of EFHW impedance and transformer design
+- W8JI — *"Long Wire Antenna"*, https://www.w8ji.com/long_wire_antenna.htm — authoritative practical analysis including counterpoise design and feed system problems
+- G3TXQ — *"Wideband Transformers"*, extensive research on ferrite vs. powdered iron core performance for UnUn applications
 
 ### Online Resources
 
@@ -691,6 +767,10 @@ Wire length, height, and operating power must comply with your national radio co
 | Battery Eliminator Store — EFHW Deep Dive | https://batteryeliminatorstore.com/blogs/ocf-masters-articles/a-deep-dive-into-end-fed-half-wave-antennas-original | Analysis of transformer ratios from 9:1 to 64:1 |
 | Wikipedia — Random Wire Antenna | https://en.wikipedia.org/wiki/Random_wire_antenna | Historical context and impedance characteristics |
 | Wikipedia — Counterpoise | https://en.wikipedia.org/wiki/Counterpoise_(ground_system) | Ground system theory |
+| RF.Guru — Feed Point Impedance | https://shop.rf.guru/pages/feed-point-impedance-vs-height-for-end-fed-antennas | Feedpoint impedance vs. height and geometry analysis |
+| KM1NDY — 64:1 UnUn Build | https://km1ndy.com/diy-linked-efhw-64-to-1-antenna/ | DIY construction of 64:1 UnUn for linked EFHW |
+| HF Underground — 9:1 vs 49:1 Discussion | https://www.hfunderground.com/board/index.php?topic=59165.0 | Community discussion on UnUn ratio selection |
+| dbBear — EFHW Transformer Theory | https://www.dbbear.com/k0emt/kits/2024-efhw/theory/index.html | Transformer theory and capacitor compensation |
 
 ### Software Tools for Advanced Modeling
 
@@ -724,4 +804,4 @@ Full license text: https://creativecommons.org/licenses/by/4.0/
 
 ---
 
-> **Disclaimer:** This tool is provided for educational and experimental purposes. The author makes no warranties regarding the accuracy of the impedance models or the suitability of any recommended configuration for any specific installation. Always verify designs with proper measurement equipment (VNA, antenna analyzer) before connecting to a transmitter. Comply with all applicable regulations regarding antenna installations and transmitter power limits.
+> **Disclaimer:** This tool is provided for educational and experimental purposes. The author makes no warranties regarding the accuracy of the impedance models or the suitability of any recommended configuration for any specific installation. Always verify designs with proper measurement equipment (VNA, antenna analyzer) before connecting to a transmitter. Comply with all applicable regulations regarding antenna installations and transmitter power limits. High voltages may be present at the antenna feedpoint during operation — exercise appropriate caution.
