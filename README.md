@@ -1,3 +1,4 @@
+
 # 📡 Long Wire Antenna + UnUn — Multi-Band Optimizer
 
 > An Excel-based engineering calculator for designing non-resonant long-wire (end-fed random wire) HF antennas with impedance-matching UnUn transformers. Supports multi-band optimization from 160 m through 6 m, with resonance avoidance scoring, VSWR estimation, UnUn ratio sweep, and counterpoise recommendations.
@@ -79,8 +80,11 @@ A long-wire end-fed antenna is **inherently unbalanced**: one side of the feedpo
 
 The most common ratio used with long-wire antennas is **9:1**, meaning the impedance at the antenna side is 9× that at the coaxial side. So:
 
+
 ```
+
 Z_antenna ≈ 9 × Z_feedline = 9 × 50 Ω = 450 Ω
+
 ```
 
 This means the antenna wire should ideally present approximately **450 Ω** at the feedpoint for a direct 9:1 match, which happens at wire lengths that are roughly **3/8 λ or 5/8 λ** — the midpoints between quarter-wave (low-impedance) and half-wave (high-impedance) resonances.
@@ -108,8 +112,11 @@ The feedpoint impedance of an end-fed wire is extremely sensitive to the ratio o
 
 The impedance model used in this workbook is a simplified cosine-based approximation:
 
+
 ```
+
 Z_wire ≈ 50 × 80^cos²(π × L / λ½)  [Ω]
+
 ```
 
 This captures the broad shape of the impedance variation (low near λ/4, high near λ/2, moderate between) without requiring a full NEC-based numerical electromagnetic simulation.
@@ -142,8 +149,11 @@ The **velocity factor (VF)** of a wire expresses the ratio at which electromagne
 
 This calculator allows you to set the velocity factor (default: **0.975**, appropriate for outdoor bare or lightly insulated copper wire). The formula for half-wavelength is:
 
+
 ```
+
 λ/2 (m) = VF × 150 / f_center (MHz)
+
 ```
 
 An incorrect VF would shift all resonance calculations, potentially causing the "optimized" wire length to fall near a resonance despite the score appearing safe. For most outdoor antenna wire (solid or stranded copper, light PVC jacket), VF = 0.97–0.98 is an excellent starting assumption.
@@ -161,7 +171,7 @@ A counterpoise is a wire (or set of wires) connected to the ground terminal of t
 
 **Multiple radials:** Using several counterpoise wires of different lengths (e.g., λ/4 at 40 m, λ/4 at 20 m) improves system efficiency across all bands. The counterpoise should be kept as straight as possible and elevated slightly above ground if practical. Coiling or routing it back toward the shack degrades performance.
 
-> **Important safety note:** The counterpoise carries significant RF voltage and current during transmission. Keep it away from areas where people may touch it, and insulate it where it passes through conductive structures.
+> **Important safety note:** The counterpoise and the feedpoint carry significant RF voltage and current during transmission, which can cause severe RF burns. Keep both the radiator and counterpoise away from areas where humans or pets may touch them, and insulate them where they pass through or near conductive structures.
 
 ---
 
@@ -326,9 +336,12 @@ For most situations, the recommended approach is:
 
 The electrical half-wavelength (λ/2) for a given band center frequency, adjusted for wire velocity factor:
 
+
 ```
+
 λ/2 (m) = VF × 150 / f_center (MHz)
 λ/4 (m) = λ/2 / 2
+
 ```
 
 The ITU amateur band center frequencies used in this calculator:
@@ -336,7 +349,7 @@ The ITU amateur band center frequencies used in this calculator:
 | Band | f_low (MHz) | f_high (MHz) | f_center (MHz) |
 |---|---|---|---|
 | 160 m | 1.800 | 2.000 | 1.900 |
-| 80 m | 3.500 | 3.800 | 3.650 |
+| 80 m* | 3.500 | 4.000 | 3.750 |
 | 60 m | 5.3515 | 5.3665 | 5.359 |
 | 40 m | 7.000 | 7.300 | 7.150 |
 | 30 m | 10.100 | 10.150 | 10.125 |
@@ -347,23 +360,31 @@ The ITU amateur band center frequencies used in this calculator:
 | 10 m | 28.000 | 29.700 | 28.850 |
 | 6 m | 50.000 | 54.000 | 52.000 |
 
+>*\* Note: The 80m band allocation varies by ITU Region. Region 2 (the Americas) extends from 3.5 to 4.0 MHz, making 3.750 MHz a balanced center frequency. Region 1 generally operates from 3.5 to 3.8 MHz.*
+
 ### 5.2 Resonance Avoidance Score Formula
 
 For each active band, the score measures how far the wire length `L` is from both the half-wave and quarter-wave resonance:
 
+
 ```
+
 L_frac = L / (λ/2)                      ; fractional length in half-waves
 
 score_λ2 = MIN( MOD(L_frac, 1),  1 − MOD(L_frac, 1) )     ; distance from integer multiples (λ/2 nodes)
 score_λ4 = | MOD(L_frac, 1) − 0.5 |                         ; distance from half-integer multiples (λ/4 nodes)
 
 score_band = MIN(score_λ2, score_λ4)
+
 ```
 
 The **overall score** is the minimum across all active bands:
 
+
 ```
+
 score_overall = MIN(score_band) for all ACTIVE bands
+
 ```
 
 The maximum possible value is **0.25**, achieved when the wire is at exactly 3λ/8 or 5λ/8 relative to every active band — the midpoint between every resonance.
@@ -372,8 +393,11 @@ The maximum possible value is **0.25**, achieved when the wire is at exactly 3λ
 
 The simplified impedance model used in the VSWR Calculator:
 
+
 ```
+
 Z_wire (Ω) ≈ 50 × 80^cos²(π × L / λ½)
+
 ```
 
 This is a **heuristic empirical model**, not a rigorous analytical solution. It produces:
@@ -387,16 +411,22 @@ This is a **heuristic empirical model**, not a rigorous analytical solution. It 
 
 After impedance transformation by the UnUn (valid for the resistive-only heuristic model; reactive components are not included):
 
+
 ```
+
 Z_coax = Z_wire / ratio_UnUn
 VSWR = MAX(Z_coax / 50,  50 / Z_coax)
+
 ```
 
 > **Note:** This formula assumes Z_wire is purely resistive. In practice the feedpoint impedance has a reactive component (capacitive or inductive) at non-resonant lengths. The actual VSWR may therefore be higher than calculated, particularly at frequencies where the wire has significant reactance. A VNA or antenna analyzer is needed to measure the true complex impedance.
 
 For a 9:1 UnUn with Z_wire = 450 Ω:
+
 ```
+
 Z_coax = 450 / 9 = 50 Ω  →  VSWR = 1.0  (perfect match)
+
 ```
 
 ---
@@ -429,12 +459,15 @@ A 9:1 UnUn uses a **3:1 turns ratio** (since impedance ratio = turns ratio²: 3�
 
 The 9:1 UnUn is wound as a **trifilar autotransformer** — a single continuous winding with a tap, not an isolated primary/secondary transformer. All three trifilar wires are connected in series on the antenna side (full winding = secondary), while the coax uses only one-third of the full winding (the inner tap = primary). This shared-winding topology is what makes it an autotransformer.
 
+
 ```
+
 Antenna ──────────────── Entire winding (3N turns total)
-                          │
-                          ├── tap at N turns from ground end (coax center conductor)
-                          │
+│
+├── tap at N turns from ground end (coax center conductor)
+│
 Counterpoise ──── Coax shield ──── Ground end of winding
+
 ```
 
 **Construction procedure (example for FT240-43 core):**
@@ -464,7 +497,7 @@ The most critical variable in UnUn performance is the **ferrite core material (m
 | FT240-31 | 2.4" | 31 | 1–30 MHz | 500 W | Low-band emphasis (80/160 m) |
 | FT240-61 | 2.4" | 61 | 5–200 MHz | 500 W | Upper HF / VHF emphasis |
 
-**Mix 43 ferrite** (µ_i ≈ 850) is the most popular for broadband HF UnUns because it provides high enough magnetizing inductance to work on 80 m and 40 m while remaining efficient on 17 m, 15 m, 12 m, and 10 m. Mix 31 works better for 160 m and 80 m but underperforms on 10 m.
+> **Note on Core Material:** **Mix 43 ferrite** (µ_i ≈ 850) is the most popular for broadband HF UnUns because it provides high enough magnetizing inductance to work on 80 m and 40 m while remaining efficient on the upper HF bands. Avoid using powdered iron cores (such as Type 2, e.g., T200-2) for 9:1 broadband impedance matching. While older literature sometimes suggests them, powdered iron cores have inferior frequency response curves compared to ferrite in this specific transformer application. Mix 31 works better for 160 m and 80 m but underperforms slightly on 10 m.
 
 For **digital modes** (FT8, PSK31, RTTY) with high duty cycles, size up one core category from the SSB rating — digital modes sustain power continuously unlike SSB which has natural pauses.
 
@@ -475,13 +508,19 @@ For **digital modes** (FT8, PSK31, RTTY) with high duty cycles, size up one core
 The **counterpoise** is at least as important as the wire length choice. A poorly designed counterpoise degrades efficiency and can cause RF in the shack.
 
 **Minimum counterpoise length:**
+
 ```
+
 L_counterpoise = VF × 75 / f_lowest (MHz)   [= λ/4 of lowest band]
+
 ```
 
 For 40 m as the lowest band (7.15 MHz center):
+
 ```
+
 L_counterpoise = 0.975 × 75 / 7.15 ≈ 10.2 m
+
 ```
 
 **Practical installation tips:**
@@ -491,34 +530,38 @@ L_counterpoise = 0.975 × 75 / 7.15 ≈ 10.2 m
 - For multi-band operation, use **multiple radials** at different λ/4 lengths (e.g., one for 40 m ≈ 10 m, one for 20 m ≈ 5 m, one for 10 m ≈ 2.5 m)
 - Do **not** connect the counterpoise back to the station RF ground or protective earth — this short-circuits the antenna system and routes RF into the building
 
-**Alternative approach:** A **1:1 common-mode choke (CMC)** installed on the coaxial feedline at 4–8 m from the UnUn can act as a virtual counterpoise by isolating the coax braid at that point.
-
 ### 6.5 Antenna Configurations
 
 The long-wire antenna can be deployed in several configurations depending on available space:
 
 **Horizontal wire (best radiation pattern, needs high support at both ends):**
+
 ```
-  [Support A]=============================[Support B]
-                         |
-                    [UnUn transformer]
-                         |
-                    [Counterpoise]
-                         |
-                     [Coax to shack]
+
+[Support A]=============================[Support B]
+|
+[UnUn transformer]
+|
+[Counterpoise]
+|
+[Coax to shack]
+
 ```
 
 **Inverted-L (most common practical choice):**
+
 ```
-  [Mast/Tree]
-       |
-       | Vertical section (as high as possible)
-       |
-       ├──────────────────────────── Horizontal section
-       |
-  [UnUn at base of vertical section]
-       |
-  [Counterpoise horizontal at ground level]
+
+[Mast/Tree]
+|
+| Vertical section (as high as possible)
+|
+├──────────────────────────── Horizontal section
+|
+[UnUn at base of vertical section]
+|
+[Counterpoise horizontal at ground level]
+
 ```
 
 **Sloper (wire from high point sloping down to low support):**
@@ -528,12 +571,15 @@ Provides some directional gain and is useful in limited-space installations.
 
 ### 6.6 Common-Mode Choke / RF Choke
 
-An issue with end-fed wire antennas is that RF current can flow on the **outside of the coaxial braid** back toward the shack. This causes:
+An issue with end-fed wire antennas is that RF current can easily flow on the **outside of the coaxial braid** back toward the shack. This causes:
 - RF interference with computers, audio equipment
 - Unexpected resonances affecting SWR
 - Inaccurate SWR meter readings
 
-**Solution:** Install a **1:1 common-mode choke** (CMC), also called an RF choke or line isolator, on the coaxial feedline, typically 4–8 m from the UnUn transformer. This position makes the coax section between the UnUn and the choke act as a controlled λ/20 counterpoise.
+**Solution:** Install a **1:1 common-mode choke** (CMC), also called an RF choke or line isolator, on the coaxial feedline. Where you place this choke depends heavily on your counterpoise design:
+
+1. **If you have a robust physical counterpoise (radials):** Place the CMC **directly at the UnUn**. Because you have provided an efficient RF return path via the radials, the choke will forcefully isolate the feedline, preventing it from radiating and keeping common-mode currents completely out of the shack.
+2. **If you CANNOT install a physical counterpoise:** Install the CMC **4–8 m down the feedline** from the UnUn. In this compromised setup, the section of the coaxial shield between the UnUn and the choke is forced to act as your counterpoise. 
 
 The CMC can be built from:
 - 10–12 turns of RG-58 or RG-316 coax wound on an FT240-43 toroid
@@ -547,7 +593,7 @@ The CMC can be built from:
 | Band Name | Range (MHz) | 
 |---|---|
 | **160 m** | **1.800 – 2.000** |
-| **80 m** | **3.500 – 3.800** |
+| **80/75 m** | **3.500 – 4.000** |
 | **60 m** | **5.3515 – 5.3665** | 
 | **40 m** | **7.000 – 7.300** |
 | **30 m** | **10.100 – 10.150** |
@@ -566,20 +612,20 @@ The CMC can be built from:
 
 This calculator is a **pre-design tool** for rapid comparison and ranking. Users should be aware of the following:
 
-**1. Simplified impedance model:**
+**1. A UnUn is NOT a Tuner:**
+The 9:1 UnUn brings the extreme impedances of the random wire down to a manageable level (usually under 5:1 SWR), but it *does not* eliminate the need for an Antenna Tuner (ATU). A capable internal radio tuner or external ATU is still required for multi-band operation.
+
+**2. Simplified impedance model:**
 The Z_wire formula is a heuristic approximation. Real feedpoint impedance depends on height above ground, ground conductivity, wire sag, and nearby objects. Variations of ±50% from the model values are normal. For accurate impedance, use NEC simulation software (EZNEC, 4NEC2, OpenEMS) or measure with a VNA or antenna analyzer.
 
-**2. Sweep resolution:**
+**3. Sweep resolution:**
 The Length Sweep evaluates at 0.5 m intervals. Optimal lengths may fall between sweep points. The top 5 results are indicative starting points; fine-tuning ±0.5 m in the field may improve performance.
 
-**3. Single-wire counterpoise only:**
+**4. Single-wire counterpoise only:**
 The counterpoise recommendation is for a single λ/4 radial. Real installations with multiple radials of various lengths will perform differently. The calculator does not model the ground system.
 
-**4. No propagation modeling:**
+**5. No propagation modeling:**
 The calculator optimizes matching efficiency only. It does not account for radiation angle, gain, directivity, or propagation conditions — all of which affect actual QSO success more than a 0.5 dB matching improvement.
-
-**5. High SWR bands still usable with ATU:**
-A high VSWR reading for a particular band does not necessarily mean the antenna cannot be used on that band — only that a sufficiently capable ATU is required. The extra feedline loss at VSWR 3:1 in 10 m of RG-213 is approximately 0.5–1 dB, which is often acceptable.
 
 **6. Lossiness of ferrite at high VSWR:**
 When the UnUn core is presented with a highly mismatched impedance, circulating currents cause core heating and insertion loss. This reduces effective radiated power in addition to the feedline mismatch loss. Monitor the UnUn housing temperature during operation; if it becomes warm, consider improving the match or increasing core volume.
