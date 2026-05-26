@@ -282,16 +282,16 @@ A reference table of common toroid cores used in antenna matching applications:
 | Core Name | Material | AL (nH/N²) | OD (mm) | ID (mm) | Height (mm) |
 |---|---|---|---|---|---|
 | FT-114-43 | Ferrite Mix 43 | 510 | 29 | 19 | 7.5 |
-| FT-140-43 | Ferrite Mix 43 | 885 | 35.6 | 22.9 | 12.7 |
+| FT-140-43 | Ferrite Mix 43 | 885 | 35.6 | 23.0 | 12.7 |
 | FT-240-43 | Ferrite Mix 43 | 1075 | 61 | 35.6 | 12.7 |
 | FT-114-31 | Ferrite Mix 31 | 800 | 29 | 19 | 7.5 |
-| FT-140-31 | Ferrite Mix 31 | 1390 | 35.6 | 22.9 | 12.7 |
+| FT-140-31 | Ferrite Mix 31 | 1390 | 35.6 | 23.0 | 12.7 |
 | FT-240-31 | Ferrite Mix 31 | 1800 | 61 | 35.6 | 12.7 |
 | FT-114-52 | Ferrite Mix 52 | 175 | 29 | 19 | 7.5 |
-| FT-140-52 | Ferrite Mix 52 | 225 | 35.6 | 22.9 | 12.7 |
+| FT-140-52 | Ferrite Mix 52 | 225 | 35.6 | 23.0 | 12.7 |
 | FT-240-52 | Ferrite Mix 52 | 300 | 61 | 35.6 | 12.7 |
 | FT-114-61 | Ferrite Mix 61 | 79.3 | 29 | 19 | 7.5 |
-| FT-140-61 | Ferrite Mix 61 | 140 | 35.6 | 22.9 | 12.7 |
+| FT-140-61 | Ferrite Mix 61 | 140 | 35.6 | 23.0 | 12.7 |
 | FT-240-61 | Ferrite Mix 61 | 170 | 61 | 35.6 | 12.7 |
 | T-130-2 | Iron Powder Mix 2 | 11 | 33 | 19.8 | 11.1 |
 | T-200-2 | Iron Powder Mix 2 | 12 | 50.8 | 31.8 | 14 |
@@ -409,7 +409,7 @@ The ITU amateur band center frequencies used in this calculator:
 | 10 m | 28.000 | 29.700 | 28.850 |
 | 6 m | 50.000 | 54.000 | 52.000 |
 
->*Note: The 80m band allocation varies by ITU Region. Region 2 (the Americas) extends from 3.5 to 4.0 MHz, while Region 1 generally operates from 3.5 to 3.8 MHz. This calculator uses 3.65 MHz as the center frequency, which is appropriate for Region 1 and the lower portion of Region 2. For Region 2 full allocation, the center would be 3.750 MHz.*
+>*Note: The 80 m band allocation varies by ITU Region. Region 2 (the Americas) extends from 3.5 to 4.0 MHz, while Region 1 generally operates from 3.5 to 3.8 MHz. This calculator uses 3.65 MHz as the center frequency, which is appropriate for Region 1 and the lower portion of Region 2. For Region 2 full allocation, the center would be 3.750 MHz. For 60 m, the 5351.5–5366.5 kHz range is the ITU worldwide secondary allocation (WRC-15). The US FCC additionally operates four discrete channels at 5332, 5348, 5373, and 5405 kHz (as of February 2026). Check your national regulator for current 60 m operating privileges.*
 
 ### 5.2 Resonance Avoidance Score Formula
 
@@ -552,7 +552,7 @@ Counterpoise ──── Coax shield ──── Ground end of winding
 **Construction procedure (example for FT240-43 core):**
 
 1. Cut three equal lengths of enameled copper wire (AWG 20–16 depending on power level). Twist them loosely together at ~3–5 twists per 10 cm to ensure tight magnetic coupling.
-2. Wind **9 trifilar turns** through the toroid core (each of the three wires passes through the core 9 times = 27 individual passes total, but only 9 magnetic turns).
+2. Wind **9 trifilar turns** through the toroid core (each of the three wires passes through the core 9 times = 27 individual conductor passes total). When the three wires are later connected in series, these 27 conductor segments form the full winding. **The number of turns (9) affects the low-frequency performance: more turns extend operation to lower bands, but add resistance and reduce high-frequency performance. Nine turns is the standard starting point for 80 m and above.**
 3. Connect all three wires in series to form the full 27-conductor-turn winding — this is the **antenna side** (high-impedance side, 9 × 50 = 450 Ω).
 4. The **coax center conductor** taps in at the junction between the first (lowest) 9-conductor-pass section and the remaining two sections. This one-third tap is the 9-turn tap from ground, giving a 3:1 voltage ratio (9:1 impedance ratio).
 5. The **coax shield** and **counterpoise** both connect to the grounded (cold) end of the winding.
@@ -568,15 +568,15 @@ Counterpoise ──── Coax shield ──── Ground end of winding
 
 The most critical variable in UnUn performance is the **ferrite core material (mix)**.
 
-| Core | OD (inches) | Mix | Freq. Range | Max Power (SSB) | Application |
+| Core | OD (inches) | Mix | Freq. Range (broadband transformer) | Max Power (SSB) | Application |
 |---|---|---|---|---|---|
-| FT82-43 | 0.825" | 43 | 1–50 MHz | 25 W | QRP, portable |
-| FT140-43 | 1.4" | 43 | 1–50 MHz | 150–200 W | Home 100 W station |
-| FT240-43 | 2.4" | 43 | 1–50 MHz | 500–1000 W | High power |
-| FT240-31 | 2.4" | 31 | 1–30 MHz | 500 W | Low-band emphasis (80/160 m) |
+| FT82-43 | 0.825" | 43 | 0.5–25 MHz | 25 W | QRP, portable |
+| FT140-43 | 1.4" | 43 | 0.5–25 MHz | 150–200 W | Home 100 W station |
+| FT240-43 | 2.4" | 43 | 0.5–25 MHz | 500–1000 W | High power |
+| FT240-31 | 2.4" | 31 | 0.1–10 MHz | 500 W | Low-band emphasis (80/160 m) |
 | FT240-61 | 2.4" | 61 | 5–200 MHz | 500 W | Upper HF / VHF emphasis |
 
-> **Note on Core Material:** **Mix 43 ferrite** (µ_i ≈ 850) is the most popular for broadband HF UnUns because it provides high enough magnetizing inductance to work on 80 m and 40 m while remaining efficient on the upper HF bands. Avoid using powdered iron cores (such as Type 2, e.g., T200-2) for 9:1 broadband impedance matching. While older literature sometimes suggests them, powdered iron cores have inferior frequency response curves compared to ferrite in this specific transformer application. Mix 31 works better for 160 m and 80 m but underperforms slightly on 10 m.
+> **Note on Core Material:** **Mix 43 ferrite** (µ_i = 800, NiZn) is the most popular for broadband HF UnUns because it provides high enough magnetizing inductance to work on 80 m and 40 m while remaining efficient on the upper HF bands. Mix 43 is well-suited for broadband transformer and balun/UnUn applications in the 0.5–25 MHz range for power transformers and up to 250 MHz for EMI suppression (Fair-Rite specification). Avoid using powdered iron cores (such as Type 2, e.g., T200-2) for 9:1 broadband impedance matching. While older literature sometimes suggests them, powdered iron cores have inferior frequency response curves compared to ferrite in this specific transformer application. Mix 31 (MnZn, µ_i ≈ 1500) works better for 160 m and 80 m but underperforms slightly on 10 m. Mix 61 (NiZn, µ_i ≈ 125) is preferred by some builders for upper HF (10–30 MHz) UnUns due to lower losses at those frequencies.
 
 For **digital modes** (FT8, PSK31, RTTY) with high duty cycles, size up one core category from the SSB rating — digital modes sustain power continuously unlike SSB which has natural pauses.
 
@@ -675,7 +675,7 @@ The CMC can be built from:
 | **10 m** | **28.000 – 29.700** | 
 | **6 m** | **50.000 – 54.000** |
 
-> **Note:** 60 m is included with its current ITU channelized allocation (5 channels at 5.3515–5.3665 MHz). Check your national regulator for specific channelized access rules.
+> **Note on 60 m:** The 5351.5–5366.5 kHz range is the **worldwide ITU secondary allocation** established at WRC-15 (2015) — a continuous 15 kHz band, not a set of discrete channels. The old US channelized system (five fixed channels) was a separate, domestic FCC arrangement. As of **February 13, 2026**, the US FCC formally aligned with WRC-15, allocating the segment 5351.5–5366.5 kHz to the Amateur Service on a secondary basis (max 9.15 W ERP, 2.8 kHz bandwidth), while also retaining four new discrete channels at 5332, 5348, 5373, and 5405 kHz (100 W ERP, General/Advanced/Extra class). Regulations differ by country — always check your national regulator's current 60 m rules before operating.
 
 ---
 
@@ -706,6 +706,12 @@ Wire length, height, and operating power must comply with your national radio co
 
 **8. High voltage warning:**
 At wire lengths near λ/2 resonance, feedpoint voltages can reach hundreds to thousands of volts even at modest power (e.g., 100 W). Ensure all connections are properly insulated and rated for the expected voltage. Arcing can occur in poorly designed UnUn housings.
+
+**9. EFHW vs. EFRW distinction:**
+This calculator designs **non-resonant end-fed random wire (EFRW)** antennas, which require a tuner on every band. This is fundamentally different from an **End-Fed Half-Wave (EFHW)** antenna, which is resonant at its fundamental frequency and works on harmonic bands without a tuner (using a 49:1 UnUn). If your primary goal is multi-band portable operation without a tuner, an EFHW may be more convenient. The EFRW with a 9:1 UnUn is preferable for maximum band flexibility, emergency use, or when exact wire length cannot be controlled.
+
+**10. Number of turns and low-frequency coverage:**
+The number of winding turns on the UnUn core controls the minimum operating frequency. Nine trifilar turns on an FT240-43 core provides adequate primary inductance for operation from ~3.5 MHz (80 m) upward. For 160 m coverage, additional turns (12–14 trifilar turns) may be needed to maintain adequate magnetizing reactance at 1.8 MHz. Always verify primary inductance with a VNA or LC meter before use on low bands.
 
 ---
 
@@ -743,10 +749,10 @@ At wire lengths near λ/2 resonance, feedpoint voltages can reach hundreds to th
 - **ARRL Antenna Book** (24th edition and later) — comprehensive coverage of end-fed antennas, impedance matching, and feedline theory
 - Lewallen, R., W7EL — *NEC-based Antenna Modeling Software*, EZNEC documentation (http://www.eznec.com)
 - Moxon, L.A., G6XN — *HF Antennas for All Locations*, RSGB, 1982 — classic reference for practical HF wire antennas
-- Sprott, J.C. — *"Optimal Length of a Random Wire Antenna"*, technical note, University of Wisconsin, https://sprott.physics.wisc.edu/technote/randwire.htm
+- Sprott, J.C. — *"Optimal Length of a Random Wire Antenna"*, technical note (April 2012, revised May 2022), University of Wisconsin, https://sprott.physics.wisc.edu/technote/randwire.htm
 - AA5TB — *"End-Fed Half-Wave Antenna"*, https://www.aa5tb.com/efha.html — detailed analysis of EFHW impedance and transformer design
 - W8JI — *"Long Wire Antenna"*, https://www.w8ji.com/long_wire_antenna.htm — authoritative practical analysis including counterpoise design and feed system problems
-- G3TXQ — *"Wideband Transformers"*, extensive research on ferrite vs. powdered iron core performance for UnUn applications
+- G3TXQ (Steve Hunt, SK 2015) — *"Wideband Transformers"* and *"Common Mode Chokes"*, http://www.karinya.net/g3txq/ — extensive research on ferrite vs. powdered iron core performance for UnUn applications (site archived; content remains an authoritative reference)
 
 ### Online Resources
 
