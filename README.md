@@ -1,5 +1,7 @@
 # 📡 Long Wire Antenna + UnUn — Multi-Band Optimizer
 
+## WARNING: Work In Progress!
+
 > An Excel-based engineering calculator for designing non-resonant long-wire (end-fed random wire) HF antennas with impedance-matching UnUn transformers. Supports multi-band optimization from 160 m through 6 m, with resonance avoidance scoring, VSWR estimation (resistive and complex), counterpoise impedance correction modelling, UnUn ratio sweep, core saturation analysis, and counterpoise recommendations.
 
 ---
