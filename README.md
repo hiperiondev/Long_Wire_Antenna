@@ -1,6 +1,6 @@
 # 📡 Long Wire Antenna + UnUn — Multi-Band Optimizer
 
-## WARNING: Work In Progress!
+## ⚠ WORK IN PROGRESS — Some features are under development. Verify all output against known reference designs before use in a real installation.
 
 > An Excel-based engineering calculator for designing non-resonant long-wire (end-fed random wire) HF antennas with impedance-matching UnUn transformers. Supports multi-band optimization from 160 m through 6 m, with resonance avoidance scoring, VSWR estimation (resistive and complex), counterpoise impedance correction modelling, UnUn ratio sweep, core saturation analysis, and counterpoise recommendations.
 
@@ -151,7 +151,9 @@ Conversely, when a wire is at an exact **quarter-wavelength**, feedpoint impedan
 
 Therefore, the **design goal** for a non-resonant long-wire is to choose a length that stays **as far from both λ/2 and λ/4** as possible, across all desired operating bands simultaneously. This is exactly what the **Resonance Avoidance Score** in this calculator quantifies.
 
-Traditional recommended non-resonant lengths (in feet) from ham radio literature include: 29, 35.5, 41, 58, 71, 84 (≈ 25.6 m), 107, 119, 148, and others. This calculator generalizes and optimizes this for any set of active bands, in meters.
+Traditional recommended non-resonant lengths (in feet) from ham radio literature include: 29, 35.5, 41, 58, **74** (≈ 22.6 m — the Sprott/W0IPL optimum for 80–10 m, widely cited), 71, 84 (≈ 25.6 m), 107, 119, 148, and others. This calculator generalizes and optimizes this for any set of active bands, in meters.
+
+> **Practically-proven lengths:** Community experience (KB9VBR, W1SFR, and numerous SOTA/POTA activators) has established **41 ft (12.5 m)** for compact 40–10 m coverage and **71 ft (21.6 m)** or **84 ft (25.6 m)** for extended 80–10 m coverage as reliable field-proven starting points. The Length Sweep will rank these appropriately for your specific band selection.
 
 ### 1.6 Velocity Factor
 
@@ -289,7 +291,7 @@ Outputs per band:
 
 The most detailed analytical sheet. For each of the **10 recommended wire lengths**, across all active bands:
 
-**Section 1** — Feedpoint impedance (Ω) per band for all 5 wires.
+**Section 1** — Feedpoint impedance (Ω) per band for all 10 wires.
 
 **Section 2** — For each wire × band combination, the optimal UnUn ratio (4:1 → 69:1) that minimises VSWR, along with the best achievable VSWR. The optimal ratio is found by evaluating all 66 possible ratios and selecting the one that gives the lowest VSWR for that specific wire length and band.
 
@@ -305,7 +307,7 @@ This section answers the key question: *"If I can only choose one UnUn transform
 
 ### 3.4 Sheet 4 — Length Sweep
 
-The computational engine that feeds the Top 5 results in Sheet 1. It evaluates **551 candidate lengths** (5.0 m to 60.0 m in 0.1 m steps) and computes:
+The computational engine that feeds the Top 10 results in Sheet 1. It evaluates **551 candidate lengths** (5.0 m to 60.0 m in 0.1 m steps) and computes:
 
 - Per-band avoidance score (0.00–0.25)
 - Overall minimum score (the bottleneck band)
@@ -402,7 +404,7 @@ A reference table of common toroid cores used in antenna matching applications:
 | T-130-6 | Iron Powder Mix 6 | 9.6 | 33 | 19.8 | 11.1 |
 | T-200-6 | Iron Powder Mix 6 | 11.6 | 50.8 | 31.8 | 14 |
 
-> **Note on AL tolerances:** AL values for ferrite cores (Mix 31/43/52/61) carry a manufacturer tolerance of ±20–25% (e.g., FT-240-43 is rated 1075 nH/N² ±20% by Amidon/Fair-Rite). Iron powder cores are tighter (±5–10%). Always verify winding inductance with an LC meter or VNA before use, especially for low-band (160/80 m) applications where adequate primary reactance is critical.
+> **Note on AL tolerances:** AL values for ferrite cores (Mix 31/43/52/61) carry a manufacturer tolerance of ±20–25% (e.g., FT-240-43 is rated 1075 nH/N² ±20% by Amidon/Fair-Rite; equivalent cores from other suppliers such as MagWave are listed at ~1030 nH/N² ±25% — both values are within normal batch variance). Iron powder cores are tighter (±5–10%). Always verify winding inductance with an LC meter or VNA before use, especially for low-band (160/80 m) applications where adequate primary reactance is critical.
 
 > **Note on FT-82 series (QRP):** The smaller FT-82 series (OD ≈ 21 mm) is a common QRP-level alternative frequently cited in construction guides:
 
@@ -654,6 +656,8 @@ Adding 160 m or 80 m to the active bands changes the optimal lengths significant
 
 **Rule of thumb:** When in doubt, longer is better. A wire of 40–55 m covers 40 m through 10 m comfortably, and is forgiving of minor installation variations.
 
+> **Note on the "43-foot / 13 m" benchmark:** The 43-foot (≈ 13.1 m) length is widely cited as a multi-band non-resonant benchmark, popularized in the context of broadband verticals and described by W8JI and others. It avoids half-wave and quarter-wave resonances for the most-used HF bands (40–10 m) reasonably well, making it a useful compact portable length. The Length Sweep and Top 10 table in this calculator will score it appropriately for your specific band selection.
+
 **Practically impossible exact lengths:** Due to practical installation constraints (tree placement, building layout), cutting to within ±0.5 m of the calculated optimum is perfectly acceptable. The avoidance score changes gradually near a good candidate length.
 
 ### 6.2 Building a 9:1 UnUn Transformer
@@ -675,9 +679,9 @@ Counterpoise ──── Coax shield ──── Ground end of winding
 **Construction procedure (example for FT-240-43 core):**
 
 1. Cut three equal lengths of enameled copper wire (AWG 20–16 depending on power level). Twist them loosely together at ~3–5 twists per 10 cm to ensure tight magnetic coupling.
-2. Wind **9 trifilar turns** through the toroid core (each of the three wires passes through the core 9 times = 27 individual conductor passes total). When the three wires are later connected in series, these 27 conductor segments form the full winding. **The number of turns (9) affects the low-frequency performance: more turns extend operation to lower bands, but add resistance and reduce high-frequency performance. Nine turns is the standard starting point for 80 m and above.**
-3. Connect all three wires in series to form the full 27-conductor-turn winding — this is the **antenna side** (high-impedance side, 9 × 50 = 450 Ω).
-4. The **coax center conductor** taps in at the junction between the first (lowest) 9-conductor-pass section and the remaining two sections. This one-third tap is the 9-turn tap from ground, giving a 3:1 voltage ratio (9:1 impedance ratio).
+2. Wind **9 trifilar turns** through the toroid core (each of the three wires passes through the core 9 times = 27 individual wire passes total, but this counts as 9 turns because all three conductors advance together per turn). When the three wires are later connected in series, these 9-turn segments form the complete **3×9 = 27-conductor autotransformer winding**. **The number of turns (9) affects the low-frequency performance: more turns extend operation to lower bands, but add resistance and reduce high-frequency performance. Nine turns is the standard starting point for 80 m and above.**
+3. Connect all three wires in series to form the full 27-pass winding — this is the **antenna side** (high-impedance side, 9 × 50 = 450 Ω).
+4. The **coax center conductor** taps in at the junction between the first (lowest) 9-pass section and the remaining two sections — i.e., one-third of the way along the full winding. This gives a 3:1 turns (voltage) ratio, which squares to a **9:1 impedance ratio**.
 5. The **coax shield** and **counterpoise** both connect to the grounded (cold) end of the winding.
 6. Install in a weatherproof enclosure (PVC or ABS box — do **not** use a metallic enclosure as it will short the magnetic field), with SO-239 (UHF female) connector for coax and screw terminals for antenna wire and counterpoise.
 
@@ -701,9 +705,9 @@ The most critical variable in UnUn performance is the **ferrite core material (m
 | FT-240-31 | 2.4\" | 31 | 0.1–10 MHz | 500 W | Low-band emphasis (80/160 m) |
 | FT-240-61 | 2.4\" | 61 | 5–50 MHz | 500 W | Upper HF / VHF emphasis (10–6 m) |
 
-> **Note on Core Material:** **Mix 43 ferrite** (µ_i = 800, NiZn) is widely used for broadband HF UnUns because it provides sufficient magnetizing inductance to work on 80 m and 40 m while remaining usable on the upper HF bands. However, users should be aware of its frequency-dependent limitations: Mix 43's complex permeability crossover point occurs at approximately 7 MHz, meaning it becomes progressively more lossy above that frequency. Fair-Rite rates it as an RF inductor/transformer material from 0.5 to 25 MHz, with its best efficiency window at 0.5–10 MHz. For 20 m (14 MHz) and above, especially 12 m (24.9 MHz) and 10 m (28 MHz), core losses in Mix 43 are noticeably higher than in Mix 61. **Mix 43 is a practical compromise** for a broadband 3.5–30 MHz UnUn at moderate power, but if 10 m and 12 m performance is critical, consider Mix 61 or use a dual-core approach (one Mix 43 + one Mix 61 stacked).
+> **Note on Core Material:** **Mix 43 ferrite** (µ_i = 800, **NiZn**) is widely used for broadband HF UnUns because it provides sufficient magnetizing inductance to work on 80 m and 40 m while remaining usable on the upper HF bands. However, users should be aware of its frequency-dependent limitations: Mix 43's complex permeability crossover point occurs at approximately 7 MHz, meaning it becomes progressively more lossy above that frequency. Fair-Rite rates it as an RF inductor/transformer material from 0.5 to 25 MHz, with its best efficiency window at 0.5–10 MHz. For 20 m (14 MHz) and above, especially 12 m (24.9 MHz) and 10 m (28 MHz), core losses in Mix 43 are noticeably higher than in Mix 61. **Mix 43 is a practical compromise** for a broadband 3.5–30 MHz UnUn at moderate power, but if 10 m and 12 m performance is critical, consider Mix 61 or use a dual-core approach (one Mix 43 + one Mix 61 stacked).
 >
-> **Mix 31** (MnZn, µ_i ≈ 1500) works better for 160 m and 80 m but underperforms slightly on 10 m. Mix 61 (NiZn, µ_i ≈ 125) is preferred by some builders for upper HF (10–30 MHz) UnUns due to lower losses at those frequencies.
+> **Mix 31** (**MnZn**, µ_i ≈ 1500) works better for 160 m and 80 m but underperforms slightly on 10 m. Mix 61 (NiZn, µ_i ≈ 125) is preferred by some builders for upper HF (10–30 MHz) UnUns due to lower losses at those frequencies.
 >
 > **On powdered iron cores:** Some references (including G3TXQ's measurements) have shown that Type 2 powdered iron cores (e.g., T-200-2) can perform acceptably in certain 9:1 UnUn configurations, particularly when the impedance transformation range is moderate. Powdered iron cores generally have lower permeability, require more turns to achieve adequate magnetizing inductance at low frequencies (3.5–7 MHz), and may not provide as broadband a response as ferrite. For a 3.5–30 MHz application, a ferrite core (Mix 43 or 61) is generally preferred. For a 7–30 MHz application (no 80 m), a large iron powder core can work. The UnUn Calculator sheet (Sheet 5) defaults to T-200-2 as a starting point; always verify the design check (XLp > 4·Rin) output before use.
 
@@ -733,6 +737,7 @@ L_counterpoise = 0.95 × 75 / 7.15 ≈ 10.0 m
 - Keep it away from metallic structures (fences, gutters, downpipes) that could absorb RF
 - For multi-band operation, use **multiple radials** at different λ/4 lengths (e.g., one for 40 m ≈ 10 m, one for 20 m ≈ 5 m, one for 10 m ≈ 2.5 m)
 - Do **not** connect the counterpoise back to the station RF ground or protective earth — this short-circuits the antenna system and routes RF into the building
+- **Alternative (no-UnUn setup):** Some operators connect the random wire and counterpoise directly to an ATU that supports unbalanced random-wire inputs (e.g., MFJ-941, LDG AT-100ProII). This eliminates the UnUn entirely and may work better on certain bands, but requires the ATU to handle wide impedance swings. As noted by W8JI, a 1:1 current balun at the ATU input is preferable to a 9:1 UnUn in counterpoise-limited installations.
 
 ### 6.5 Antenna Configurations
 
@@ -797,7 +802,7 @@ For **multi-band** operation, run the coax **perpendicular** to the antenna wire
 | Band Name | Range (MHz) | 
 |---|---|
 | **160 m** | **1.800 – 2.000** |
-| **80/75 m** | **3.500 – 3.800** |
+| **80/75 m** | **3.500 – 4.000** (Region 2: Americas) / **3.500 – 3.800** (Region 1) |
 | **60 m** | **5.3515 – 5.3665** | 
 | **40 m** | **7.000 – 7.300** |
 | **30 m** | **10.100 – 10.150** |
@@ -823,7 +828,7 @@ The 9:1 UnUn brings the extreme impedances of the random wire down to a manageab
 The Z_wire formula is a heuristic approximation. Real feedpoint impedance depends on height above ground, ground conductivity, wire sag, and nearby objects. Variations of ±50% from the model values are normal. For accurate impedance, use NEC simulation software (EZNEC, 4NEC2, OpenEMS) or measure with a VNA or antenna analyzer.
 
 **3. Sweep resolution:**
-The Length Sweep evaluates at 0.1 m intervals. Optimal lengths may fall between sweep points. The top 5 results are indicative starting points; fine-tuning ±0.5 m in the field may improve performance.
+The Length Sweep evaluates at 0.1 m intervals. Optimal lengths may fall between sweep points. The top 10 results are indicative starting points; fine-tuning ±0.5 m in the field may improve performance.
 
 **4. Single-wire counterpoise only:**
 The counterpoise recommendation is for a single λ/4 radial. The Counterpoise Impedance Model provides a first-order correction for multiple radials, but real installations with many radials will perform differently. The calculator does not model ground conductivity or soil type.
@@ -890,7 +895,8 @@ The assumption that a non-resonant random wire presents approximately 450 Ω is 
 - **ARRL Antenna Book** (24th edition and later) — comprehensive coverage of end-fed antennas, impedance matching, and feedline theory
 - Lewallen, R., W7EL — *NEC-based Antenna Modeling Software*, EZNEC documentation (http://www.eznec.com)
 - Moxon, L.A., G6XN — *HF Antennas for All Locations*, RSGB, 1982 — classic reference for practical HF wire antennas
-- Sprott, J.C. — *"Optimal Length of a Random Wire Antenna"*, technical note (April 2012, revised May 2022), University of Wisconsin, https://sprott.physics.wisc.edu/technote/randwire.htm — algorithmic approach to finding lengths that avoid all amateur band half-wave resonances simultaneously
+- Sprott, J.C. — *"Optimal Length of a Random Wire Antenna"*, technical note (April 2012, revised May 2022), University of Wisconsin, https://sprott.physics.wisc.edu/technote/randwire.htm — algorithmic approach to finding lengths that avoid all amateur band half-wave resonances simultaneously. Key result: **74 feet (≈ 22.6 m)** is identified as the length with the widest gap (376 kHz) between resonances, making it one of the most robust choices for 80–10 m multi-band coverage without a balun of large turns ratio.
+- W0IPL — *"Optimal Non-Resonant Wire Lengths for HF Operation"* — table of odd quarter-wave multiples versus amateur band resonances; origin of the widely-cited 74-foot non-resonant recommendation; referenced in ARRL Antenna Book and the Wikipedia *Random wire antenna* article
 - AA5TB — *"End-Fed Half-Wave Antenna"*, https://www.aa5tb.com/efha.html — detailed analysis of EFHW impedance and transformer design
 - W8JI — *"Long Wire Antenna"*, https://www.w8ji.com/long_wire_antenna.htm — authoritative practical analysis including counterpoise design and the argument for a 1:1 current balun rather than a UnUn
 - G3TXQ (Steve Hunt, SK 2015) — *"Wideband Transformers"* and *"Common Mode Chokes"*, http://www.karinya.net/g3txq/ — extensive research on ferrite vs. powdered iron core performance for UnUn applications (site archived; content remains an authoritative reference)
