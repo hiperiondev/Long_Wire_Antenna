@@ -283,7 +283,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 ---
 
-### 3.4 Sheet 4 — Transmatch Calculator ⭐ **NEW DOCUMENTATION**
+### 3.4 Sheet 4 — Transmatch Calculator
 
 **Purpose**: Design an **air-core antenna tuning network** (impedance matching coil with multiple taps)
 
