@@ -1,4 +1,4 @@
-# 📡 Long Wire Antenna + UnUn — Multi-Band Optimizer
+# 📡 Long Wire Antenna — Multi-Band Optimizer
 
 ## ⚠ WORK IN PROGRESS — Some features are under development. Verify all output against known reference designs before use in a real installation.
 
