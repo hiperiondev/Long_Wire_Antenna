@@ -2,6 +2,8 @@
 
 ## ⚠ WORK IN PROGRESS — Some features are under development. Verify all output against known reference designs before use in a real installation.
 
+> **README revision note (June 2026):** This README has been audited and corrected against the actual workbook. Key corrections: sheet order/numbering fixed (Sheets 3–6 were in wrong order), avoidance score scale corrected throughout to max = 0.25 (Sections 1.5, 3.5, 4.1, 5.2, and Glossary all previously stated max = 1.0), Section 5.2 formula rewritten to match actual spreadsheet algorithm, Step 5 of Quick Start corrected (counterpoise cell uses λ/4, not 0.05λ), VSWR Calculator UnUn ratio input clarified (accepts any integer N:1, not just 4 fixed values), CMC placement warning added to Sheet 1 description (spreadsheet cell contains outdated "feedpoint" instruction contradicting 2025 guidance), counterpoise formula aligned with what the sheet actually computes (λ/4), FT-82 references removed (not in Toroid Database), Toroid Database mix inventory corrected, and UnUn Ratio Optimizer sweep range corrected (4:1–69:1, not just 4 fixed ratios). **Additional June 2026 audit corrections:** Section 5.5 counterpoise formula corrected to include velocity factor (L_cp = 75 × VF / f_MHz, matching the spreadsheet); Section 3.3 UnUn Calculator ratio input clarified to accept any custom turns count (matching Section 3.2 wording); Section 3.4 Transmatch vs. UnUn table header corrected (was "Sheet 6", now "Sheet 3 / Sheet 6"); Section 3.4 SWR output clarified to distinguish unmatched vs. matched SWR columns; Step 7 Quick Start SWR threshold corrected from ">2:1" to ">3:1" to match the VSWR sheet colour coding; license note corrected to match the CC0 v1.0 declaration inside the workbook. **June 2026 full workbook re-audit corrections:** (1) VSWR 4-tier guide added to Section 4.3 — sheet has four tiers (Excellent/Good/Marginal/Poor at ≤1.5 / 1.5–3.0 / 3.0–6.0 / >6.0) but README previously documented only 3 tiers; Step 7 Quick Start updated to reflect 4-tier scale. (2) Section 6.2 UnUn construction winding instructions completely rewritten — previous version described a separate primary+secondary winding (wrong); corrected to describe the autotransformer topology (single winding, tap at N_total/n turns) which matches Section 2.1 of the UnUn Calculator sheet. (3) Section 5.6 UnUn formula corrected — label `N_turns` renamed to `n` (turns ratio) and formula updated to reflect autotransformer impedance ratio `(N_total/N_tap)²`; autotransformer vs two-winding distinction clarified. (4) Section 3.4 Transmatch "Antenna length" key input corrected — was "Inherited from VSWR Calculator" but the sheet uses an independent input cell (C3); user must enter the value manually. (5) Section 3.3 Key Outputs — max turns per core warning added (sheet shows a per-core maximum turns limit cell beside the turns result). (6) Section 3.7 Toroid Database "How to Use" step 1 now lists the full ratio range (4:1–69:1 autotransformer) instead of only 4 fixed square ratios. (7) Spreadsheet cell typo noted in Section 3.1: counterpoise guidance reads "Keep counterpoise straigh" — trailing 't' missing; display-only typo noted.
+
 > An Excel-based engineering calculator for designing non-resonant long-wire (end-fed random wire) HF antennas with impedance-matching networks. Supports multi-band optimization from 160 m through 6 m, with resonance avoidance scoring, VSWR estimation (resistive and complex), counterpoise impedance correction modelling, UnUn ratio sweep, core saturation analysis, counterpoise recommendations, and alternative air-core antenna tuner design.
 
 ---
@@ -20,10 +22,10 @@
 3. [Workbook Structure](#3-workbook-structure)
    - [Sheet 1 — Calculator](#31-sheet-1--calculator)
    - [Sheet 2 — VSWR Calculator](#32-sheet-2--vswr-calculator)
-   - [Sheet 3 — UnUn Ratio Optimizer](#33-sheet-3--unun-ratio-optimizer)
+   - [Sheet 3 — UnUn Calculator](#33-sheet-3--unun-calculator)
    - [Sheet 4 — Transmatch Calculator](#34-sheet-4--transmatch-calculator)
    - [Sheet 5 — Length Sweep](#35-sheet-5--length-sweep)
-   - [Sheet 6 — UnUn Calculator](#36-sheet-6--unun-calculator)
+   - [Sheet 6 — UnUn Ratio Optimizer](#36-sheet-6--unun-ratio-optimizer)
    - [Sheet 7 — Toroid Database](#37-sheet-7--toroid-database)
 4. [How to Use the Calculator](#4-how-to-use-the-calculator)
    - [Step-by-Step Quick Start](#41-step-by-step-quick-start)
@@ -132,7 +134,7 @@ The central design challenge with random-wire antennas is **avoiding resonances*
 - At **quarter-wave resonance** (λ/4): Impedance becomes very low; little power is radiated
 - **Between these points** (3/8 λ, 5/8 λ, etc.): Impedance is moderate and tunable
 
-**The solution:** Choose a wire length that **avoids half-wave and quarter-wave multiples** of all bands you want to operate on. The **avoidance score** in this calculator measures how far your chosen length is from these "forbidden" resonance points. Scores range from 0 (on resonance) to 1.0 (maximum distance from all resonances).
+**The solution:** Choose a wire length that **avoids half-wave and quarter-wave multiples** of all bands you want to operate on. The **avoidance score** in this calculator measures how far your chosen length is from these "forbidden" resonance points. Scores range from 0 (on resonance) to **0.25** (maximum distance from all resonances — the wire sits exactly at the midpoint between λ/4 and λ/2).
 
 **Key reference**: J.C. Sprott's research (revised 2022) identified that **74 feet (22.6 m)** has the largest gap (376 kHz) between quarter-wave resonances, making it the single best length for 80–10 m multi-band coverage.
 
@@ -162,14 +164,16 @@ A **counterpoise** is a wire or set of wires that acts as a reference return pat
 
 **Counterpoise design (Updated 2025):**
 
-The traditional formula is **λ/4 of the lowest operating frequency**. However, recent research (PA9X 2025, RF.Guru 2025) provides a more practical guideline:
+The traditional formula is **λ/4 of the lowest operating frequency**, which is the value the Calculator sheet displays and pre-fills.
 
-**Ideal length: 0.05 × longest wavelength you plan to transmit on**
+However, recent research (PA9X 2025, RF.Guru 2025) provides a more practical guideline for the *minimum effective* length:
+
+**Minimum practical length: 0.05 × longest wavelength you plan to transmit on**
 
 Example: For 80–10 m operation (80 m is longest), λ = 80 m, so 0.05 × 80 = **4 meters** is sufficient. This length:
 - Provides adequate return current path
 - Doesn't radiate as a co-radiator
-- Is much easier to implement than λ/4 (which would be ~20 m)
+- Is much easier to implement than λ/4 (which would be ~20 m for 80m)
 
 **Number of radials:**
 - **Single radial**: 1–2 meters minimum; works for QRP
@@ -216,8 +220,11 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 **Key Outputs**:
 - **Top 10 Recommended Wire Lengths**: Ordered by avoidance score (EXCELLENT ★★★ to AVOID ✗)
-- **Recommended Counterpoise Length**: 0.05 × longest wavelength (updated 2025)
+- **Recommended Counterpoise Length**: λ/4 of the lowest active band (see Section 5.5 for the practical 0.05λ alternative)
+  > ⚠️ **Spreadsheet typo note**: The counterpoise guidance cell in Sheet 1 reads *"Keep counterpoise straigh"* — the trailing 't' is missing. This is a display-only typo in the spreadsheet cell and does not affect calculations. The correct word is **"straight"**.
 - **Choke/Balun Installation Guidance**: Placement, impedance targets, core recommendations
+
+> ⚠️ **CMC Placement Note**: The "Choke/Balun Installation Guidance" table inside the Calculator sheet contains an outdated instruction that reads *"Install current choke (CMC) at the feedpoint, between coax and UnUn primary"*. This is **incorrect per 2025 best practice**. The correct placement is at the **radio end of the feedline** (before it enters the shack), **not** at the antenna feedpoint. See Section 6.6 for the full explanation. The spreadsheet cell will be corrected in a future revision.
 
 **Typical Workflow**: Start here, select your bands, note Top-1 or Top-3 wire length, then verify with VSWR Calculator.
 
@@ -236,7 +243,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 **Key Inputs**:
 - **Wire length** (m): Select from Top-10 list or enter custom value
-- **UnUn Ratio** (N:1): Usually 9:1; can test alternatives (6:1, 7:1, 16:1, 49:1)
+- **UnUn Ratio** (N:1): Enter any integer ratio (e.g. 9:1, 16:1, 25:1, 30:1, 49:1); the sheet accepts any value — use the UnUn Ratio Optimizer (Sheet 6) to find the best ratio for your wire length
 - **Counterpoise configuration**: Height, length, number of radials
 
 **Key Outputs**:
@@ -256,30 +263,50 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 ---
 
-### 3.3 Sheet 3 — UnUn Ratio Optimizer
+### 3.3 Sheet 3 — UnUn Calculator
 
-**Purpose**: Suggest the best ferrite UnUn impedance ratio for your chosen antenna
+**Purpose**: Design a **ferrite-based wideband UnUn transformer** (impedance matching)
 
 **What It Does**:
-- Tests multiple UnUn ratios (9:1, 16:1, 25:1, 49:1) for your specific wire length
-- Calculates average SWR and return loss for each ratio across all active bands
-- Recommends which ratio provides best broadband performance
-- Shows trade-offs between different ratios
+- Calculates ferrite toroid specifications for your UnUn
+- Designs windings: Number of turns, wire gauge, connections
+- Predicts impedance matching performance across 1.8–30 MHz
+- Provides step-by-step construction instructions
 
-**Key Inputs**:
-- Wire length: Automatically pulls from VSWR Calculator (Sheet 2)
-- Antenna impedance data: Calculated from impedance model
+**Key Inputs** (Blue cells):
+- **UnUn Ratio** (N:1): Enter any integer ratio — 9:1 (most common), 16:1, 25:1, 49:1, or any custom value; the sheet accepts any primary turns count and computes the resulting impedance ratio
+- **Wire diameter**: AWG or mm (for coil winding)
+- **Core type & size**: FT-114, FT-140, FT-240 (from Toroid Database)
+- **Turns**: Default calculated; can adjust for experimentation
 
 **Key Outputs**:
-- **Recommended ratio**: Which of 9:1, 16:1, 25:1, 49:1 is optimal
-- **SWR comparison**: How each ratio performs on each band
-- **Average SWR**: Across all bands for comparison
+- **Winding design**: Primary turns, secondary turns, impedance ratio confirmed
+- **RF Performance** (per frequency): Impedance transformation, phase shift
+- **Construction Notes**: How to connect, polarity, box specifications
+- **Max Turns Warning**: The sheet displays a per-core maximum turns limit beside the "Actual Secondary Turns (Rounded)" cell. For example, the T-200-2 core shows a max of 40 turns. If your calculated secondary turns exceed this limit, select a larger core or reduce the impedance ratio.
+- **Counterpoise Impedance Analysis**: Corrected feedpoint Z with counterpoise effect
+- **Core Saturation & Max Power Handling**: Saturation voltage and power limits
+- **Multi-Band Reactive Compensation Analysis**: VSWR with/without series L or C
 
-**Typical Workflow**: 
-1. Select wire length on Calculator (Sheet 1)
-2. Check impedance on VSWR Calculator (Sheet 2)
-3. Use this sheet to confirm best UnUn ratio
-4. Go to UnUn Calculator (Sheet 6) to design the transformer
+**⚠️ CRITICAL CORRECTIONS** (Updated 2025):
+1. **Do NOT use Mix 31 ferrite** for UnUn; use Mix 43, 52, or 61 only
+   - Mix 31 (MnZn) is for 1:1 chokes ONLY
+   - Mix 43, 52, 61 (NiZn) are for impedance transformers
+   - See Section 6.3 for detailed ferrite selection
+
+2. **Core power limits** (1.8–30 MHz, 9:1 ratio):
+   - FT-114 (mix 43): 100–150 W max
+   - FT-140 (mix 43): 300–400 W max
+   - FT-240 (mix 43): 1000–1500 W max
+
+3. **Saturation not fully modeled** — Keep actual power ≤50% of rated for safety margin
+
+**Typical Workflow**:
+1. Get recommended ratio from UnUn Ratio Optimizer (Sheet 6)
+2. Select core size from Toroid Database (Sheet 7)
+3. Input core type & ratio here
+4. Note turn counts and construction details
+5. Build & test with VNA/analyzer
 
 ---
 
@@ -291,7 +318,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 #### **When to Use Transmatch vs. UnUn:**
 
-| Aspect | UnUn (Sheet 6) | Transmatch (Sheet 4) |
+| Aspect | UnUn (Sheet 3 — design; Sheet 6 — ratio optimizer) | Transmatch (Sheet 4) |
 |--------|---|---|
 | **What it is** | Fixed-ratio ferrite wideband transformer | Air-core tapped coil tuner |
 | **Matching** | Same impedance ratio all bands (9:1, 16:1, etc.) | Different tap optimized per band |
@@ -312,7 +339,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 5. **Accounts for actual antenna impedance** — Links to impedance model in VSWR Calculator
 
 #### **Key Inputs**:
-- **Antenna length** (m): Inherited from VSWR Calculator
+- **Antenna length** (m): Entered independently in the Transmatch Calculator sheet (cell C3); it is **not** automatically inherited from the VSWR Calculator — you must enter your chosen wire length here manually. Check that this matches your selection on Sheet 1.
 - **Coil dimensions**: Diameter (mm), wire gauge (AWG or mm)
 - **Target output impedance**: Always 50 Ω (coax)
 - **Active bands**: Inherited from Calculator sheet
@@ -320,7 +347,10 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 #### **Key Outputs**:
 - **Tap summary**: Which tap for which band, required turns ratio, impedance
 - **Winding details**: Cumulative turns, delta turns per section, wire length
-- **RF performance**: SWR, return loss, phase angle for each tap/band
+- **RF performance**: Two SWR columns are shown per tap/band:
+  - **SWR** (unmatched) — the raw impedance magnitude referenced to 50 Ω *before* the autotransformer step; typically very high (>10:1) and informational only. This column reflects the antenna impedance Z_in directly, without any turns-ratio transformation.
+  - **SWR with 5% comp Serial** — the *matched* SWR after the autotransformer transformation **plus** a 5% series compensation component; this is the working value to evaluate (green SWR ≤1.5, red SWR >3.0)
+- **Return loss and reflected power** per tap (based on matched SWR)
 - **Construction guide**: Color-coded interpretation (green SWR <1.5, red SWR >3.0)
 
 #### **How to Build an Air-Core Transmatch:**
@@ -365,8 +395,8 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 ❌ Not ideal for QRP portable (many taps)  
 
 #### **Typical Workflow** (Alternative to UnUn):
-1. Select wire length on Calculator
-2. Use Transmatch Calculator to design air-core coil
+1. Select wire length on Calculator (Sheet 1)
+2. Use Transmatch Calculator (Sheet 4) to design air-core coil
 3. Build coil with marked tap points
 4. Test with antenna analyzer; fine-tune tap positions if needed
 5. Use manual alligator clip or relay to switch taps per band
@@ -395,10 +425,11 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 - **Visual chart**: (if present) Shows impedance vs. length graphically
 
 **What "Avoidance Score" Means**:
-- **1.0 (best)**: Maximum distance from all resonances
-- **0.5 (good)**: Well-positioned between resonances
-- **0.2 (marginal)**: Getting close to a resonance
-- **0.0 (worst)**: On a resonance (λ/2 or λ/4 multiple)
+- **0.25 (perfect)**: Maximum distance from ALL resonances — wire is at 3λ/8 or 5λ/8, the ideal position
+- **≥ 0.20 (excellent)**: ★★★ Score; large gap to any resonance
+- **≥ 0.12 (good)**: ★★ Score; well-positioned, easy to tune
+- **0.05–0.12 (fair/marginal)**: ★/⚠ Score; getting close to a resonance
+- **0.0 (worst)**: ✗ AVOID; on a λ/2 or λ/4 resonance
 
 **Typical Workflow**: 
 - Provides data for Top-10 list in Calculator
@@ -407,47 +438,32 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 ---
 
-### 3.6 Sheet 6 — UnUn Calculator
+### 3.6 Sheet 6 — UnUn Ratio Optimizer
 
-**Purpose**: Design a **ferrite-based wideband UnUn transformer** (impedance matching)
+**Purpose**: Suggest the best ferrite UnUn impedance ratio for your chosen antenna
 
 **What It Does**:
-- Calculates ferrite toroid specifications for your UnUn
-- Designs windings: Number of turns, wire gauge, connections
-- Predicts impedance matching performance across 1.8–30 MHz
-- Provides step-by-step construction instructions
+- Tests UnUn ratios from **4:1 through 69:1** for your specific wire length
+- Calculates average VSWR for each ratio across all active bands for the top-5 wire lengths simultaneously
+- Recommends which ratio provides best broadband performance
+- Shows per-band VSWR for every ratio — includes both integer (4:1, 9:1, 16:1, 25:1, 36:1, 49:1, 64:1) and non-integer ratios
+- Shows trade-offs between different ratios
 
-**Key Inputs** (Blue cells):
-- **UnUn Ratio** (N:1): 9:1 (most common), 16:1, 25:1, 49:1, or custom
-- **Wire diameter**: AWG or mm (for coil winding)
-- **Core type & size**: FT-82, FT-114, FT-140, FT-240 (from Toroid Database)
-- **Turns**: Default calculated; can adjust for experimentation
+**Key Inputs**:
+- Wire lengths: Automatically pulls the Top-5 wire lengths from the Calculator sheet
+- Antenna impedance data: Calculated from the same empirical impedance model used in the VSWR Calculator
 
 **Key Outputs**:
-- **Winding design**: Primary turns, secondary turns, impedance ratio confirmed
-- **RF Performance** (per frequency): Impedance transformation, phase shift
-- **Construction Notes**: How to connect, polarity, box specifications
+- **Feedpoint Impedance Table (Section 1)**: Resistive part Z_R (Ω) for each top-5 wire length per active band
+- **Optimal UnUn Ratio Summary (Section 2)**: Per-band best ratio and best achievable VSWR for each of the 5 wire lengths
+- **Full VSWR Table (Section 3)**: Complete sweep 4:1–69:1, showing VSWR for every ratio on every active band for each wire length
+- **Recommended ratio**: Which ratio minimises average VSWR across all active bands
 
-**⚠️ CRITICAL CORRECTIONS** (Updated 2025):
-1. **Do NOT use Mix 31 ferrite** for UnUn; use Mix 43, 52, or 61 only
-   - Mix 31 (MnZn) is for 1:1 chokes ONLY
-   - Mix 43, 52, 61 (NiZn) are for impedance transformers
-   - See Section 6.3 for detailed ferrite selection
-
-2. **Core power limits** (1.8–30 MHz, 9:1 ratio):
-   - FT-82 (mix 43): 50–75 W max
-   - FT-114 (mix 43): 100–150 W max
-   - FT-140 (mix 43): 300–400 W max
-   - FT-240 (mix 43): 1000–1500 W max
-
-3. **Saturation not fully modeled** — Keep actual power ≤50% of rated for safety margin
-
-**Typical Workflow**:
-1. Get recommended ratio from UnUn Ratio Optimizer (Sheet 3)
-2. Select core size from Toroid Database (Sheet 7)
-3. Input core type & ratio here
-4. Note turn counts and construction details
-5. Build & test with VNA/analyzer
+**Typical Workflow**: 
+1. Select wire length on Calculator (Sheet 1)
+2. Check impedance on VSWR Calculator (Sheet 2)
+3. Use this sheet (Sheet 6) to confirm best UnUn ratio
+4. Go to UnUn Calculator (Sheet 3) to design the transformer
 
 ---
 
@@ -457,19 +473,19 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 **What It Contains**:
 - **Fair-Rite & Micrometals cores**: Common part numbers and specifications
-- **Mix types**: 31, 43, 52, 61, 75 (organized by material)
+- **Mix types**: 31, 43, 52, 61 (organized by material) and iron powder Mix 2 and 6
 - **AL values**: Inductance per-turn-squared (nH/turn²)
-- **Dimensions**: O.D., I.D., height (mm & inches)
-- **Frequency range**: Best operating range for each material
-- **Power ratings**: Approximate max watts for different impedance ratios
+- **Dimensions**: O.D., I.D., height (mm)
 - **Recommended uses**: Which cores for what applications
 
+> **Note**: The sheet tab name in the workbook is `Toroid_Database`.
+
 **How to Use**:
-1. Decide on **impedance ratio** (9:1, 16:1, 25:1, 49:1)
+1. Decide on **impedance ratio** — use UnUn Ratio Optimizer (Sheet 6) to find the best ratio for your wire length. Common integer-square ratios are 9:1, 16:1, 25:1, 49:1, 64:1, but any ratio from 4:1 to 69:1 can be built as a tapped autotransformer.
 2. Choose **power level** you need (QRP: 5–10W, SSB: 50–100W, AM: 100–400W)
 3. Look up **core size** from table matching power & ratio
 4. Note **part number** and **AL value**
-5. Input into UnUn Calculator (Sheet 6)
+5. Input into UnUn Calculator (Sheet 3)
 
 **⚠️ CRITICAL NOTE (Updated 2025)**:
 - **Mix 31 (MnZn) is ONLY for 1:1 chokes**, not UnUn transformers
@@ -484,7 +500,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 - Look in table: FT-140-43 rated ~300–400 W
 - Choose FT-140-43 (NiZn Mix 43)
 - Use AL value (from spec sheet)
-- Input into UnUn Calculator
+- Input into UnUn Calculator (Sheet 3)
 
 ---
 
@@ -523,7 +539,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 - See rows 28–38 in the Calculator sheet
 - Each row shows:
   - **Wire Length** (meters)
-  - **Avoidance Score** (0.0–1.0; higher is better)
+  - **Avoidance Score** (0.0–0.25; higher is better)
   - **Quality Rating** (★★★ EXCELLENT to ✗ AVOID)
 
 **Interpretation:**
@@ -533,8 +549,9 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 - **#6–#10** — Acceptable but less optimal
 
 #### **Step 5: Note the Recommended Counterpoise Length**
-- Cell D25: Automatically calculated as 0.05 × longest wavelength of active bands
-- Example: For 80–10m, counterpoise ≈ 4 meters (0.05 × 80m)
+- Cell D25: Automatically calculated as **λ/4 of the lowest active band** (e.g. ~10 m for 40m as the lowest band)
+- Example: For 40–10m bands, counterpoise ≈ 9.97 m (λ/4 at 7.15 MHz)
+- A practical alternative supported by 2025 research is 0.05 × longest wavelength (~4 m for 80–10m operation); see Section 5.5 and 6.4 for details
 
 #### **Step 6: Choose Your Wire Length**
 - Copy the length of Top-1 or Top-3 recommendation
@@ -544,13 +561,14 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 - Go to **Sheet 2** (VSWR Calculator)
 - Cell C4: Paste your chosen wire length
 - Review the **SWR** column (rows 8–18)
-- If SWR >2:1 on critical bands, try next-best length
+- If SWR >3:1 on most active bands, a tuner will be required; try the next-best length from the Top-10 list if SWR >6:1 on any band
+  - SWR ≤ 1.5:1 → Excellent (green); 1.5–3.0:1 → Good/Acceptable (white); 3.0–6.0:1 → Marginal (tuner needed); > 6.0:1 → Poor (red)
 
 #### **Step 8: Choose Your Matching Method**
 - **Option A: UnUn Transformer (Fixed Ratio)**
-  - Go to Sheet 3 (UnUn Ratio Optimizer)
+  - Go to Sheet 6 (UnUn Ratio Optimizer)
   - Check recommended ratio (9:1, 16:1, 49:1, etc.)
-  - Go to Sheet 6 (UnUn Calculator) to design
+  - Go to Sheet 3 (UnUn Calculator) to design
   - Build ferrite-based transformer
 
 - **Option B: Air-Core Transmatch (Switched Taps)**
@@ -571,23 +589,24 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 The **avoidance score** measures how far your chosen wire length is from problematic resonances.
 
+> ⚠️ **Important**: The maximum possible avoidance score is **0.25** (not 1.0). A score of 0.25 means the wire sits exactly at the mid-point between a quarter-wave and a half-wave resonance — the ideal position. The Length Sweep sheet header confirms: *"0.25 = perfect (mid-gap between λ/4 and λ/2), 0.00 = on resonance."*
+
 **Scale**:
-- **1.0 (Perfect)** — Maximum distance from ALL quarter-wave and half-wave resonances
-- **0.7–0.9 (Excellent)** — ★★★ Score; large gap between resonances
-- **0.4–0.6 (Good)** — ★★ Score; acceptable gap; easy to tune
-- **0.2–0.4 (Fair)** — ★ Score; close to a resonance; needs careful tuning
-- **0.05–0.2 (Marginal)** — ⚠ Score; very close to resonance; difficult to tune
+- **0.25 (Perfect)** — Wire is at maximum distance from ALL quarter-wave and half-wave resonances
+- **≥ 0.20 (Excellent)** — ★★★ Score; large gap between resonances
+- **≥ 0.12 (Good)** — ★★ Score; acceptable gap; easy to tune
+- **0.05–0.12 (Fair/Marginal)** — ★ / ⚠ Score; close to a resonance; careful tuning needed
 - **0.0 (Worst)** — ✗ AVOID; on a quarter-wave or half-wave resonance
 
 **Why it matters:**
-- Wire at **high avoidance score** (0.7+): Antenna impedance is moderate and easy to match with UnUn/tuner
-- Wire at **low avoidance score** (<0.2): Antenna impedance will be very high or very low; difficult to achieve good SWR
+- Wire at **high avoidance score** (≥ 0.20): Antenna impedance is moderate and easy to match with UnUn/tuner
+- Wire at **low avoidance score** (< 0.12): Antenna impedance will be very high or very low; difficult to achieve good SWR
 
-**Example:**
+**Example** (with 40m, 20m, 10m active):
 ```
-74 feet (22.6 m):  Score 0.376 (★★★ EXCELLENT) — Large gap; recommended
-63 feet (19.2 m):  Score 0.118 (★★ GOOD)       — Acceptable gap
-50 feet (15.2 m):  Score 0.000 (✗ AVOID)       — On half-wave of 80m; very high impedance
+53.4 m:  Score 0.179 (★★  GOOD)  — Recommended Top-1 for default band selection
+43.4 m:  Score 0.178 (★★  GOOD)  — Excellent home station option
+ 5.0 m:  Score 0.000 (✗  AVOID)  — On quarter-wave resonance of 40m; very low impedance
 ```
 
 ---
@@ -598,18 +617,22 @@ The **VSWR Calculator** (Sheet 2) predicts standing-wave ratio for your chosen w
 
 **Color Coding** (from interpretation guide at bottom of sheet):
 - 🟢 **Green** — SWR ≤ 1.5:1 → Excellent match; <4% reflected power
-- ⚪ **White** — SWR 1.5–3.0:1 → Acceptable for most ham radio work
-- 🔴 **Red** — SWR > 3.0:1 → Poor match; consider different wire length
+- ⚪ **White** — SWR 1.5–3.0:1 → Good; acceptable for most ham radio work (tuner helpful)
+- 🟠 **Marginal** — SWR 3.0–6.0:1 → Marginal match; tuner required
+- 🔴 **Red** — SWR > 6.0:1 → Poor match; high-loss mismatch; consider different wire length
+
+> **Note**: The VSWR sheet uses a 4-tier guide. The threshold ">3:1 → consider different wire length" mentioned in the Quick Start (Step 7) refers to the point where a tuner becomes mandatory, not the absolute worst-case limit.
 
 **Reading the Results**:
-- **SWR Column** (per band): Voltage Standing Wave Ratio (1.0 = perfect, 3.0 = poor)
-- **Return Loss** (dB): Reflection coefficient (>14 dB = acceptable)
+- **SWR Column** (per band): Voltage Standing Wave Ratio (1.0 = perfect, >6.0 = poor)
+- **Return Loss** (dB): Reflection coefficient (>14 dB = acceptable; >20 dB = excellent)
 - **Phase** (degrees): Reactance angle (0° = purely resistive, ±90° = purely reactive)
 
 **What to Do**:
-- **If all bands are green**: Your wire length is excellent; proceed to transformer design
-- **If some bands are white**: Acceptable; use antenna tuner on those bands
-- **If any band is red**: Try a different wire length from the Top-10 list
+- **If all bands are green (≤1.5)**: Your wire length is excellent; proceed to transformer design
+- **If some bands are white (1.5–3.0)**: Acceptable; use antenna tuner on those bands
+- **If any band is marginal (3.0–6.0)**: Tuner required; consider a different wire length
+- **If any band is red (>6.0)**: Try a different wire length from the Top-10 list
 
 **Important**: These are **theoretical predictions** based on an empirical model. **Always validate with an antenna analyzer** before full power.
 
@@ -640,9 +663,9 @@ You have **two main options** for matching your antenna to 50 Ω coax:
 **Best for:** QRP portable, multiband operation, set-and-forget approach
 
 **How to proceed:**
-1. Go to Sheet 3 (UnUn Ratio Optimizer)
+1. Go to Sheet 6 (UnUn Ratio Optimizer)
 2. Note the recommended ratio
-3. Go to Sheet 6 (UnUn Calculator)
+3. Go to Sheet 3 (UnUn Calculator)
 4. Select ferrite core from Sheet 7 (Toroid Database)
 5. Build using winding instructions
 
@@ -702,15 +725,20 @@ This means a wire of 39.6 m will resonate (half-wave) at 3.6 MHz.
 
 ### 5.2 Resonance Avoidance Score Formula
 
-The avoidance score measures how far your wire is from the nearest resonance:
+The avoidance score measures how far your wire is from the nearest resonance. For each active band, the score is computed as the minimum fractional distance from both the nearest λ/2 and λ/4 resonance multiples, then the overall score is the minimum across all active bands:
 
 ```
-distance_to_resonance = |L - nearest_λ/2|  [normalized to 0–1 scale]
-avoidance_score = 1 - MIN(|L - λ/2_all_bands|)
+per_band_score = MIN(
+    MIN(MOD(L/λ½, 1),  1 − MOD(L/λ½, 1)),   ← distance from nearest λ/2
+    |MOD(L/λ½, 1) − 0.5|                       ← distance from nearest λ/4
+)
+avoidance_score = MIN(per_band_score across all active bands)
 ```
+
+The maximum possible value is **0.25**, which occurs when the wire sits exactly at the midpoint between a λ/4 and a λ/2 resonance (i.e., at 3λ/8 or 5λ/8). Inactive bands return 1.00 and are not counted.
 
 Interpretation:
-- Score **close to 1.0**: Wire is far from all resonances
+- Score **0.25**: Wire is at maximum distance from ALL resonances (ideal)
 - Score **close to 0.0**: Wire is on a resonance
 
 The calculator computes this for all quarter-wave and half-wave multiples across all selected bands.
@@ -756,36 +784,45 @@ With 9:1 UnUn: Z_antenna transforms to ~45 Ω, giving VSWR ≈ 1.1:1 (excellent)
 
 ### 5.5 Counterpoise Length Formula
 
-**Traditional formula** (λ/4 of lowest frequency):
+**Formula used in the Calculator sheet** (λ/4 of lowest active band, velocity-factor corrected):
 ```
-L_cp = (75 / f_low_MHz)  [meters]
+L_cp = (75 × VF) / f_low_MHz  [meters]
 ```
 
-**Updated formula** (2025 — 0.05 × longest wavelength):
+> ⚠️ **Important**: The spreadsheet applies the velocity factor (VF) to the counterpoise formula, giving an *electrical* quarter-wave length. This matches what the Calculator sheet actually computes. The purely physical quarter-wave (without VF) would be `75 / f_low_MHz`, which is slightly longer.
+
+This is the value displayed on the Calculator sheet and pre-filled in the VSWR Calculator and UnUn Calculator sheets. For example, with VF = 0.95 and 40m (7.15 MHz) as the lowest active band:
 ```
-L_cp = 0.05 × (150 / f_lowest_MHz)  [meters]
+L_cp = (75 × 0.95) / 7.15 ≈ 9.97 m  (λ/4 at 7.15 MHz, VF-corrected)
+```
+
+**Updated practical formula** (2025 research — 0.05 × longest wavelength):
+```
+L_cp = 0.05 × (300 / f_lowest_MHz)  [meters]
 ```
 
 Example: For 80–10m operation (80m is lowest frequency):
-- Traditional: λ/4 = 150 / 1.8 = **83 m** (impractical!)
-- Updated: 0.05 × 150 / 1.8 = **4.2 m** (practical, sufficient)
+- λ/4 formula (VF-corrected): (75 × 0.95) / 3.65 ≈ **19.5 m** (traditional, conservative)
+- 0.05λ formula: 0.05 × (300 / 3.65) ≈ **4.1 m** (practical, sufficient per PA9X 2025)
 
-Both approaches work; the updated formula is more practical.
+> **Note**: The Calculator sheet uses the **VF-corrected λ/4 formula** for its displayed counterpoise recommendation. The 0.05λ result is a valid practical alternative supported by recent field measurements — both approaches work. The λ/4 value provides a more conservative (lower-loss) return path, while 0.05λ is the minimum effective length.
 
 ### 5.6 UnUn Turns Ratio and Impedance Ratio
 
 For a ferrite UnUn transformer:
 
 ```
-N_turns = √(Z_antenna / Z₀)  [turns ratio]
-Impedance_ratio = (N_primary / N_secondary)²  [impedance transformation]
+n = √(Z_antenna / Z₀)     [turns ratio — ratio of total turns to tap turns]
+Impedance_ratio = (N_total / N_tap)²  [impedance transformation for autotransformer]
 ```
 
-For **9:1 UnUn**:
+For **9:1 UnUn** (autotransformer):
 ```
-N_primary / N_secondary = √9 = 3 (e.g., 3 primary, 9 secondary turns)
-Z_out = Z_in / 9  (e.g., 450 Ω antenna transforms to 50 Ω)
+n = √9 = 3  → total 9 turns, tap at 3 turns (N_tap = 3, N_total = 9)
+Z_out = Z_in × (N_total/N_tap)²  →  50 Ω × 9 = 450 Ω (antenna side)
 ```
+
+> ⚠️ **Autotransformer vs. Two-Winding Transformer**: The UnUn Calculator implements a **tapped autotransformer** (single winding with a tap), as shown in Section 2.1 of the sheet. In this topology, `N_tap` is the number of turns from ground to the coax input tap, and `N_total` is the full winding. The impedance ratio is `(N_total / N_tap)²`. Do not confuse this with a two-winding transformer where primary and secondary are wound separately.
 
 ---
 
@@ -825,29 +862,31 @@ A **9:1 autotransformer** is the most common and practical design. Here's how to
 #### **Construction Steps:**
 
 1. **Prepare the wire**
-   - Cut three lengths ~1.5 m each of 18 AWG enamel wire
-   - Measure and mark: First 3 turns will be primary; next 9 turns will be secondary
+   - Cut two lengths ~1.5 m each of 18 AWG enamel wire
+   - The 9:1 UnUn is built as an **autotransformer**: a single 9-turn winding with a tap at turn 3
+   - The coax (50 Ω) connects across turns 0–3 (the tap); the antenna connects across the full 0–9 turns
 
-2. **Wind the toroid (Trifilar method)**
-   - Twist three wires together loosely (to keep parallel)
-   - Wind all three wires through toroid simultaneously:
-     - Turns 1–3: All three wires together (primary section)
-     - Turns 4–12: All three wires together (secondary section)
-   - Total: ~12 passes through toroid
+2. **Wind the toroid (Bifilar/autotransformer method)**
+   - Wind a single winding of 9 turns total through the toroid
+   - Mark a solder tap at turn 3 (this is the coax / low-impedance input tap)
+   - Turns 0–3: primary (coax side, 50 Ω) tap point
+   - Turns 0–9: full winding (antenna side, ~450 Ω)
+   - Total: 9 passes through toroid
 
 3. **Strip and Identify Leads**
-   - Carefully scrape enamel off all six wire ends
-   - Label them: P1, P2 (primary); S1, S2, S3, S4 (secondary); G (ground reference)
+   - Carefully scrape enamel off all wire ends and the mid-winding tap
+   - Label them: T0 (start/ground), T3 (input tap), T9 (antenna end)
+
+   > ⚠️ **Autotransformer note**: A 9:1 autotransformer uses one continuous winding with a tap, **not** separate primary and secondary windings. The impedance ratio is (N_total/N_tap)² = (9/3)² = 9:1. This is confirmed by Section 2.1 of the UnUn Calculator sheet. Do not wind 3 turns and 9 turns separately — that would give a turns ratio of 3:9 and an impedance ratio of 1:9 (wrong direction).
 
 4. **Make Connections** (autotransformer configuration)
-   - **Primary (coax side)**:
-     - Coax center → P1
-     - Coax shield → G (ground)
-   - **Secondary (antenna side)**:
-     - Antenna wire → S1
-     - Counterpoise → S4
-     - (S2, S3 unused in basic 9:1; could add taps for testing)
-   - **Ground connection**: G to enclosure (RF ground)
+   - **Coax/input side** (50 Ω):
+     - Coax center conductor → T3 (tap)
+     - Coax shield → T0 (start/ground)
+   - **Antenna side** (high impedance):
+     - Antenna wire → T9 (full winding end)
+     - Counterpoise → T0 (same as ground)
+   - **Impedance ratio**: (T9/T3)² = (9/3)² = 9:1 — antenna sees 9 × 50 Ω = 450 Ω
 
 5. **Mount in Enclosure**
    - Place toroid in center
@@ -863,10 +902,11 @@ A **9:1 autotransformer** is the most common and practical design. Here's how to
    - If ratio is wrong, check connections
 
 #### **Power Handling:**
-- **FT-82-43**: 50–75 W max
 - **FT-114-43**: 100–150 W max
 - **FT-140-43**: 300–400 W max
 - **FT-240-43**: 1000–1500 W max
+
+> ⚠️ FT-82-43 is **not included** in the Toroid Database sheet. If using an FT-82-43, consult the Fair-Rite datasheet directly; typical power handling is 50–75 W max.
 
 Use **50% margin**: If 100W is your target, use FT-140-43 (rated 300–400W).
 
@@ -882,8 +922,10 @@ Use **50% margin**: If 100W is your target, use FT-140-43 (rated 300–400W).
 |-----|----------|---|---|---|---|
 | **31** | MnZn | 1–10 MHz | 1:1 RF chokes ONLY | ❌ NO | Low frequency; NOT for UnUn |
 | **43** | NiZn | 10–250 MHz | UnUn 9:1, 16:1, 25:1 | ✅ YES | **BEST for HF UnUn** |
-| **52** | NiZn | 200–1000 MHz | High-frequency UnUn | ✅ YES | More turns needed for HF |
+| **52** | NiZn | 1–250 MHz | HF/VHF UnUn | ✅ YES | Effective across HF range; more turns needed than Mix 43 |
 | **61** | NiZn | 200–2000 MHz | Ultra-wideband | ✅ YES | Very low µ; many turns needed |
+
+> **Toroid Database availability**: The `Toroid_Database` sheet includes FT-114, FT-140, FT-240 variants for Mix 31, 43, 52, 61, plus T-130 and T-200 in iron powder Mix 2 and Mix 6. FT-82 and Mix 75 cores are **not** listed in the sheet — consult Fair-Rite datasheets directly for these.
 
 **For HF Long-Wire UnUn applications (1.8–54 MHz):**
 - ✅ **Best choice: Mix 43** — Ideal balance of permeability, bandwidth, and efficiency
@@ -894,7 +936,6 @@ Use **50% margin**: If 100W is your target, use FT-140-43 (rated 300–400W).
 
 | Core Size | Max Power (PEP) @ 1.8–30 MHz | Recommended For | Notes |
 |-----------|------------------------------|---|---|
-| FT-82 (mix 43) | 50–75 W | QRP (5–10W sustained) | Small; limited thermal mass |
 | FT-114 (mix 43) | 100–150 W | SSB voice (10–50W sustained) | Compact, moderate power |
 | FT-140 (mix 43) | 300–400 W | Linear amp (50–150W sustained) | Larger; good thermal mass |
 | FT-240 (mix 43) | 1000–1500 W | High power (100W+ sustained) | Large; excellent thermal performance |
@@ -904,7 +945,7 @@ Use **50% margin**: If 100W is your target, use FT-140-43 (rated 300–400W).
 - If core is warm to touch during operation, saturation may be occurring
 - Design safety margin: Keep flux density at <50% of Bsat at room temperature
 - **Never use a core at maximum rated power continuously** — leave 30–50% margin for sustained operation
-- Small cores (FT-82) heat quickly and saturate far below rated power
+- Small cores (FT-114) heat up and saturate more quickly than larger cores
 
 **Stacking Cores for High Power:**
 - Single FT-240-43: ~1000–1500 W @ 1.8–30 MHz
@@ -917,10 +958,10 @@ A **counterpoise** is a wire or set of wires that acts as a reference return pat
 
 **Counterpoise Length Formula (Updated 2025):**
 
-The traditional rule of thumb is: **λ/4 of the lowest operating frequency**
+The traditional rule of thumb is: **λ/4 of the lowest operating frequency** — this is what the Calculator sheet computes and displays.
 
 However, recent research (PA9X 2025, RF.Guru 2025) provides more nuanced guidance:
-- **Ideal length**: 0.05 × longest wavelength you plan to transmit on
+- **Minimum effective length**: 0.05 × longest wavelength you plan to transmit on
 - **Example**: For 80–10m operation (80m is longest), λ = 80 m, so 0.05 × 80 = **4 meters** is sufficient
 - This length:
   - Provides return current path without radiating as co-radiator
@@ -1075,7 +1116,7 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 - The UnUn Calculator sheet does NOT account for ferrite core saturation in detail
 - At high power (>100 W on HF), small cores heat up and lose permeability
 - Check the "Toroid Core Selection" section for power ratings; do not exceed 50% of rated power for sustained operation
-- **Never use FT-82 at full power** — limited thermal mass; saturates easily
+- **FT-114-43 is the smallest core in the Toroid Database** — avoid sustained high-power operation on this core
 
 **Counterpoise Impedance Model (Empirical):**
 - The counterpoise impedance model in the VSWR Calculator is based on heuristic formulas, not NEC2 simulation
@@ -1112,7 +1153,7 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 | Term | Definition |
 |------|-----------|
 | **Antenna tuner** | Device that matches antenna impedance to transmitter impedance; also called ATU or transmatch |
-| **Avoidance score** | Metric (0–1) indicating distance from resonance; 1.0 = far from all resonances, 0.0 = on resonance |
+| **Avoidance score** | Metric (0–0.25) indicating distance from resonance; 0.25 = wire at maximum distance from all resonances (3λ/8 or 5λ/8), 0.0 = wire is on a resonance (λ/4 or λ/2) |
 | **BalUn** | Balanced-to-Unbalanced transformer; used for balanced antennas like dipoles |
 | **Bandwidth** | Range of frequencies over which a component operates effectively |
 | **Characteristic impedance** | Reference impedance of a transmission line (typically 50 Ω for coax) |
@@ -1205,16 +1246,17 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 
 ## 11. License
 
-This spreadsheet calculator is released under the **Creative Commons Attribution 4.0 International (CC BY 4.0)** license.
+This spreadsheet calculator is released under the **Creative Commons Zero v1.0 Universal (CC0 1.0)** license — effectively a public domain dedication.
+
+> ⚠️ **Note**: The workbook header and all sheet footers declare **CC0 v1.0**. CC0 waives all copyright and related rights; no attribution is legally required, although it is always appreciated. An earlier version of this README incorrectly stated CC BY 4.0.
 
 You are free to:
 - **Share** — copy and redistribute in any medium or format
-- **Adapt** — remix, transform, and build upon the material for any purpose
+- **Adapt** — remix, transform, and build upon the material for any purpose, including commercially
 
-Under the following terms:
-- **Attribution** — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
+Under CC0 there are no conditions. To the extent possible under law, the author has dedicated the work to the public domain.
 
-Full license text: https://creativecommons.org/licenses/by/4.0/
+Full license text: https://creativecommons.org/publicdomain/zero/1.0/
 
 ---
 
