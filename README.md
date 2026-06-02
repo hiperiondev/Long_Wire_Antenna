@@ -2,8 +2,6 @@
 
 ## ⚠ WORK IN PROGRESS — Some features are under development. Verify all output against known reference designs before use in a real installation.
 
-> **README revision note (June 2026):** This README has been audited and corrected against the actual workbook. Key corrections: sheet order/numbering fixed (Sheets 3–6 were in wrong order), avoidance score scale corrected throughout to max = 0.25 (Sections 1.5, 3.5, 4.1, 5.2, and Glossary all previously stated max = 1.0), Section 5.2 formula rewritten to match actual spreadsheet algorithm, Step 5 of Quick Start corrected (counterpoise cell uses λ/4, not 0.05λ), VSWR Calculator UnUn ratio input clarified (accepts any integer N:1, not just 4 fixed values), CMC placement warning added to Sheet 1 description (spreadsheet cell contains outdated "feedpoint" instruction contradicting 2025 guidance), counterpoise formula aligned with what the sheet actually computes (λ/4), FT-82 references removed (not in Toroid Database), Toroid Database mix inventory corrected, and UnUn Ratio Optimizer sweep range corrected (4:1–69:1, not just 4 fixed ratios). **Additional June 2026 audit corrections:** Section 5.5 counterpoise formula corrected to include velocity factor (L_cp = 75 × VF / f_MHz, matching the spreadsheet); Section 3.3 UnUn Calculator ratio input clarified to accept any custom turns count (matching Section 3.2 wording); Section 3.4 Transmatch vs. UnUn table header corrected (was "Sheet 6", now "Sheet 3 / Sheet 6"); Section 3.4 SWR output clarified to distinguish unmatched vs. matched SWR columns; Step 7 Quick Start SWR threshold corrected from ">2:1" to ">3:1" to match the VSWR sheet colour coding; license note corrected to match the CC0 v1.0 declaration inside the workbook. **June 2026 full workbook re-audit corrections:** (1) VSWR 4-tier guide added to Section 4.3 — sheet has four tiers (Excellent/Good/Marginal/Poor at ≤1.5 / 1.5–3.0 / 3.0–6.0 / >6.0) but README previously documented only 3 tiers; Step 7 Quick Start updated to reflect 4-tier scale. (2) Section 6.2 UnUn construction winding instructions completely rewritten — previous version described a separate primary+secondary winding (wrong); corrected to describe the autotransformer topology (single winding, tap at N_total/n turns) which matches Section 2.1 of the UnUn Calculator sheet. (3) Section 5.6 UnUn formula corrected — label `N_turns` renamed to `n` (turns ratio) and formula updated to reflect autotransformer impedance ratio `(N_total/N_tap)²`; autotransformer vs two-winding distinction clarified. (4) Section 3.4 Transmatch "Antenna length" key input corrected — was "Inherited from VSWR Calculator" but the sheet uses an independent input cell (C3); user must enter the value manually. (5) Section 3.3 Key Outputs — max turns per core warning added (sheet shows a per-core maximum turns limit cell beside the turns result). (6) Section 3.7 Toroid Database "How to Use" step 1 now lists the full ratio range (4:1–69:1 autotransformer) instead of only 4 fixed square ratios. (7) Spreadsheet cell typo noted in Section 3.1: counterpoise guidance reads "Keep counterpoise straigh" — trailing 't' missing; display-only typo noted.
-
 > An Excel-based engineering calculator for designing non-resonant long-wire (end-fed random wire) HF antennas with impedance-matching networks. Supports multi-band optimization from 160 m through 6 m, with resonance avoidance scoring, VSWR estimation (resistive and complex), counterpoise impedance correction modelling, UnUn ratio sweep, core saturation analysis, counterpoise recommendations, and alternative air-core antenna tuner design.
 
 ---
@@ -94,7 +92,7 @@ Z_antenna ≈ 9 × Z_feedline = 9 × 50 Ω = 450 Ω
 
 This means the antenna wire should ideally present approximately **450 Ω** at the feedpoint for a direct 9:1 match, which happens at wire lengths that are roughly **3/8 λ or 5/8 λ** — the midpoints between quarter-wave (low-impedance) and half-wave (high-impedance) resonances.
 
-**⚠️ CRITICAL CORRECTION — Measured vs. Theoretical Impedance (2024–2025 Research):**
+**Measured vs. Theoretical Impedance (2024–2025 Research):**
 
 Recent field measurements from multiple sources have demonstrated that the actual antenna feedpoint impedance is often **significantly less than the theoretical 450 Ω** assumption on each band. This challenges decades of conventional wisdom. The "450 Ω rule of thumb" is a gross oversimplification that depends heavily on:
 - Wire length and geometry
@@ -288,7 +286,6 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 - **Core Saturation & Max Power Handling**: Saturation voltage and power limits
 - **Multi-Band Reactive Compensation Analysis**: VSWR with/without series L or C
 
-**⚠️ CRITICAL CORRECTIONS** (Updated 2025):
 1. **Do NOT use Mix 31 ferrite** for UnUn; use Mix 43, 52, or 61 only
    - Mix 31 (MnZn) is for 1:1 chokes ONLY
    - Mix 43, 52, 61 (NiZn) are for impedance transformers
@@ -487,7 +484,6 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 4. Note **part number** and **AL value**
 5. Input into UnUn Calculator (Sheet 3)
 
-**⚠️ CRITICAL NOTE (Updated 2025)**:
 - **Mix 31 (MnZn) is ONLY for 1:1 chokes**, not UnUn transformers
 - **Never use Mix 31 for impedance transformers** — it will have:
   - Poor frequency bandwidth
@@ -906,13 +902,11 @@ A **9:1 autotransformer** is the most common and practical design. Here's how to
 - **FT-140-43**: 300–400 W max
 - **FT-240-43**: 1000–1500 W max
 
-> ⚠️ FT-82-43 is **not included** in the Toroid Database sheet. If using an FT-82-43, consult the Fair-Rite datasheet directly; typical power handling is 50–75 W max.
-
 Use **50% margin**: If 100W is your target, use FT-140-43 (rated 300–400W).
 
 ### 6.3 Toroid Core Selection — CRITICAL MATERIAL SELECTION RULES
 
-**⚠️ FERRITE MIX SELECTION (Updated 2025):**
+**⚠️ FERRITE MIX SELECTION:**
 
 **DO NOT USE Mix 31** for UnUn/Balun impedance transformers. Mix 31 (Manganese-Zinc ferrite) is only suitable for 1:1 common-mode choking applications. According to Palomar Engineers and Fair-Rite specifications:
 
@@ -1205,7 +1199,7 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 
 | Resource | URL | Content |
 |---|---|---|
-| **Ham Radio Outside the Box — Random Wire Antennas Challenge** ⭐ | https://hamradiooutsidethebox.ca/2024/09/04/random-wire-antennas-a-challenge-to-common-knowledge/ | **CRITICAL 2024 STUDY** — Measured 84-foot wire impedance is LESS than 450 Ω on all bands, directly contradicting conventional wisdom. Questions the optimality of 9:1 UnUns. |
+| Ham Radio Outside the Box — Random Wire Antennas Challenge | https://hamradiooutsidethebox.ca/2024/09/04/random-wire-antennas-a-challenge-to-common-knowledge/ | **CRITICAL 2024 STUDY** — Measured 84-foot wire impedance is LESS than 450 Ω on all bands, directly contradicting conventional wisdom. Questions the optimality of 9:1 UnUns. |
 | W8JI — Long Wire Antenna | https://www.w8ji.com/long_wire_antenna.htm | Authoritative practical analysis of long-wire systems including counterpoise design |
 | Bob Cromwell, AC6V — 9:1 UnUn Build | https://cromwell-intl.com/radio/9-1-unun/ | Detailed construction guide with NanoVNA measurements and core material comparison |
 | M0UKD — 9:1 Magnetic Longwire Balun | https://m0ukd.com/homebrew/baluns-and-ununs/91-magnetic-longwire-balun-unun/ | Step-by-step with photos |
@@ -1216,9 +1210,9 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 | Toroids.info | https://toroids.info | Online calculator for AL values and inductance of ferrite toroids |
 | 73QRZ Choke Calculator | https://73qrz.com/choke-calc | Online tool for balun/choke/UnUn core selection |
 | Practical Antennas | https://practicalantennas.com/designs/end-fed/ | Comprehensive analysis of end-fed types |
-| **RF.Guru — Counterpoise Role & CMC Placement** ⭐ | https://shop.rf.guru/pages/understanding-the-role-of-the-counterpoise-in-4-1-and-9-1-antennas/ | August 2025: Detailed counterpoise design; optimal CMC placement guidance |
-| **PA9X — Proper Counterpoise Design** ⭐ | https://www.pa9x.com/boost-your-end-fed-antenna-with-proper-counterpoise/ | October 2025: Rule of thumb for counterpoise length (0.05λ); RFI prevention |
-| **PA9X — Why Antennas Need Counterpoises** ⭐ | https://www.pa9x.com/why-does-an-antenna-require-a-counterpoise/ | Complete explanation of counterpoise function |
+| RF.Guru — Counterpoise Role & CMC Placement | https://shop.rf.guru/pages/understanding-the-role-of-the-counterpoise-in-4-1-and-9-1-antennas/ | August 2025: Detailed counterpoise design; optimal CMC placement guidance |
+| PA9X — Proper Counterpoise Design | https://www.pa9x.com/boost-your-end-fed-antenna-with-proper-counterpoise/ | October 2025: Rule of thumb for counterpoise length (0.05λ); RFI prevention |
+| PA9X — Why Antennas Need Counterpoises | https://www.pa9x.com/why-does-an-antenna-require-a-counterpoise/ | Complete explanation of counterpoise function |
 | K7MEM — End-Fed Wire Calculator | https://k7mem.com/Ant_End_Fed.html | Interactive online calculator for non-resonant end-fed wire lengths; similar avoidance approach to this workbook |
 | VU2NSB — EFHW Antenna | https://vu2nsb.com/antenna/wire-antennas/multiband-efhw-antenna/ | Detailed harmonic analysis of EFHW antenna |
 | Battery Eliminator Store — EFHW Deep Dive | https://batteryeliminatorstore.com/blogs/ocf-masters-articles/a-deep-dive-into-end-fed-half-wave-antennas-original | Analysis of transformer ratios from 9:1 to 64:1 |
@@ -1228,8 +1222,8 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 | KM1NDY — 64:1 UnUn Build | https://km1ndy.com/diy-linked-efhw-64-to-1-antenna/ | DIY construction of 64:1 UnUn for linked EFHW |
 | HF Underground — 9:1 vs 49:1 Discussion | https://www.hfunderground.com/board/index.php?topic=59165.0 | Community discussion on UnUn ratio selection |
 | dbBear — EFHW Transformer Theory | https://www.dbbear.com/k0emt/kits/2024-efhw/theory/index.html | Transformer theory and capacitor compensation |
-| **Palomar Engineers — Ferrite Mix Selection** ⭐ | https://palomar-engineers.com/ferrite-cores-for-rfi-emi-noise-suppression-mix-31-43-61-75-palomar-engineers/ | Updated 2025: Mix 31 NOT for UnUn; detailed mix comparison |
-| **Palomar Engineers — Power Ratings** ⭐ | https://palomar-engineers.com/choke-transformer-power-ratings | Core size power limits; saturation guidance |
+| Palomar Engineers — Ferrite Mix Selection | https://palomar-engineers.com/ferrite-cores-for-rfi-emi-noise-suppression-mix-31-43-61-75-palomar-engineers/ | Updated 2025: Mix 31 NOT for UnUn; detailed mix comparison |
+| Palomar Engineers — Power Ratings | https://palomar-engineers.com/choke-transformer-power-ratings | Core size power limits; saturation guidance |
 
 ### Software Tools for Advanced Modeling
 
@@ -1265,5 +1259,3 @@ Full license text: https://creativecommons.org/publicdomain/zero/1.0/
 ---
 
 > **Disclaimer:** This tool is provided for educational and experimental purposes. The author makes no warranties regarding the accuracy of the impedance models or the suitability of any recommended configuration for any specific installation. Always verify designs with proper measurement equipment (VNA, antenna analyzer) before connecting to a transmitter. Comply with all applicable regulations regarding antenna installations and transmitter power limits. High voltages may be present at the antenna feedpoint during operation — exercise appropriate caution.
-
-> **Updated May 31, 2026** with corrections and new documentation based on 2024–2025 research including critical impedance measurement studies, ferrite mix selection corrections, and proper common-mode choke placement guidance.
