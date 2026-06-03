@@ -22,9 +22,10 @@
    - [Sheet 2 — VSWR Calculator](#32-sheet-2--vswr-calculator)
    - [Sheet 3 — UnUn Calculator](#33-sheet-3--unun-calculator)
    - [Sheet 4 — Transmatch Calculator](#34-sheet-4--transmatch-calculator)
-   - [Sheet 5 — Length Sweep](#35-sheet-5--length-sweep)
-   - [Sheet 6 — UnUn Ratio Optimizer](#36-sheet-6--unun-ratio-optimizer)
-   - [Sheet 7 — Toroid Database](#37-sheet-7--toroid-database)
+   - [Sheet 5 — NEC2 Export](#35-sheet-5--nec2-export)
+   - [Sheet 6 — Length Sweep](#36-sheet-6--length-sweep)
+   - [Sheet 7 — UnUn Ratio Optimizer](#37-sheet-7--unun-ratio-optimizer)
+   - [Sheet 8 — Toroid Database](#38-sheet-8--toroid-database)
 4. [How to Use the Calculator](#4-how-to-use-the-calculator)
    - [Step-by-Step Quick Start](#41-step-by-step-quick-start)
    - [Interpreting the Avoidance Score](#42-interpreting-the-avoidance-score)
@@ -192,6 +193,7 @@ This workbook provides a comprehensive toolkit for long-wire antenna design:
 - ✅ **UnUn ratio optimization** — Tests multiple transformer ratios and recommends the best
 - ✅ **UnUn transformer design** — Calculates ferrite toroid windings and specifications
 - ✅ **Air-core antenna tuner design** — Alternative approach using tapped air-core coil
+- ✅ **NEC2 export** — Generates ready-to-paste NEC2 input deck for full-wave simulation validation (EZNEC, 4NEC2, MMANA-GAL)
 - ✅ **Core saturation awareness** — Notes power limits and saturation risk (see Limitations)
 - ✅ **Comprehensive references** — Links to research papers, standards, and practical guides
 
@@ -199,7 +201,7 @@ This workbook provides a comprehensive toolkit for long-wire antenna design:
 
 ## 3. Workbook Structure
 
-This workbook contains **seven interconnected sheets** for designing and optimizing long-wire antennas:
+This workbook contains **eight interconnected sheets** for designing and optimizing long-wire antennas:
 
 ### 3.1 Sheet 1 — Calculator
 
@@ -219,10 +221,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 **Key Outputs**:
 - **Top 10 Recommended Wire Lengths**: Ordered by avoidance score (EXCELLENT ★★★ to AVOID ✗)
 - **Recommended Counterpoise Length**: λ/4 of the lowest active band (see Section 5.5 for the practical 0.05λ alternative)
-  > ⚠️ **Spreadsheet typo note**: The counterpoise guidance cell in Sheet 1 reads *"Keep counterpoise straigh"* — the trailing 't' is missing. This is a display-only typo in the spreadsheet cell and does not affect calculations. The correct word is **"straight"**.
 - **Choke/Balun Installation Guidance**: Placement, impedance targets, core recommendations
-
-> ⚠️ **CMC Placement Note**: The "Choke/Balun Installation Guidance" table inside the Calculator sheet contains an outdated instruction that reads *"Install current choke (CMC) at the feedpoint, between coax and UnUn primary"*. This is **incorrect per 2025 best practice**. The correct placement is at the **radio end of the feedline** (before it enters the shack), **not** at the antenna feedpoint. See Section 6.6 for the full explanation. The spreadsheet cell will be corrected in a future revision.
 
 **Typical Workflow**: Start here, select your bands, note Top-1 or Top-3 wire length, then verify with VSWR Calculator.
 
@@ -241,7 +240,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 **Key Inputs**:
 - **Wire length** (m): Select from Top-10 list or enter custom value
-- **UnUn Ratio** (N:1): Enter any integer ratio (e.g. 9:1, 16:1, 25:1, 30:1, 49:1); the sheet accepts any value — use the UnUn Ratio Optimizer (Sheet 6) to find the best ratio for your wire length
+- **UnUn Ratio** (N:1): Enter any integer ratio (e.g. 9:1, 16:1, 25:1, 30:1, 49:1); the sheet accepts any value — use the UnUn Ratio Optimizer (Sheet 7) to find the best ratio for your wire length
 - **Counterpoise configuration**: Height, length, number of radials
 
 **Key Outputs**:
@@ -299,8 +298,8 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 3. **Saturation not fully modeled** — Keep actual power ≤50% of rated for safety margin
 
 **Typical Workflow**:
-1. Get recommended ratio from UnUn Ratio Optimizer (Sheet 6)
-2. Select core size from Toroid Database (Sheet 7)
+1. Get recommended ratio from UnUn Ratio Optimizer (Sheet 7)
+2. Select core size from Toroid Database (Sheet 8)
 3. Input core type & ratio here
 4. Note turn counts and construction details
 5. Build & test with VNA/analyzer
@@ -315,7 +314,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 #### **When to Use Transmatch vs. UnUn:**
 
-| Aspect | UnUn (Sheet 3 — design; Sheet 6 — ratio optimizer) | Transmatch (Sheet 4) |
+| Aspect | UnUn (Sheet 3 — design; Sheet 7 — ratio optimizer) | Transmatch (Sheet 4) |
 |--------|---|---|
 | **What it is** | Fixed-ratio ferrite wideband transformer | Air-core tapped coil tuner |
 | **Matching** | Same impedance ratio all bands (9:1, 16:1, etc.) | Different tap optimized per band |
@@ -336,7 +335,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 5. **Accounts for actual antenna impedance** — Links to impedance model in VSWR Calculator
 
 #### **Key Inputs**:
-- **Antenna length** (m): Entered independently in the Transmatch Calculator sheet (cell C3); it is **not** automatically inherited from the VSWR Calculator — you must enter your chosen wire length here manually. Check that this matches your selection on Sheet 1.
+- **Antenna length** (m): Entered independently in the Transmatch Calculator sheet (cell C5); it is **not** automatically inherited from the VSWR Calculator — you must enter your chosen wire length here manually. Check that this matches your selection on Sheet 1.
 - **Coil dimensions**: Diameter (mm), wire gauge (AWG or mm)
 - **Target output impedance**: Always 50 Ω (coax)
 - **Active bands**: Inherited from Calculator sheet
@@ -400,20 +399,79 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 ---
 
-### 3.5 Sheet 5 — Length Sweep
+### 3.5 Sheet 5 — NEC2 Export
+
+**Purpose**: Generate ready-to-use NEC2 simulation input files for your antenna design
+
+**What It Does**:
+- Produces a complete NEC2 input deck (`.nec` file content) from your antenna parameters
+- Supports two counterpoise geometries: **horizontal in-line** and **vertical drop** from feedpoint
+- Automatically calculates the correct number of wire segments per NEC2 rules (≤ λ/10 at highest frequency)
+- Generates a frequency sweep from the lowest to highest active band
+- Handles "Real (Sommerfeld-Norton)" ground, perfect ground, and free-space options
+- The output can be pasted directly into EZNEC, 4NEC2, MMANA-GAL, or any NEC2-compatible modeler
+
+**Key Inputs** (Blue cells):
+- **Rank selector (cell E5)**: Enter a rank number 1–10; wire length auto-fills from the Calculator Top-10 list
+- **Counterpoise Length (cell B6)**: Auto-filled as λ/4 of lowest active band; override manually or set to 0 to omit
+- **Wire Height above ground (cell B7)**: Typical 5–15 m for portable, 10–30 m for home station
+- **Wire Diameter (cell B8)**: Conductor diameter — 1.0 mm (AWG 20), 2.05 mm (AWG 12), 3.26 mm (AWG 8)
+- **Wire Conductivity (cell B9)**: Copper = 5.8×10⁷, aluminium = 3.5×10⁷, steel = 1.0×10⁷
+- **Ground Type (cell B12)**: "Real (Sommerfeld-Norton)", "Perfect Ground", or "Free Space"
+- **Ground Conductivity (cell B13) & Permittivity (cell B14)**: Typical soil: σ = 0.005 S/m, εr = 13
+- **Frequency Step (cell B17)**: Sweep resolution (default 0.5 MHz)
+- **Source Power (cell B19)**: Used for field strength calculations in NEC2 output
+- **Highest/Lowest Sim. Freq. (B15, B16)**: Auto-filled from active bands in Calculator sheet
+
+**Key Outputs**:
+- **Coordinate table**: Wire geometry with X/Y/Z endpoints for visual inspection
+- **NEC2 Input Deck — Horizontal counterpoise**: Full deck for inline horizontal counterpoise configuration
+- **NEC2 Input Deck — Vertical counterpoise**: Full deck for vertical drop counterpoise at the feedpoint end
+
+**How to Use**:
+1. Set the rank selector to your chosen Top-10 wire length (auto-fills from Calculator sheet)
+2. Adjust height, diameter, and ground parameters
+3. Copy all of column A from the dashed separator line to the `EN` card
+4. Paste into a new `.nec` file and open in EZNEC, 4NEC2, or MMANA-GAL
+5. Run the frequency sweep and examine feedpoint impedance vs. frequency
+6. Compare NEC2 impedance results with the VSWR Calculator estimates — they validate each other
+
+**NEC2 Deck Structure**:
+- `CM` lines — comment block with antenna dimensions and simulation parameters
+- `CE` — end of comments
+- `GW` lines — geometry wires (tag 1 = antenna, tag 2 = counterpoise)
+- `GE 1` — geometry end, ground present
+- `LD 5` lines — wire conductivity loads (realistic conductor model)
+- `EX 0` — voltage excitation source at the antenna feedpoint end (end-fed model)
+- `GN 2` — ground parameters (Sommerfeld-Norton real ground)
+- `FR` — linear frequency sweep
+- `RP` — azimuth radiation pattern at horizon elevation
+- `EN` — end of input file
+
+> **Note**: The segment count formula used is `MAX(11, 2×INT(L×f/30/2)+1)`, which enforces both the NEC2 odd-segment rule and the ≤ λ/10 maximum segment length at the highest simulated frequency.
+
+**Typical Workflow**:
+1. Select wire length on Calculator (Sheet 1)
+2. Check VSWR estimates on VSWR Calculator (Sheet 2)
+3. Export a NEC2 file from this sheet to validate with NEC2 simulation
+4. Compare NEC2 impedance to the empirical model — large discrepancies indicate unusual geometry
+
+---
+
+### 3.6 Sheet 6 — Length Sweep
 
 **Purpose**: Visual analysis of antenna impedance vs. wire length
 
 **What It Does**:
-- Calculates impedance for ALL possible wire lengths (10 m to 150 m, 0.1 m increments)
+- Calculates impedance for ALL possible wire lengths (**5.0 m to 60.0 m, 0.1 m increments**)
 - Computes resonance avoidance score for each length
 - Creates visual "heatmap" showing good lengths (green) vs. bad lengths (red)
 - Ranks all lengths by avoidance score
 - Identifies which lengths resonate on which bands
 
 **Key Inputs**:
-- Band selection: Inherited from Calculator (E12:E22)
-- Velocity factor: Inherited from Calculator (C7)
+- Band selection: Inherited from Calculator — column E, rows 12–22 (the ACTIVE column)
+- Velocity factor: Inherited from Calculator (cell D7)
 
 **Key Outputs**:
 - **Large data table**: Impedance (R, X, |Z|) for every 0.1 m increment
@@ -435,7 +493,7 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 
 ---
 
-### 3.6 Sheet 6 — UnUn Ratio Optimizer
+### 3.7 Sheet 7 — UnUn Ratio Optimizer
 
 **Purpose**: Suggest the best ferrite UnUn impedance ratio for your chosen antenna
 
@@ -459,12 +517,12 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 **Typical Workflow**: 
 1. Select wire length on Calculator (Sheet 1)
 2. Check impedance on VSWR Calculator (Sheet 2)
-3. Use this sheet (Sheet 6) to confirm best UnUn ratio
+3. Use this sheet (Sheet 7) to confirm best UnUn ratio
 4. Go to UnUn Calculator (Sheet 3) to design the transformer
 
 ---
 
-### 3.7 Sheet 7 — Toroid Database
+### 3.8 Sheet 8 — Toroid Database
 
 **Purpose**: Reference table of ferrite core specifications and recommendations
 
@@ -473,12 +531,13 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 - **Mix types**: 31, 43, 52, 61 (organized by material) and iron powder Mix 2 and 6
 - **AL values**: Inductance per-turn-squared (nH/turn²)
 - **Dimensions**: O.D., I.D., height (mm)
+- **Effective area (Ae, cm²)**: Used by the UnUn Calculator for core saturation calculations
 - **Recommended uses**: Which cores for what applications
 
 > **Note**: The sheet tab name in the workbook is `Toroid_Database`.
 
 **How to Use**:
-1. Decide on **impedance ratio** — use UnUn Ratio Optimizer (Sheet 6) to find the best ratio for your wire length. Common integer-square ratios are 9:1, 16:1, 25:1, 49:1, 64:1, but any ratio from 4:1 to 69:1 can be built as a tapped autotransformer.
+1. Decide on **impedance ratio** — use UnUn Ratio Optimizer (Sheet 7) to find the best ratio for your wire length. Common integer-square ratios are 9:1, 16:1, 25:1, 49:1, 64:1, but any ratio from 4:1 to 69:1 can be built as a tapped autotransformer.
 2. Choose **power level** you need (QRP: 5–10W, SSB: 50–100W, AM: 100–400W)
 3. Look up **core size** from table matching power & ratio
 4. Note **part number** and **AL value**
@@ -527,12 +586,12 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 ```
 
 #### **Step 3: Adjust Velocity Factor (Optional)**
-- Cell C7: Default is **0.95** (insulated wire + end-effect)
+- Cell D7: Default is **0.95** (insulated wire + end-effect)
 - For bare copper wire in free air: Use **0.97–0.98**
 - For heavily insulated wire: Use **0.92–0.94**
 
 #### **Step 4: Review the Top-10 Recommended Wire Lengths**
-- See rows 28–38 in the Calculator sheet
+- See rows 29–38 in the Calculator sheet (row 27 is the section title, row 28 is the column header)
 - Each row shows:
   - **Wire Length** (meters)
   - **Avoidance Score** (0.0–0.25; higher is better)
@@ -556,13 +615,13 @@ This workbook contains **seven interconnected sheets** for designing and optimiz
 #### **Step 7: Verify with VSWR Calculator**
 - Go to **Sheet 2** (VSWR Calculator)
 - Cell C4: Paste your chosen wire length
-- Review the **SWR** column (rows 8–18)
+- Review the **VSWR (complex Z)** column H (rows 8–18, one per band)
 - If SWR >3:1 on most active bands, a tuner will be required; try the next-best length from the Top-10 list if SWR >6:1 on any band
   - SWR ≤ 1.5:1 → Excellent (green); 1.5–3.0:1 → Good/Acceptable (white); 3.0–6.0:1 → Marginal (tuner needed); > 6.0:1 → Poor (red)
 
 #### **Step 8: Choose Your Matching Method**
 - **Option A: UnUn Transformer (Fixed Ratio)**
-  - Go to Sheet 6 (UnUn Ratio Optimizer)
+  - Go to Sheet 7 (UnUn Ratio Optimizer)
   - Check recommended ratio (9:1, 16:1, 49:1, etc.)
   - Go to Sheet 3 (UnUn Calculator) to design
   - Build ferrite-based transformer
@@ -638,7 +697,7 @@ The **VSWR Calculator** (Sheet 2) predicts standing-wave ratio for your chosen w
 
 You have **two main options** for matching your antenna to 50 Ω coax:
 
-#### **Option 1: Ferrite UnUn Transformer (Sheet 6)** — Recommended for most users
+#### **Option 1: Ferrite UnUn Transformer (Sheet 7)** — Recommended for most users
 
 **Advantages:**
 ✅ Simple, broadband match  
@@ -659,10 +718,10 @@ You have **two main options** for matching your antenna to 50 Ω coax:
 **Best for:** QRP portable, multiband operation, set-and-forget approach
 
 **How to proceed:**
-1. Go to Sheet 6 (UnUn Ratio Optimizer)
+1. Go to Sheet 7 (UnUn Ratio Optimizer)
 2. Note the recommended ratio
 3. Go to Sheet 3 (UnUn Calculator)
-4. Select ferrite core from Sheet 7 (Toroid Database)
+4. Select ferrite core from Sheet 8 (Toroid Database)
 5. Build using winding instructions
 
 ---
@@ -1097,6 +1156,7 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 **Model Accuracy:**
 - The feedpoint impedance model (R_est and X_est) used in the VSWR Calculator is **empirical, NOT based on NEC2** full-wave antenna modeling
 - Real antenna impedance depends on: height, ground type, nearby objects, weather conditions (humidity/rain), exact geometry
+- **For NEC2 validation**: Use the **NEC2 Export sheet (Sheet 5)** to generate a simulation file and compare against these empirical estimates
 - **Always validate with a VNA or antenna analyzer** before connecting to a transmitter at full power
 
 **450 Ω Assumption (CORRECTED 2024):**
@@ -1226,6 +1286,8 @@ The calculator automatically finds wire lengths that avoid half-wave and quarter
 | Palomar Engineers — Power Ratings | https://palomar-engineers.com/choke-transformer-power-ratings | Core size power limits; saturation guidance |
 
 ### Software Tools for Advanced Modeling
+
+> 💡 **Built-in NEC2 Export**: This workbook includes a **NEC2 Export sheet (Sheet 5)** that generates a ready-to-paste `.nec` input file for any of the Top-10 wire lengths. Use it to validate the empirical VSWR estimates against a full-wave simulation.
 
 | Tool | Platform | Description |
 |---|---|---|
