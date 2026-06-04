@@ -306,13 +306,24 @@ def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
     FIX #8: Warns if no RP card was found in the .nec deck.
     """
     run = NEC2Run(filepath=filepath)
-    run._has_rp_card = False  # set True by _parse_cp_from_nec_deck if RP found
+    run._has_rp_card = False  # updated below once .out text is loaded
 
     if not os.path.isfile(filepath):
         raise FileNotFoundError(f"NEC2 file not found: {filepath}")
 
     with open(filepath, 'r', errors='replace') as fh:
         text = fh.read()
+
+    # Detect RP card from the .out file itself (reproduced as "DATA CARD No: N RP …").
+    # _parse_cp_from_nec_deck also sets this flag when a .nec sibling exists, but
+    # the .out file is always present so it is the primary detection path.
+    # Two patterns cover all nec2c output styles:
+    #   "  DATA CARD No:   6 RP   0 …"  (standard nec2c echo)
+    #   "RP 0 …"                         (bare card, some front-ends)
+    run._has_rp_card = bool(
+        re.search(r'DATA\s+CARD[^\n]*\bRP\b', text, re.IGNORECASE) or
+        re.search(r'^\s*RP\b',                text, re.IGNORECASE | re.MULTILINE)
+    )
 
     # ── FIX #1: diagnostic dump ─────────────────────────────────────────────
     if debug:
