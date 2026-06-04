@@ -4,9 +4,9 @@
 ════════════════════════════════════════════════════════════════════════════════
   Antenna wire length  : 13.300 m
   UnUn ratio applied   : 9.00:1
-  NEC2 file (horiz. CP): ../antenna_counterpoise_horizontal.out
+  NEC2 file (horiz. CP): example_data/antenna_counterpoise_horizontal.out
      CP length          : 10.000 m  |  type: horizontal
-  NEC2 file (vert.  CP): ../antenna_counterpoise_verticall.out
+  NEC2 file (vert.  CP): example_data/antenna_counterpoise_verticall.out
      CP length          : 5.000 m  |  type: vertical
   Spreadsheet CSV rows : 11
   Active bands in CSV  : 2 (40m, 20m)
@@ -16,44 +16,44 @@
 ════════════════════════════════════════════════════════════════════════════════
         Freq       R (Ω)       X (Ω)     |Z| (Ω)    ∠ (°)     VSWR     Gain  Region
   ────────────────────────────────────────────────────────────────────────────────
-       7.000        81.8      +234.8       248.6    +70.8    15.67  +0.12 dBi  Inductive reactance dominant
-       7.500       107.4      +394.3       408.6    +74.8    31.52  +0.13 dBi  Inductive reactance dominant
-       8.000       143.7      +569.4       587.2    +75.8    48.33  +0.13 dBi  Inductive reactance dominant
-       8.500       196.9      +769.5       794.3    +75.6    64.33  +0.14 dBi  Inductive reactance dominant
-       9.000       279.4     +1008.6      1046.6    +74.5    78.58  +0.15 dBi  Inductive reactance dominant
-       9.500       417.7     +1309.6      1374.6    +72.3    90.58  +0.16 dBi  Inductive reactance dominant
-      10.000       678.0     +1710.4      1839.9    +68.4    99.92  +0.17 dBi  Near λ/2 (very high Z – voltage maximum)
-      10.500      1260.9     +2253.1      2581.9    +60.8   105.77  +0.18 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.000      2854.7     +2644.2      3891.2    +42.8   106.09  +0.18 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.500      4749.3      -171.8      4752.4     -2.1    95.11  +0.19 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.000      1919.2     -1484.8      2426.5    -37.7    61.37  +0.20 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.500      1019.1      -267.6      1053.6    -14.7    21.79  +0.21 dBi  Capacitive reactance dominant
-      13.000      1447.9      +806.7      1657.5    +29.1    37.96  +0.22 dBi  Near λ/2 (very high Z – voltage maximum)
-      13.500      3162.4      +956.0      3303.8    +16.8    69.03  +0.23 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.000      3781.1     -1480.9      4060.8    -21.4    87.22  +0.23 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.500      2021.9     -2357.7      3105.9    -49.4    95.44  +0.24 dBi  Near λ/2 (very high Z – voltage maximum)
+       7.000        81.8      +234.8       248.6    +70.8    15.67    n/a    Inductive reactance dominant
+       7.500       107.4      +394.3       408.6    +74.8    31.52    n/a    Inductive reactance dominant
+       8.000       143.7      +569.4       587.2    +75.8    48.33    n/a    Inductive reactance dominant
+       8.500       196.9      +769.5       794.3    +75.6    64.33    n/a    Inductive reactance dominant
+       9.000       279.4     +1008.6      1046.6    +74.5    78.58    n/a    Inductive reactance dominant
+       9.500       417.7     +1309.6      1374.6    +72.3    90.58    n/a    Inductive reactance dominant
+      10.000       678.0     +1710.4      1839.9    +68.4    99.92    n/a    Near λ/2 (very high Z – voltage maximum)
+      10.500      1260.9     +2253.1      2581.9    +60.8   105.77    n/a    Near λ/2 (very high Z – voltage maximum)
+      11.000      2854.7     +2644.2      3891.2    +42.8   106.09    n/a    Near λ/2 (very high Z – voltage maximum)
+      11.500      4749.3      -171.8      4752.4     -2.1    95.11    n/a    Near λ/2 (very high Z – voltage maximum)
+      12.000      1919.2     -1484.8      2426.5    -37.7    61.37    n/a    Near λ/2 (very high Z – voltage maximum)
+      12.500      1019.1      -267.6      1053.6    -14.7    21.79    n/a    Capacitive reactance dominant
+      13.000      1447.9      +806.7      1657.5    +29.1    37.96    n/a    Near λ/2 (very high Z – voltage maximum)
+      13.500      3162.4      +956.0      3303.8    +16.8    69.03    n/a    Near λ/2 (very high Z – voltage maximum)
+      14.000      3781.1     -1480.9      4060.8    -21.4    87.22    n/a    Near λ/2 (very high Z – voltage maximum)
+      14.500      2021.9     -2357.7      3105.9    -49.4    95.44    n/a    Near λ/2 (very high Z – voltage maximum)
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 1 — NEC2 IMPEDANCE SWEEP  [VERTICAL CP]
 ════════════════════════════════════════════════════════════════════════════════
         Freq       R (Ω)       X (Ω)     |Z| (Ω)    ∠ (°)     VSWR     Gain  Region
   ────────────────────────────────────────────────────────────────────────────────
-       7.000       253.2      +579.0       632.0    +66.4    31.72  +0.12 dBi  Inductive reactance dominant
-       7.500       283.1      +722.4       775.9    +68.6    42.68  +0.13 dBi  Inductive reactance dominant
-       8.000       325.2      +884.4       942.3    +69.8    54.75  +0.13 dBi  Inductive reactance dominant
-       8.500       385.9     +1074.0      1141.2    +70.2    67.62  +0.14 dBi  Inductive reactance dominant
-       9.000       477.7     +1305.2      1389.9    +69.9    80.97  +0.15 dBi  Inductive reactance dominant
-       9.500       627.4     +1601.6      1720.1    +68.6    94.39  +0.16 dBi  Near λ/2 (very high Z – voltage maximum)
-      10.000       902.4     +2004.3      2198.1    +65.8   107.13  +0.17 dBi  Near λ/2 (very high Z – voltage maximum)
-      10.500      1512.3     +2565.7      2978.2    +59.5   117.33  +0.18 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.000      3205.4     +2995.5      4387.2    +43.1   120.10  +0.18 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.500      5261.0       +39.0      5261.1     +0.4   105.23  +0.19 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.000      2502.3     -1486.5      2910.5    -30.7    67.71  +0.20 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.500      1507.6      -607.8      1625.5    -22.0    35.06  +0.21 dBi  Near λ/2 (very high Z – voltage maximum)
-      13.000      1481.2       +52.5      1482.1     +2.0    29.66  +0.22 dBi  Predominantly resistive (good match region)
-      13.500      1841.0      +410.6      1886.2    +12.6    38.65  +0.23 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.000      2414.0      +382.2      2444.1     +9.0    49.49  +0.23 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.500      2895.7      -161.5      2900.2     -3.2    58.09  +0.24 dBi  Near λ/2 (very high Z – voltage maximum)
+       7.000       253.2      +579.0       632.0    +66.4    31.72    n/a    Inductive reactance dominant
+       7.500       283.1      +722.4       775.9    +68.6    42.68    n/a    Inductive reactance dominant
+       8.000       325.2      +884.4       942.3    +69.8    54.75    n/a    Inductive reactance dominant
+       8.500       385.9     +1074.0      1141.2    +70.2    67.62    n/a    Inductive reactance dominant
+       9.000       477.7     +1305.2      1389.9    +69.9    80.97    n/a    Inductive reactance dominant
+       9.500       627.4     +1601.6      1720.1    +68.6    94.39    n/a    Near λ/2 (very high Z – voltage maximum)
+      10.000       902.4     +2004.3      2198.1    +65.8   107.13    n/a    Near λ/2 (very high Z – voltage maximum)
+      10.500      1512.3     +2565.7      2978.2    +59.5   117.33    n/a    Near λ/2 (very high Z – voltage maximum)
+      11.000      3205.4     +2995.5      4387.2    +43.1   120.10    n/a    Near λ/2 (very high Z – voltage maximum)
+      11.500      5261.0       +39.0      5261.1     +0.4   105.23    n/a    Near λ/2 (very high Z – voltage maximum)
+      12.000      2502.3     -1486.5      2910.5    -30.7    67.71    n/a    Near λ/2 (very high Z – voltage maximum)
+      12.500      1507.6      -607.8      1625.5    -22.0    35.06    n/a    Near λ/2 (very high Z – voltage maximum)
+      13.000      1481.2       +52.5      1482.1     +2.0    29.66    n/a    Predominantly resistive (good match region)
+      13.500      1841.0      +410.6      1886.2    +12.6    38.65    n/a    Near λ/2 (very high Z – voltage maximum)
+      14.000      2414.0      +382.2      2444.1     +9.0    49.49    n/a    Near λ/2 (very high Z – voltage maximum)
+      14.500      2895.7      -161.5      2900.2     -3.2    58.09    n/a    Near λ/2 (very high Z – voltage maximum)
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 2 — PER-BAND: NEC2 vs. EMPIRICAL MODEL (VSWR/IMPEDANCE)
@@ -61,63 +61,59 @@
 
 
   ── Band 40m  —  f_center = 7.1500 MHz ─────────────────────────────────────────
-    Wire L = 13.300 m  →  L/λ½ = 0.1780  (0.178×λ/2)
+    Wire L = 13.300 m  →  L/λ½ = 0.6344  (0.634×λ/2)
     ┌─ EMPIRICAL MODEL (spreadsheet formulas)
-    │  R_wire   =   1171.0 Ω  (antenna side)
-    │  X_wire   =  +1347.5 Ω   (Near λ/2 (very high Z – voltage maximum))
+    │  R_wire   =    104.4 Ω  (antenna side)
+    │  X_wire   =  -1121.5 Ω   (Capacitive reactance dominant)
     │  VSWR(no CP, ref 50Ω)  = 6.27  → POOR       [antenna side, no UnUn]
     │  VSWR(post-9:1 UnUn)  = 31.29  → POOR       [← transmitter sees this]
     │  VSWR(w/ CP, model)    = 6.24  → POOR       [⚠ series-CP model — may be inaccurate]
     │  Zcp (counterpoise)  = 30.0 Ω  (CP length 9.96 m, height 5.0 m, 1 radial(s))
-    │  Avoidance score      = 0.1780  [★★  GOOD]  (per-band, computed)
+    │  Avoidance score      = 0.3656  [★★★ EXCELLENT]  (per-band, computed)
     ├─ NEC2 – HORIZ. CP  (NEC2 freq=7.000 MHz, Δf=-0.150 MHz)
-    │  R_sim    =     81.8 Ω   Δ vs model = -1089.2 Ω  (-93.0%)
-    │  X_sim    =   +234.8 Ω   Δ vs model = -1112.7 Ω
+    │  R_sim    =     81.8 Ω   Δ vs model = -22.6 Ω  (-21.7%)
+    │  X_sim    =   +234.8 Ω   Δ vs model = +1356.2 Ω
     │  |Z|_sim  =    248.6 Ω   phase = +70.8°
     │  VSWR_sim =    15.67  → POOR       [antenna side, ref 50Ω]
     │  VSWR(post-9:1 UnUn)=    7.04  → POOR       [← transmitter sees this]
-    │  ΔVSWR vs. model = +9.43  ▲ ++9.4
-  ⚠     NEC2 VSWR is HIGHER than model by 9.4. Ground loss, near-field coupling, or wire height are likely increasing the effective feedpoint impedance beyond the infinite-ground assumption in the empirical formula.
-    │  Gain     = +0.12 dBi   take-off = 1.0°   efficiency = 96.2%
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -24.25  ▼ -24.2  [NEC2=7.04  model=31.29  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 24.2. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
     ├─ NEC2 – VERT.  CP  (NEC2 freq=7.000 MHz, Δf=-0.150 MHz)
-    │  R_sim    =    253.2 Ω   Δ vs model = -917.8 Ω  (-78.4%)
-    │  X_sim    =   +579.0 Ω   Δ vs model = -768.5 Ω
+    │  R_sim    =    253.2 Ω   Δ vs model = +148.8 Ω  (+142.6%)
+    │  X_sim    =   +579.0 Ω   Δ vs model = +1700.5 Ω
     │  |Z|_sim  =    632.0 Ω   phase = +66.4°
     │  VSWR_sim =    31.72  → POOR       [antenna side, ref 50Ω]
     │  VSWR(post-9:1 UnUn)=    5.09  → MARGINAL   [← transmitter sees this]
-    │  ΔVSWR vs. model = +25.48  ▲ ++25.5
-  ⚠     NEC2 VSWR is HIGHER than model by 25.5. Ground loss, near-field coupling, or wire height are likely increasing the effective feedpoint impedance beyond the infinite-ground assumption in the empirical formula.
-    │  Gain     = +0.12 dBi   take-off = 1.0°   efficiency = 98.6%
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -26.20  ▼ -26.2  [NEC2=5.09  model=31.29  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 26.2. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
 
 
   ── Band 20m  —  f_center = 14.1750 MHz ────────────────────────────────────────
-    Wire L = 13.300 m  →  L/λ½ = 0.3170  (0.317×λ/2)
+    Wire L = 13.300 m  →  L/λ½ = 1.2577  (1.258×λ/2)
     ┌─ EMPIRICAL MODEL (spreadsheet formulas)
-    │  R_wire   =    182.0 Ω  (antenna side)
-    │  X_wire   =  +1368.4 Ω   (Inductive reactance dominant)
+    │  R_wire   =    402.1 Ω  (antenna side)
+    │  X_wire   =  +1498.2 Ω   (Near λ/2 (very high Z – voltage maximum))
     │  VSWR(no CP, ref 50Ω)  = 25.70  → POOR       [antenna side, no UnUn]
     │  VSWR(post-9:1 UnUn)  = 14.35  → POOR       [← transmitter sees this]
     │  VSWR(w/ CP, model)    = 19.93  → POOR       [⚠ series-CP model — may be inaccurate]
     │  Zcp (counterpoise)  = 55.0 Ω  (CP length 9.96 m, height 5.0 m, 1 radial(s))
-    │  Avoidance score      = 0.3170  [★★★ EXCELLENT]  (per-band, computed)
+    │  Avoidance score      = 0.2577  [★★★ EXCELLENT]  (per-band, computed)
     ├─ NEC2 – HORIZ. CP  (NEC2 freq=14.000 MHz, Δf=-0.175 MHz)
-    │  R_sim    =   3781.1 Ω   Δ vs model = +3599.1 Ω  (+1977.5%)
-    │  X_sim    =  -1480.9 Ω   Δ vs model = -2849.3 Ω
+    │  R_sim    =   3781.1 Ω   Δ vs model = +3379.0 Ω  (+840.2%)
+    │  X_sim    =  -1480.9 Ω   Δ vs model = -2979.1 Ω
     │  |Z|_sim  =   4060.8 Ω   phase = -21.4°
     │  VSWR_sim =    87.22  → POOR       [antenna side, ref 50Ω]
     │  VSWR(post-9:1 UnUn)=    9.71  → POOR       [← transmitter sees this]
-    │  ΔVSWR vs. model = +67.29  ▲ ++67.3
-  ⚠     NEC2 VSWR is HIGHER than model by 67.3. Ground loss, near-field coupling, or wire height are likely increasing the effective feedpoint impedance beyond the infinite-ground assumption in the empirical formula.
-    │  Gain     = +0.23 dBi   take-off = 1.0°   efficiency = 97.9%
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -4.64  ▼ -4.6  [NEC2=9.71  model=14.35  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 4.6. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
     ├─ NEC2 – VERT.  CP  (NEC2 freq=14.000 MHz, Δf=-0.175 MHz)
-    │  R_sim    =   2414.0 Ω   Δ vs model = +2232.0 Ω  (+1226.4%)
-    │  X_sim    =   +382.2 Ω   Δ vs model = -986.2 Ω
+    │  R_sim    =   2414.0 Ω   Δ vs model = +2011.9 Ω  (+500.3%)
+    │  X_sim    =   +382.2 Ω   Δ vs model = -1116.0 Ω
     │  |Z|_sim  =   2444.1 Ω   phase = +9.0°
     │  VSWR_sim =    49.49  → POOR       [antenna side, ref 50Ω]
     │  VSWR(post-9:1 UnUn)=    5.50  → MARGINAL   [← transmitter sees this]
-    │  ΔVSWR vs. model = +29.56  ▲ ++29.6
-  ⚠     NEC2 VSWR is HIGHER than model by 29.6. Ground loss, near-field coupling, or wire height are likely increasing the effective feedpoint impedance beyond the infinite-ground assumption in the empirical formula.
-    │  Gain     = +0.23 dBi   take-off = 1.0°   efficiency = 98.8%
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -8.84  ▼ -8.8  [NEC2=5.50  model=14.35  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 8.8. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
 
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -228,53 +224,21 @@
 
     Band      f(MHz)      VSWR_H     VSWR_V     Model(nCP)    Model(wCP)    Verdict                            
     ─────────────────────────────────────────────────────────────────────────────────────────────
-    40m       7.1500          7.04      5.09     31.29      6.24  Marginal — tuner required  [score=0.178: ✓]
-    20m       14.1750         9.71      5.50     14.35     19.93  Marginal — tuner required  [score=0.317: ✓]
+    40m       7.1500          7.04      5.09     31.29     24.41  Marginal — tuner required  [score=0.366: ✓]
+    20m       14.1750         9.71      5.50     14.35     12.83  Marginal — tuner required  [score=0.258: ✓]
 
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 6 — GAIN & RADIATION PATTERN (if available)
 ════════════════════════════════════════════════════════════════════════════════
-
-  ── Gain summary — HORIZ. CP ───────────────────────────────────────────────────
-        Freq    MaxGain    TOA(°)   Efficiency  Note
-    ─────────────────────────────────────────────────────────────────
-       7.000      +0.12       1.0        96.2%  Above isotropic — good radiation
-       7.500      +0.13       1.0        96.6%  Above isotropic — good radiation
-       8.000      +0.13       1.0        96.9%  Above isotropic — good radiation
-       8.500      +0.14       1.0        97.2%  Above isotropic — good radiation
-       9.000      +0.15       1.0        97.5%  Above isotropic — good radiation
-       9.500      +0.16       1.0        97.6%  Above isotropic — good radiation
-      10.000      +0.17       1.0        97.8%  Above isotropic — good radiation
-      10.500      +0.18       1.0        97.8%  Above isotropic — good radiation
-      11.000      +0.18       1.0        97.7%  Above isotropic — good radiation
-      11.500      +0.19       1.0        97.5%  Above isotropic — good radiation
-      12.000      +0.20       1.0        96.9%  Above isotropic — good radiation
-      12.500      +0.21       1.0        96.5%  Above isotropic — good radiation
-      13.000      +0.22       1.0        97.1%  Above isotropic — good radiation
-      13.500      +0.23       1.0        97.7%  Above isotropic — good radiation
-      14.000      +0.23       1.0        97.9%  Above isotropic — good radiation
-      14.500      +0.24       1.0        98.0%  Above isotropic — good radiation
-
-  ── Gain summary — VERT.  CP ───────────────────────────────────────────────────
-        Freq    MaxGain    TOA(°)   Efficiency  Note
-    ─────────────────────────────────────────────────────────────────
-       7.000      +0.12       1.0        98.6%  Above isotropic — good radiation
-       7.500      +0.13       1.0        98.5%  Above isotropic — good radiation
-       8.000      +0.13       1.0        98.5%  Above isotropic — good radiation
-       8.500      +0.14       1.0        98.4%  Above isotropic — good radiation
-       9.000      +0.15       1.0        98.4%  Above isotropic — good radiation
-       9.500      +0.16       1.0        98.3%  Above isotropic — good radiation
-      10.000      +0.17       1.0        98.2%  Above isotropic — good radiation
-      10.500      +0.18       1.0        98.1%  Above isotropic — good radiation
-      11.000      +0.18       1.0        97.9%  Above isotropic — good radiation
-      11.500      +0.19       1.0        97.7%  Above isotropic — good radiation
-      12.000      +0.20       1.0        97.7%  Above isotropic — good radiation
-      12.500      +0.21       1.0        98.1%  Above isotropic — good radiation
-      13.000      +0.22       1.0        98.5%  Above isotropic — good radiation
-      13.500      +0.23       1.0        98.7%  Above isotropic — good radiation
-      14.000      +0.23       1.0        98.8%  Above isotropic — good radiation
-      14.500      +0.24       1.0        98.9%  Above isotropic — good radiation
+    HORIZ. CP: No gain data found in output file.
+    VERT.  CP: No gain data found in output file.
+    No gain or RP data available in NEC2 files.
+  ⚠    No RP card found in .nec input deck for: H-CP, V-CP
+    To get gain data, add the following card to your .nec deck
+    BEFORE the EN card and re-run the simulation:
+      RP 0 37 73 1000 0 0 1.0 5.0
+    (37 elevation steps × 73 azimuth steps, dBi, 1° and 5° increments)
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 7 — ROOT-CAUSE ANALYSIS OF MODEL vs. NEC2 DISCREPANCIES

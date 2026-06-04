@@ -199,9 +199,24 @@ _RE_CP_CM   = re.compile(
     r'Counterpoise(?:\s*\(vertical\))?\s*:\s*([\d.]+)\s*m',            re.IGNORECASE)
 _RE_CP_VERT = re.compile(r'counterpoise\s*\(vertical\)',                re.IGNORECASE)
 
-# RP (radiation pattern) table row: THETA  PHI  V-POL  H-POL  TOTAL  ...
+# RP (radiation pattern) table row: THETA  PHI  VERTC  HORIZ  TOTAL  ...
+# BUG 2 FIX: The original pattern matched ANY 5-column numeric line, which
+# includes the CURRENTS AND LOCATION table rows (seg# tag# x y z ...).
+# Those rows begin with small positive integers (seg/tag) and z-values like
+# 0.1167 (height in wavelengths), producing fake gain = 0.1167 and fake
+# TOA = 1, 2, 3 ... (segment numbers).
+#
+# Fix strategy: only search for RP rows within RADIATION PATTERNS sub-blocks.
+# _RE_RP_SECTION marks where each RP section starts inside a frequency block;
+# _RE_RP_ROW is then applied only to the text after that marker.
+# Additionally constrain THETA to [0, 90] (NEC2 ground-reflection RP uses
+# elevation 0–90°) so stray numeric lines outside the section still can't
+# match: the current-table SEG numbers go 1..18, which satisfies that range,
+# so the section-gating is the primary guard.
+_RE_RP_SECTION = re.compile(r'[-]{4,}\s*RADIATION PATTERNS\s*[-]{4,}', re.IGNORECASE)
 _RE_RP_ROW = re.compile(
-    r'^\s*([\-\d.]+)\s+([\-\d.]+)\s+[\-\d.]+\s+[\-\d.]+\s+([\-\d.]+)',
+    r'^\s*((?:90(?:\.0+)?|[0-8]?\d(?:\.\d+)?))\s+(\d{1,3}(?:\.\d+)?)\s+'
+    r'([\-\d.]+)\s+[\-\d.]+\s+([\-\d.]+)',
     re.MULTILINE)
 
 
@@ -395,11 +410,18 @@ def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
                 fp.efficiency /= 100.0  # was percentage
 
         # --- RP table: find max gain and take-off angle ---
+        # BUG 2 FIX: Only search for RP rows within the RADIATION PATTERNS
+        # sub-section of this frequency block.  Searching the whole block
+        # matched CURRENTS AND LOCATION table rows (seg# tag# x y z ...),
+        # which have the same column count, producing fake gain values equal
+        # to the segment z-height in wavelengths and fake TOA = seg numbers.
         rp_gains: List[Tuple[float, float, float]] = []  # (theta, phi, dBi)
-        for rm in _RE_RP_ROW.finditer(block):
+        rp_sec_m = _RE_RP_SECTION.search(block)
+        rp_search_text = block[rp_sec_m.start():] if rp_sec_m else ""
+        for rm in _RE_RP_ROW.finditer(rp_search_text):
             theta = _safe_float(rm.group(1))
             phi   = _safe_float(rm.group(2))
-            gain  = _safe_float(rm.group(3))
+            gain  = _safe_float(rm.group(4))  # group 4 = TOTAL column
             # FIX-B5: NEC2 outputs -999.99 dB as a sentinel for below-ground
             # or invalid radiation pattern points (theta = 90° ground plane).
             # Accepting the sentinel causes the reported max gain to read
@@ -542,16 +564,35 @@ def load_csv(filepath: str) -> List[CalcRow]:
             cr.cp_height_m     = _flt(raw, "cp_height_m", default=0.0)
             cr.num_radials     = int(_flt(raw, "num_radials", default=1))
 
-            # Auto-compute L/λ½ if missing
-            if cr.L_over_lhalf == 0.0 and cr.lambda_half_m > 0:
-                cr.L_over_lhalf = cr.wire_len_m / cr.lambda_half_m
+            # BUG 1 + BUG 3 COMBINED FIX:
+            # The CSV L_over_lhalf was computed against a single fixed reference
+            # wavelength (the 160m band), so every row carries the same wrong
+            # fraction (e.g. 0.178 for all bands).
+            #
+            # Naively recomputing from the CSV lambda_half_m column still
+            # produces a slightly different ratio than calc_empirical uses,
+            # because lambda_half_m is rounded (e.g. 19.93 m vs the exact
+            # c/(2f) = 20.965 m at 7.15 MHz). That rounding discrepancy makes
+            # Section 2 (which reads cr.R_wire_ohm) disagree with Section 4
+            # (which calls calc_empirical directly) — Bug 3.
+            #
+            # Fix: always derive L_over_lhalf from the exact c/(2f) formula,
+            # matching what calc_empirical computes internally.  This makes
+            # cr.R_wire_ohm / cr.X_wire_ohm identical to calc_empirical's
+            # output and eliminates the cross-section inconsistency.
+            if cr.freq_mhz > 0:
+                c_mhz = 299.792458
+                lambda_half_exact = (c_mhz / cr.freq_mhz) * 0.5
+                cr.L_over_lhalf = cr.wire_len_m / lambda_half_exact
 
-            # Auto-compute R_wire / X_wire from empirical formulas if missing
-            if cr.R_wire_ohm == 0.0 and cr.L_over_lhalf > 0:
+            # BUG 1 FIX: Always recompute R_wire / X_wire from the corrected
+            # L_over_lhalf (now derived from the correct per-band lambda_half_m).
+            # The CSV values were computed from the wrong (160m-reference)
+            # L_over_lhalf, so we must override them unconditionally.
+            if cr.L_over_lhalf > 0:
                 arg = math.pi * cr.L_over_lhalf
                 cr.R_wire_ohm = 50 * (80 ** (math.cos(arg) ** 2))
-            if cr.X_wire_ohm == 0.0 and cr.L_over_lhalf > 0:
-                cr.X_wire_ohm = 1500 * math.sin(2 * math.pi * cr.L_over_lhalf)
+                cr.X_wire_ohm = 1500 * math.sin(2 * arg)
 
             # FIX #7 — Recompute avoidance_score per band from actual L/λ½.
             # The CSV stores a single wire-length score from the Length Sweep
@@ -785,9 +826,15 @@ def analyse_model_vs_nec(
             info(f"  │  Avoidance score      = {avoid:.4f}  [{rating}]  (per-band, computed)")
 
             # ---- NEC2 result lookup ----
-            for run, rlabel, vswr_ref in [
-                (run_h, "NEC2 – HORIZ. CP", cr.vswr_with_cp),
-                (run_v, "NEC2 – VERT.  CP", cr.vswr_with_cp),
+            # BUG 5 FIX: The delta comparison must use the SAME reference system
+            # for both sides.  NEC2 VSWR is antenna-side (ref 50Ω, no UnUn).
+            # The old code compared that against cr.vswr_with_cp which is the
+            # model's post-UnUn, post-CP-correction value — apples vs oranges.
+            # Correct comparison: NEC2 post-UnUn VSWR  vs  model post-UnUn VSWR
+            # (what the transmitter actually sees through the same UnUn).
+            for run, rlabel in [
+                (run_h, "NEC2 – HORIZ. CP"),
+                (run_v, "NEC2 – VERT.  CP"),
             ]:
                 if run is None:
                     continue
@@ -821,31 +868,38 @@ def analyse_model_vs_nec(
                 info(f"  │  |Z|_sim  = {fp.Z_mag:8.1f} Ω   phase = {fp.Z_phase_deg:+.1f}°")
                 info(f"  │  VSWR_sim = {fp.vswr50:8.2f}  → {_vswr_label(fp.vswr50)}"
                      f"  [antenna side, ref 50Ω]")
-                # FIX #6: also show post-UnUn VSWR for NEC2 simulated Z
+                # BUG 5 FIX: compute NEC2 post-UnUn VSWR for apples-to-apples delta.
+                # Model post-UnUn VSWR comes from calc_empirical(unun=unun) which
+                # divides both R and X by the UnUn ratio before computing VSWR.
                 if unun > 1.0:
                     R_in = fp.R_ohm / unun
                     X_in = fp.X_ohm / unun
                     g_in = math.hypot(R_in - 50, X_in) / math.hypot(R_in + 50, X_in)
-                    vswr_in = (1 + g_in) / (1 - g_in) if g_in < 1 else 999.0
-                    info(f"  │  VSWR(post-{unun:.0f}:1 UnUn)= {vswr_in:7.2f}  → {_vswr_label(vswr_in)}"
+                    vswr_nec2_unun = (1 + g_in) / (1 - g_in) if g_in < 1 else 999.0
+                    info(f"  │  VSWR(post-{unun:.0f}:1 UnUn)= {vswr_nec2_unun:7.2f}  → {_vswr_label(vswr_nec2_unun)}"
                          f"  [← transmitter sees this]")
-                if vswr_ref:
-                    delta_vswr = fp.vswr50 - vswr_ref
-                    arrow = _delta_arrow(delta_vswr, 0.5)
-                    info(f"  │  ΔVSWR vs. model = {delta_vswr:+.2f}  {arrow}")
+                else:
+                    vswr_nec2_unun = fp.vswr50
 
-                    # Interpretation
-                    if abs(delta_vswr) < 0.5:
-                        good(f"   VSWR matches model within ±0.5 → model is reliable for {cr.band}")
-                    elif delta_vswr > 0:
-                        warn(f"   NEC2 VSWR is HIGHER than model by {delta_vswr:.1f}."
-                             " Ground loss, near-field coupling, or wire height are likely"
-                             " increasing the effective feedpoint impedance beyond the"
-                             " infinite-ground assumption in the empirical formula.")
-                    else:
-                        warn(f"   NEC2 VSWR is LOWER than model by {abs(delta_vswr):.1f}."
-                             " The antenna may be seeing a more favourable ground or a"
-                             " resonance effect not captured by the sinusoidal empirical model.")
+                # BUG 5 FIX: compare post-UnUn NEC2 vs post-UnUn model (same reference).
+                _, _, vswr_model_unun = calc_empirical(wire_len_m, cr.freq_mhz, unun)
+                delta_vswr = vswr_nec2_unun - vswr_model_unun
+                arrow = _delta_arrow(delta_vswr, 0.5)
+                info(f"  │  ΔVSWR(post-UnUn) NEC2 vs model = {delta_vswr:+.2f}  {arrow}"
+                     f"  [NEC2={vswr_nec2_unun:.2f}  model={vswr_model_unun:.2f}  — same ref]")
+
+                # Interpretation
+                if abs(delta_vswr) < 0.5:
+                    good(f"   VSWR matches model within ±0.5 → model is reliable for {cr.band}")
+                elif delta_vswr > 0:
+                    warn(f"   NEC2 VSWR is HIGHER than model by {delta_vswr:.1f}."
+                         " Ground loss, near-field coupling, or wire height are likely"
+                         " increasing the effective feedpoint impedance beyond the"
+                         " infinite-ground assumption in the empirical formula.")
+                else:
+                    warn(f"   NEC2 VSWR is LOWER than model by {abs(delta_vswr):.1f}."
+                         " The antenna may be seeing a more favourable ground or a"
+                         " resonance effect not captured by the sinusoidal empirical model.")
 
                 # Gain & efficiency
                 if fp.gain_dbi != 0.0:
@@ -1079,11 +1133,26 @@ def analyse_model_vs_nec(
         vswr_v_raw, vswr_v_unun = nec_vswr(run_v)
         vswr_h_s = f"{vswr_h_unun:8.2f}" if vswr_h_unun else "   n/a  "
         vswr_v_s = f"{vswr_v_unun:8.2f}" if vswr_v_unun else "   n/a  "
-        # FIX #6: model columns also show post-UnUn
-        _, _, vswr_no_unun  = calc_empirical(wire_len_m, freq, unun)
-        _, _, vswr_wcp_unun = calc_empirical(wire_len_m, freq, unun)
-        m_no  = f"{vswr_no_unun:8.2f}"
-        m_wcp = f"{cr.vswr_with_cp:8.2f}" if cr.vswr_with_cp else "   n/a  "
+        # BUG 4 FIX: The two calc_empirical calls were identical — the second
+        # never incorporated Zcp, so vswr_wcp_unun was the same as vswr_no_unun.
+        # Correct fix: the with-CP column derives its VSWR from the CP-corrected
+        # impedance: Z_eff = R_wire + (R_cp + jX_cp) with Zcp from the CSV.
+        # We then divide by the UnUn ratio for the transmitter-side reference.
+        _, _, vswr_no_unun = calc_empirical(wire_len_m, freq, unun)
+        m_no = f"{vswr_no_unun:8.2f}"
+        if cr.Zcp_ohm and cr.Zcp_ohm != 0.0:
+            # Zcp is stored as a magnitude in the CSV; model it as purely
+            # resistive series correction (the spreadsheet's own assumption).
+            R_eff = cr.R_wire_ohm + cr.Zcp_ohm
+            X_eff = cr.X_wire_ohm
+            R_eff_in = R_eff / unun if unun > 0 else R_eff
+            X_eff_in = X_eff / unun if unun > 0 else X_eff
+            g_cp = math.hypot(R_eff_in - 50, X_eff_in) / math.hypot(R_eff_in + 50, X_eff_in)
+            vswr_wcp_unun = (1 + g_cp) / (1 - g_cp) if g_cp < 1 else 999.0
+            m_wcp = f"{vswr_wcp_unun:8.2f}"
+        else:
+            # No Zcp available — fall back to the CSV's pre-computed value if present
+            m_wcp = f"{cr.vswr_with_cp:8.2f}" if cr.vswr_with_cp else "   n/a  "
 
         # Build verdict — FIX #6: judge against post-UnUn VSWR
         sims = [v for v in [vswr_h_unun, vswr_v_unun] if v is not None]
@@ -1347,7 +1416,10 @@ def plot_comparison(
         fx, fy = clean(R_v); ax1.plot(fx, fy, "s-", color=colors["V"], label="NEC2 V-CP")
     ax1.set_title("Feedpoint Resistance R (Ω)")
     ax1.set_xlabel("Frequency (MHz)"); ax1.set_ylabel("R (Ω)")
-    ax1.set_yscale("log"); ax1.legend(fontsize=8); ax1.grid(True, alpha=0.3)
+    ax1.set_yscale("log")
+    if ax1.get_legend_handles_labels()[0]:
+        ax1.legend(fontsize=8)
+    ax1.grid(True, alpha=0.3)
 
     # ── Plot 2: X ──
     ax2 = fig.add_subplot(gs[0, 1])
@@ -1359,7 +1431,9 @@ def plot_comparison(
     ax2.axhline(0, color="black", linewidth=0.7, linestyle=":")
     ax2.set_title("Feedpoint Reactance X (Ω)")
     ax2.set_xlabel("Frequency (MHz)"); ax2.set_ylabel("X (Ω)")
-    ax2.legend(fontsize=8); ax2.grid(True, alpha=0.3)
+    if ax2.get_legend_handles_labels()[0]:
+        ax2.legend(fontsize=8)
+    ax2.grid(True, alpha=0.3)
 
     # ── Plot 3: VSWR ──
     ax3 = fig.add_subplot(gs[1, 0])
@@ -1376,7 +1450,9 @@ def plot_comparison(
     ax3.set_ylim(0.9, min(30, max(
         [v for v in VSWR_emp + VSWR_h + VSWR_v if v is not None and v < 999] or [10]
     ) * 1.1))
-    ax3.legend(fontsize=7); ax3.grid(True, alpha=0.3)
+    if ax3.get_legend_handles_labels()[0]:
+        ax3.legend(fontsize=7)
+    ax3.grid(True, alpha=0.3)
 
     # ── Plot 4: Gain ──
     ax4 = fig.add_subplot(gs[1, 1])
@@ -1392,7 +1468,9 @@ def plot_comparison(
                  ha='center', va='center', transform=ax4.transAxes, color='gray')
     ax4.set_title("Max Gain (dBi)")
     ax4.set_xlabel("Frequency (MHz)"); ax4.set_ylabel("Gain (dBi)")
-    ax4.legend(fontsize=8); ax4.grid(True, alpha=0.3)
+    if ax4.get_legend_handles_labels()[0]:
+        ax4.legend(fontsize=8)
+    ax4.grid(True, alpha=0.3)
 
     # ── Plot 5: VSWR delta (H-CP vs V-CP) ──
     ax5 = fig.add_subplot(gs[2, 0])
