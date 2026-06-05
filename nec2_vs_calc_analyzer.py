@@ -171,6 +171,11 @@ _RE_IMPEDANCE = re.compile(
 
 # nec2c ANTENNA INPUT PARAMETERS table:
 # Columns: TAG  SEG  V_REAL  V_IMAG  I_REAL  I_IMAG  Z_REAL  Z_IMAG  Y_REAL  Y_IMAG
+# Bug G fix: gate the data row match to the ANTENNA INPUT PARAMETERS section header
+# so we never accidentally match the CURRENTS AND LOCATION table rows, which share
+# the same column structure but carry I and phase in groups 1/2 instead of Z_R/Z_I.
+_RE_ANTINPUT_SECTION = re.compile(
+    r'ANTENNA INPUT PARAMETERS', re.IGNORECASE)
 _RE_ANTINPUT = re.compile(
     r'^\s*\d+\s+\d+\s+[\-\d.E+]+\s+[\-\d.E+]+\s+[\-\d.E+]+\s+[\-\d.E+]+\s+'
     r'([\-\d.E+]+)\s+([\-\d.E+]+)',
@@ -290,6 +295,9 @@ def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run):
     else:
         run.cp_type = 'horizontal'
 
+    # Bug E fix: mark that cp_len_m came from actual GW geometry, not CM comment
+    run._cp_from_deck = True
+
 
 def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
     """
@@ -307,6 +315,7 @@ def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
     """
     run = NEC2Run(filepath=filepath)
     run._has_rp_card = False  # updated below once .out text is loaded
+    run._cp_from_deck = False  # Bug E fix: set True only when .nec GW geometry is found
 
     if not os.path.isfile(filepath):
         raise FileNotFoundError(f"NEC2 file not found: {filepath}")
@@ -383,8 +392,12 @@ def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
             fp.X_ohm = _safe_float(m.group(2))
 
         # Method 2: ANTENNA INPUT PARAMETERS table
+        # Bug G fix: search only within the text after the section header to avoid
+        # matching CURRENTS AND LOCATION rows that share the same column structure.
         if fp.R_ohm == 0.0:
-            m = _RE_ANTINPUT.search(block)
+            sec_m = _RE_ANTINPUT_SECTION.search(block)
+            antinput_text = block[sec_m.start():] if sec_m else ""
+            m = _RE_ANTINPUT.search(antinput_text)
             if m:
                 fp.R_ohm = _safe_float(m.group(1))
                 fp.X_ohm = _safe_float(m.group(2))
@@ -765,10 +778,12 @@ def analyse_model_vs_nec(
     info(f"UnUn ratio applied   : {unun_ratio:.2f}:1")
     if run_h:
         info(f"NEC2 file (horiz. CP): {run_h.filepath}")
-        info(f"   CP length          : {run_h.cp_len_m:.3f} m  |  type: {run_h.cp_type}")
+        cp_src_h = "GW geometry" if getattr(run_h, '_cp_from_deck', False) else "CM comment — co-locate .nec with .out for exact value"
+        info(f"   CP length          : {run_h.cp_len_m:.3f} m  |  type: {run_h.cp_type}  |  source: {cp_src_h}")
     if run_v:
         info(f"NEC2 file (vert.  CP): {run_v.filepath}")
-        info(f"   CP length          : {run_v.cp_len_m:.3f} m  |  type: {run_v.cp_type}")
+        cp_src_v = "GW geometry" if getattr(run_v, '_cp_from_deck', False) else "CM comment — co-locate .nec with .out for exact value"
+        info(f"   CP length          : {run_v.cp_len_m:.3f} m  |  type: {run_v.cp_type}  |  source: {cp_src_v}")
     info(f"Spreadsheet CSV rows : {len(calc_rows)}")
     active_rows = [r for r in calc_rows if r.active]
     info(f"Active bands in CSV  : {len(active_rows)} "
@@ -809,7 +824,11 @@ def analyse_model_vs_nec(
 
             # ---- Empirical model recap ----
             # FIX #6: show both raw-wire VSWR and post-UnUn VSWR
-            unun = cr.unun_ratio if cr.unun_ratio > 0 else unun_ratio
+            # Bug A fix: always use the global unun_ratio passed by the caller.
+            # The CSV column cr.unun_ratio may differ from the user-entered value
+            # (e.g. CSV has 27, user entered 9), causing silent inconsistencies
+            # across sections.  The global parameter is the single source of truth.
+            unun = unun_ratio
             _, _, vswr_unun_no_cp = calc_empirical(wire_len_m, cr.freq_mhz, unun)
             R_cp_coax = (cr.R_wire_ohm / unun) if unun else cr.R_wire_ohm
             X_cp_coax = (cr.X_wire_ohm / unun) if unun else cr.X_wire_ohm
@@ -925,6 +944,12 @@ def analyse_model_vs_nec(
     # -----------------------------------------------------------------------
     # SECTION 3 — Horizontal CP vs. Vertical CP Delta Analysis
     # -----------------------------------------------------------------------
+    # Bug F fix: initialize outside the if-block so Section 8 never sees NameError
+    # when only one NEC2 file is supplied.
+    delta_R_list:    List[float] = []
+    delta_X_list:    List[float] = []
+    delta_vswr_list: List[float] = []
+
     if run_h and run_v:
         h1("SECTION 3 — COUNTERPOISE ORIENTATION COMPARISON  (H-CP vs. V-CP)")
         info("  This section quantifies the effect of mounting the counterpoise")
@@ -940,10 +965,6 @@ def analyse_model_vs_nec(
         fmap_h = run_h.freq_map()
         fmap_v = run_v.freq_map()
         common_freqs = sorted(set(fmap_h.keys()) & set(fmap_v.keys()))
-
-        delta_R_list:    List[float] = []
-        delta_X_list:    List[float] = []
-        delta_vswr_list: List[float] = []
 
         for freq in common_freqs:
             fh = fmap_h[freq]
@@ -1040,8 +1061,7 @@ def analyse_model_vs_nec(
                     best_df = df
                     cr_match = cr
 
-            unun_row = cr_match.unun_ratio if (cr_match and cr_match.unun_ratio > 0) \
-                       else unun_ratio
+            unun_row = unun_ratio   # Bug A fix: always use the global unun_ratio
             # Always recompute empirical to avoid stale/missing CSV values
             R_ref, X_ref, vswr_emp = calc_empirical(wire_len_m, f, unun_row)
 
@@ -1117,7 +1137,8 @@ def analyse_model_vs_nec(
         if not cr.active:
             continue
         freq = cr.freq_mhz
-        unun = cr.unun_ratio if cr.unun_ratio > 0 else unun_ratio
+        # Bug A fix: always use the global unun_ratio, not cr.unun_ratio from CSV.
+        unun = unun_ratio
 
         # FIX #3: raised tolerance to 0.75 MHz; FIX #6: compute post-UnUn VSWR
         def nec_vswr(run):
@@ -1222,6 +1243,12 @@ def analyse_model_vs_nec(
                 note = f"{Fore.YELLOW}Significant loss — check ground, mismatch{Style.RESET_ALL}"
             if fp.efficiency < 0.5:
                 note += f"  {Fore.RED}[low η={fp.efficiency*100:.0f}%]{Style.RESET_ALL}"
+            # Bug H fix: flag NVIS operating mode so users expecting DX are not misled
+            # by a TOA near 0° (zenith).  A horizontal wire at low height radiates
+            # most power straight up — excellent for regional (0-600 km) contacts,
+            # useless for DX.  This is physically correct, not a simulation error.
+            if fp.toa_deg < 5.0:
+                note += f"  {Fore.CYAN}[NVIS — regional 0-600 km, not DX]{Style.RESET_ALL}"
             info(f"  {fp.freq_mhz:8.3f}  {fp.gain_dbi:+9.2f}  {fp.toa_deg:8.1f}  "
                  f"{fp.efficiency*100:10.1f}%  {note}")
 
@@ -1300,6 +1327,11 @@ def analyse_model_vs_nec(
     recs = []
 
     # VSWR-based
+    # Bug B fix: compute post-UnUn VSWR (what the transmitter sees) instead of
+    #   raw antenna-side fp.vswr50, which is always huge for end-fed wires and
+    #   caused every band to be flagged as "very poor match" even when the UnUn
+    #   brings the mismatch to an acceptable level.
+    # Bug C fix: raised tolerance from 0.3 MHz to 0.75 MHz to match Sections 2/5.
     for cr in active:
         sims = []
         for run in [run_h, run_v]:
@@ -1307,18 +1339,29 @@ def analyse_model_vs_nec(
                 continue
             fmap = run.freq_map()
             key  = min(fmap.keys(), key=lambda k: abs(k - cr.freq_mhz)) if fmap else None
-            if key and abs(key - cr.freq_mhz) <= 0.3:
-                sims.append(fmap[key].vswr50)
+            if key and abs(key - cr.freq_mhz) <= 0.75:   # Bug C fix: was 0.3
+                fp_ = fmap[key]
+                # Bug B fix: apply UnUn transformation before comparing thresholds
+                if unun_ratio > 1.0:
+                    R_in = fp_.R_ohm / unun_ratio
+                    X_in = fp_.X_ohm / unun_ratio
+                    g_in = math.hypot(R_in - 50, X_in) / math.hypot(R_in + 50, X_in)
+                    vswr_unun = (1 + g_in) / (1 - g_in) if g_in < 1 else 999.0
+                else:
+                    vswr_unun = fp_.vswr50
+                sims.append(vswr_unun)
         if sims:
             worst = max(sims)
             if worst > 6.0:
                 recs.append(
-                    f"[{cr.band}] NEC2 VSWR = {worst:.1f} → very poor match."
+                    f"[{cr.band}] NEC2 VSWR = {worst:.1f} (post-{unun_ratio:.0f}:1 UnUn)"
+                    " → very poor match."
                     " Adjust wire length (±0.2 m steps) or add more radials."
                     " Consider a tuner (ATU) for this band.")
             elif worst > 3.0:
                 recs.append(
-                    f"[{cr.band}] NEC2 VSWR = {worst:.1f} → marginal."
+                    f"[{cr.band}] NEC2 VSWR = {worst:.1f} (post-{unun_ratio:.0f}:1 UnUn)"
+                    " → marginal."
                     " A tuner is recommended.  Verify UnUn ratio is correct.")
 
     # CP-based

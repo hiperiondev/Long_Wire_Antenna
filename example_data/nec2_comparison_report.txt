@@ -4,10 +4,10 @@
 ════════════════════════════════════════════════════════════════════════════════
   Antenna wire length  : 13.300 m
   UnUn ratio applied   : 9.00:1
-  NEC2 file (horiz. CP): example_data/antenna_counterpoise_horizontal.out
-     CP length          : 10.000 m  |  type: horizontal
-  NEC2 file (vert.  CP): example_data/antenna_counterpoise_verticall.out
-     CP length          : 5.000 m  |  type: vertical
+  NEC2 file (horiz. CP): antenna_counterpoise_horizontal.out
+     CP length          : 10.000 m  |  type: horizontal  |  source: CM comment — co-locate .nec with .out for exact value
+  NEC2 file (vert.  CP): antenna_counterpoise_verticall.out
+     CP length          : 5.000 m  |  type: vertical  |  source: CM comment — co-locate .nec with .out for exact value
   Spreadsheet CSV rows : 11
   Active bands in CSV  : 2 (40m, 20m)
 
@@ -65,9 +65,9 @@
     ┌─ EMPIRICAL MODEL (spreadsheet formulas)
     │  R_wire   =    104.4 Ω  (antenna side)
     │  X_wire   =  -1121.5 Ω   (Capacitive reactance dominant)
-    │  VSWR(no CP, ref 50Ω)  = 6.27  → POOR       [antenna side, no UnUn]
+    │  VSWR(no CP, ref 50Ω)  = 21.89  → POOR       [antenna side, no UnUn]
     │  VSWR(post-9:1 UnUn)  = 31.29  → POOR       [← transmitter sees this]
-    │  VSWR(w/ CP, model)    = 6.24  → POOR       [⚠ series-CP model — may be inaccurate]
+    │  VSWR(w/ CP, model)    = 14.46  → POOR       [⚠ series-CP model — may be inaccurate]
     │  Zcp (counterpoise)  = 30.0 Ω  (CP length 9.96 m, height 5.0 m, 1 radial(s))
     │  Avoidance score      = 0.3656  [★★★ EXCELLENT]  (per-band, computed)
     ├─ NEC2 – HORIZ. CP  (NEC2 freq=7.000 MHz, Δf=-0.150 MHz)
@@ -95,9 +95,9 @@
     ┌─ EMPIRICAL MODEL (spreadsheet formulas)
     │  R_wire   =    402.1 Ω  (antenna side)
     │  X_wire   =  +1498.2 Ω   (Near λ/2 (very high Z – voltage maximum))
-    │  VSWR(no CP, ref 50Ω)  = 25.70  → POOR       [antenna side, no UnUn]
+    │  VSWR(no CP, ref 50Ω)  = 7.66  → POOR       [antenna side, no UnUn]
     │  VSWR(post-9:1 UnUn)  = 14.35  → POOR       [← transmitter sees this]
-    │  VSWR(w/ CP, model)    = 19.93  → POOR       [⚠ series-CP model — may be inaccurate]
+    │  VSWR(w/ CP, model)    = 12.04  → POOR       [⚠ series-CP model — may be inaccurate]
     │  Zcp (counterpoise)  = 55.0 Ω  (CP length 9.96 m, height 5.0 m, 1 radial(s))
     │  Avoidance score      = 0.2577  [★★★ EXCELLENT]  (per-band, computed)
     ├─ NEC2 – HORIZ. CP  (NEC2 freq=14.000 MHz, Δf=-0.175 MHz)
@@ -239,14 +239,14 @@
   ── Gain summary — HORIZ. CP ───────────────────────────────────────────────────
         Freq    MaxGain    TOA(°)   Efficiency  Note
     ─────────────────────────────────────────────────────────────────
-       7.000      +5.20       0.0        96.2%  Above isotropic — good radiation
-       7.500      +5.52       0.0        96.6%  Above isotropic — good radiation
-       8.000      +5.79       0.0        96.9%  Above isotropic — good radiation
-       8.500      +6.04       0.0        97.2%  Above isotropic — good radiation
-       9.000      +6.24       0.0        97.5%  Above isotropic — good radiation
-       9.500      +6.42       0.0        97.6%  Above isotropic — good radiation
-      10.000      +6.55       0.0        97.8%  Above isotropic — good radiation
-      10.500      +6.63       2.5        97.8%  Above isotropic — good radiation
+       7.000      +5.20       0.0        96.2%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+       7.500      +5.52       0.0        96.6%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+       8.000      +5.79       0.0        96.9%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+       8.500      +6.04       0.0        97.2%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+       9.000      +6.24       0.0        97.5%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+       9.500      +6.42       0.0        97.6%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+      10.000      +6.55       0.0        97.8%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+      10.500      +6.63       2.5        97.8%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
       11.000      +6.58       5.0        97.7%  Above isotropic — good radiation
       11.500      +6.33      10.0        97.5%  Above isotropic — good radiation
       12.000      +6.47      22.5        96.9%  Above isotropic — good radiation
@@ -264,12 +264,12 @@
        8.000      -1.68       7.5        98.5%  Slight loss vs isotropic — acceptable
        8.500      -0.69       5.0        98.4%  Slight loss vs isotropic — acceptable
        9.000      +0.29       5.0        98.4%  Above isotropic — good radiation
-       9.500      +1.30       2.5        98.3%  Above isotropic — good radiation
-      10.000      +2.34       2.5        98.2%  Above isotropic — good radiation
-      10.500      +3.41       0.0        98.1%  Above isotropic — good radiation
-      11.000      +4.46       0.0        97.9%  Above isotropic — good radiation
-      11.500      +5.18       0.0        97.7%  Above isotropic — good radiation
-      12.000      +4.91       0.0        97.7%  Above isotropic — good radiation
+       9.500      +1.30       2.5        98.3%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+      10.000      +2.34       2.5        98.2%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+      10.500      +3.41       0.0        98.1%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+      11.000      +4.46       0.0        97.9%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+      11.500      +5.18       0.0        97.7%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
+      12.000      +4.91       0.0        97.7%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
       12.500      +3.08      15.0        98.1%  Above isotropic — good radiation
       13.000      +0.34      35.0        98.5%  Above isotropic — good radiation
       13.500      -1.85      50.0        98.7%  Slight loss vs isotropic — acceptable
@@ -327,10 +327,10 @@
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 8 — RECOMMENDATIONS
 ════════════════════════════════════════════════════════════════════════════════
-    1. [40m] NEC2 VSWR = 31.7 → very poor match. Adjust wire length (±0.2 m steps)
-       or add more radials. Consider a tuner (ATU) for this band.
-    2. [20m] NEC2 VSWR = 87.2 → very poor match. Adjust wire length (±0.2 m steps)
-       or add more radials. Consider a tuner (ATU) for this band.
+    1. [40m] NEC2 VSWR = 7.0 (post-9:1 UnUn) → very poor match. Adjust wire length
+       (±0.2 m steps) or add more radials. Consider a tuner (ATU) for this band.
+    2. [20m] NEC2 VSWR = 9.7 (post-9:1 UnUn) → very poor match. Adjust wire length
+       (±0.2 m steps) or add more radials. Consider a tuner (ATU) for this band.
     3. Vertical CP gives lower average VSWR; drop the counterpoise vertically from
        the feedpoint.
     4. Always verify feedpoint impedance with a vector network analyser (VNA)
