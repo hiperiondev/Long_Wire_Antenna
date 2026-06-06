@@ -108,9 +108,6 @@ class NEC2Run:
     freqs:      List[FreqPoint] = field(default_factory=list)
 
     def freq_map(self, decimals: int = 4) -> Dict[float, FreqPoint]:
-        # FIX #4: always round to `decimals` places so that identical MHz
-        # values written with different trailing digits in the two .out files
-        # still produce matching keys when the two maps are intersected.
         return {round(fp.freq_mhz, decimals): fp for fp in self.freqs}
 
 
@@ -143,12 +140,6 @@ class CalcRow:
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Compiled patterns
-# ---------------------------------------------------------------------------
-# FIX #1 — Extended regex patterns covering all common NEC2 output variants:
-#   nec2c, 4nec2, xnec2c, EZNEC export.
-#   Previous patterns missed bare "*** FREQUENCY" star-bordered headers and
-#   "Z = R +j X" tabular impedance blocks used by nec2c standard output.
-# ---------------------------------------------------------------------------
 
 # Frequency markers — covers all known NEC2 front-end formats
 _RE_FREQ    = re.compile(r'FREQUENCY\s*=\s*([\d.E+\-]+)\s*MHZ',       re.IGNORECASE)
@@ -174,9 +165,6 @@ _RE_IMPEDANCE = re.compile(
 
 # nec2c ANTENNA INPUT PARAMETERS table:
 # Columns: TAG  SEG  V_REAL  V_IMAG  I_REAL  I_IMAG  Z_REAL  Z_IMAG  Y_REAL  Y_IMAG
-# Bug G fix: gate the data row match to the ANTENNA INPUT PARAMETERS section header
-# so we never accidentally match the CURRENTS AND LOCATION table rows, which share
-# the same column structure but carry I and phase in groups 1/2 instead of Z_R/Z_I.
 _RE_ANTINPUT_SECTION = re.compile(
     r'ANTENNA INPUT PARAMETERS', re.IGNORECASE)
 _RE_ANTINPUT = re.compile(
@@ -197,30 +185,12 @@ _RE_GAIN_DB  = re.compile(r'POWER\s+GAIN\s*=\s*([\-\d.E+]+)\s*DB',   re.IGNORECA
 _RE_GAIN_MAX = re.compile(r'MAXIMUM\s+GAIN\s*=\s*([\-\d.E+]+)\s*DB', re.IGNORECASE)
 _RE_EFF = re.compile(
     r'(?:RADIATION\s+EFFICIENCY|EFFICIENCY)\s*=\s*([\d.E+\-]+)', re.IGNORECASE)
-
-# FIX-B3: nec2c writes metadata inside a plain COMMENTS block, not as NEC2
-# "CM" card lines.  The actual text is:
-#   "Wire length: 13.3 m  |  Counterpoise: 10.0 m  |  Height: 5.0 m"
-# Drop the leading "CM\s+" requirement so both formats are matched.
 _RE_WIRE_CM = re.compile(r'Wire\s+length:\s*([\d.]+)\s*m',             re.IGNORECASE)
 _RE_CP_CM   = re.compile(
     r'Counterpoise(?:\s*\(vertical\))?\s*:\s*([\d.]+)\s*m',            re.IGNORECASE)
 _RE_CP_VERT = re.compile(r'counterpoise\s*\(vertical\)',                re.IGNORECASE)
 
 # RP (radiation pattern) table row: THETA  PHI  VERTC  HORIZ  TOTAL  ...
-# BUG 2 FIX: The original pattern matched ANY 5-column numeric line, which
-# includes the CURRENTS AND LOCATION table rows (seg# tag# x y z ...).
-# Those rows begin with small positive integers (seg/tag) and z-values like
-# 0.1167 (height in wavelengths), producing fake gain = 0.1167 and fake
-# TOA = 1, 2, 3 ... (segment numbers).
-#
-# Fix strategy: only search for RP rows within RADIATION PATTERNS sub-blocks.
-# _RE_RP_SECTION marks where each RP section starts inside a frequency block;
-# _RE_RP_ROW is then applied only to the text after that marker.
-# Additionally constrain THETA to [0, 90] (NEC2 ground-reflection RP uses
-# elevation 0–90°) so stray numeric lines outside the section still can't
-# match: the current-table SEG numbers go 1..18, which satisfies that range,
-# so the section-gating is the primary guard.
 _RE_RP_SECTION = re.compile(r'[-]{4,}\s*RADIATION PATTERNS\s*[-]{4,}', re.IGNORECASE)
 _RE_RP_ROW = re.compile(
     r'^\s*((?:90(?:\.0+)?|[0-8]?\d(?:\.\d+)?))\s+(\d{1,3}(?:\.\d+)?)\s+'
@@ -235,26 +205,12 @@ def _safe_float(s: str) -> float:
     except ValueError:
         return 0.0
 
-
-# ---------------------------------------------------------------------------
-# FIX #2 — Parse counterpoise geometry from the .nec INPUT deck (GW cards).
-#   The .out file never contains geometry; the old code always read 0.000 m.
-#   This function reads the sibling .nec file (same basename, .nec extension)
-#   and extracts wire lengths from GW cards to identify the CP wire.
-# ---------------------------------------------------------------------------
-
 def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run,
                              explicit_nec_path: Optional[str] = None):
     """
     Try to find a companion .nec input deck and parse CP length from GW cards.
     Wire 1 is assumed to be the antenna; Wire 2 (if present) is the CP.
     Also detects CP type (horizontal vs vertical) from z-coordinates.
-
-    BUG 4 FIX: accepts an explicit_nec_path so the caller can supply a companion
-    file whose basename differs from the .out file (e.g. antenna_horizontal.nec
-    paired with antenna_counterpoise_horizontal.out).  If explicit_nec_path is
-    given and the file exists it is used directly; otherwise the old same-basename
-    search is attempted as a fallback.
     """
     nec_path = None
     if explicit_nec_path and os.path.isfile(explicit_nec_path):
@@ -310,7 +266,6 @@ def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run,
     else:
         run.cp_type = 'horizontal'
 
-    # Bug E fix: mark that cp_len_m came from actual GW geometry, not CM comment
     run._cp_from_deck = True
 
 
@@ -318,20 +273,10 @@ def parse_nec2_output(filepath: str, debug: bool = False,
                       explicit_nec_path: Optional[str] = None) -> NEC2Run:
     """
     Parse a NEC2 .out file produced by nec2c, 4nec2, xnec2c, or EZNEC export.
-
-    FIX #1: Uses five frequency-marker patterns in priority order so that
-            nec2c star-bordered headers, 4nec2 "Frequency =" lines, and
-            xnec2c bare-number lines are all recognised.
-    FIX #1: Adds a fourth impedance-extraction method: "Z = R +j X" table.
-    FIX #1: debug=True prints the first 60 lines of the file so you can see
-            which tokens the parser is looking for vs what is actually there.
-    FIX #2: After parsing, calls _parse_cp_from_nec_deck() to get accurate
-            CP length and type from the companion .nec geometry file.
-    FIX #8: Warns if no RP card was found in the .nec deck.
     """
     run = NEC2Run(filepath=filepath)
     run._has_rp_card = False  # updated below once .out text is loaded
-    run._cp_from_deck = False  # Bug E fix: set True only when .nec GW geometry is found
+    run._cp_from_deck = False  # set True only when .nec GW geometry is found
 
     if not os.path.isfile(filepath):
         raise FileNotFoundError(f"NEC2 file not found: {filepath}")
@@ -350,7 +295,7 @@ def parse_nec2_output(filepath: str, debug: bool = False,
         re.search(r'^\s*RP\b',                text, re.IGNORECASE | re.MULTILINE)
     )
 
-    # ── FIX #1: diagnostic dump ─────────────────────────────────────────────
+    # ── diagnostic dump ─────────────────────────────────────────────
     if debug:
         print(f"\n{'─'*60}")
         print(f"  DEBUG: first 60 lines of {filepath}")
@@ -373,13 +318,9 @@ def parse_nec2_output(filepath: str, debug: bool = False,
     else:
         run.cp_type = "none"
 
-    # ── FIX #2: override CP geometry from companion .nec deck ───────────────
-    # BUG 4 FIX: forward the explicit_nec_path so a user-supplied filename
-    # that differs from the .out basename is honoured without guessing.
     _parse_cp_from_nec_deck(filepath, run, explicit_nec_path=explicit_nec_path)
 
     # --- split into per-frequency blocks ---
-    # FIX #1: try all five frequency patterns; use the one that finds the most hits
     freq_positions: List[Tuple[int, float]] = []
     for pattern in _ALL_FREQ_RES:
         candidates = [(m.start(), float(m.group(1)))
@@ -410,11 +351,6 @@ def parse_nec2_output(filepath: str, debug: bool = False,
             fp.X_ohm = _safe_float(m.group(2))
 
         # Method 2: ANTENNA INPUT PARAMETERS table
-        # Bug G fix: search only within the text after the section header AND
-        # before the CURRENTS AND LOCATION section, which shares the exact same
-        # column structure.  Without the upper bound the regex matches the first
-        # CURRENTS row (not the impedance row) whenever CURRENTS precedes the
-        # impedance line — a layout that is possible in non-standard NEC2 outputs.
         if fp.R_ohm == 0.0:
             sec_m = _RE_ANTINPUT_SECTION.search(block)
             antinput_text = block[sec_m.start():] if sec_m else ""
@@ -436,7 +372,6 @@ def parse_nec2_output(filepath: str, debug: bool = False,
                 fp.R_ohm = _safe_float(m.group(1))
                 fp.X_ohm = _safe_float(m.group(2))
 
-        # FIX #1 — Method 4: "Z = R +j X"  or  "Z = R -j X" table
         if fp.R_ohm == 0.0:
             m = _RE_Z_TABLE.search(block)
             if m:
@@ -461,11 +396,6 @@ def parse_nec2_output(filepath: str, debug: bool = False,
                 fp.efficiency /= 100.0  # was percentage
 
         # --- RP table: find max gain and take-off angle ---
-        # BUG 2 FIX: Only search for RP rows within the RADIATION PATTERNS
-        # sub-section of this frequency block.  Searching the whole block
-        # matched CURRENTS AND LOCATION table rows (seg# tag# x y z ...),
-        # which have the same column count, producing fake gain values equal
-        # to the segment z-height in wavelengths and fake TOA = seg numbers.
         rp_gains: List[Tuple[float, float, float]] = []  # (theta, phi, dBi)
         rp_sec_m = _RE_RP_SECTION.search(block)
         rp_search_text = block[rp_sec_m.start():] if rp_sec_m else ""
@@ -473,10 +403,7 @@ def parse_nec2_output(filepath: str, debug: bool = False,
             theta = _safe_float(rm.group(1))
             phi   = _safe_float(rm.group(2))
             gain  = _safe_float(rm.group(4))  # group 4 = TOTAL column
-            # FIX-B5: NEC2 outputs -999.99 dB as a sentinel for below-ground
-            # or invalid radiation pattern points (theta = 90° ground plane).
-            # Accepting the sentinel causes the reported max gain to read
-            # ~-999 dBi on every band.  Skip any value ≤ -200 dB.
+
             if gain <= -200.0:
                 continue
             rp_gains.append((theta, phi, gain))
@@ -484,14 +411,6 @@ def parse_nec2_output(filepath: str, debug: bool = False,
         if rp_gains:
             best = max(rp_gains, key=lambda t: t[2])
             fp.gain_dbi = best[2]
-            # BUG 3 FIX: NEC2 RP THETA is measured FROM THE ZENITH
-            # (0° = straight up, 90° = horizon), which is the OPPOSITE of the
-            # ham-radio take-off angle convention (0° = horizon = DX, 90° =
-            # zenith = NVIS).  Storing NEC2 THETA directly made the report
-            # show "take-off = 0°" for a pure NVIS antenna, which reads as
-            # excellent DX to anyone not aware of the convention inversion.
-            # Fix: convert here so that all downstream code, labels, and the
-            # NVIS flag all use the correct elevation-from-horizon angle.
             fp.toa_deg = 90.0 - best[0]  # ham TOA = 90° − NEC2_THETA
 
         fp.vswr50 = fp.compute_vswr50()
@@ -503,8 +422,6 @@ def parse_nec2_output(filepath: str, debug: bool = False,
 def _parse_nec2_fallback(text: str, run: NEC2Run):
     """
     Fallback when no FREQUENCY= markers found with any pattern.
-    FIX #1: Tries all impedance extraction methods (including Z= table),
-            and uses all five frequency patterns to locate the best candidates.
     """
     imp_matches = list(_RE_IMPEDANCE.finditer(text))
 
@@ -569,7 +486,7 @@ def _flt(row: dict, name: str, default: float = 0.0) -> float:
     if v is None or str(v).strip() in ("", "—", "-", "N/A", "n/a"):
         return default
     s = str(v).strip()
-    # DATA fix: only convert a leading-comma decimal separator (European locale)
+    # DATA: only convert a leading-comma decimal separator (European locale)
     # when the entire string is numeric — digits, commas, dots, and an optional
     # leading minus.  A broad s.replace(',', '.') would corrupt string columns
     # that legitimately contain commas (e.g. quality_rating "Good, excellent")
@@ -591,14 +508,7 @@ def _bool_yes(v) -> bool:
 
 def load_csv(filepath: str) -> List[CalcRow]:
     rows: List[CalcRow] = []
-    # FIX-B2: CSV files exported from European-locale spreadsheets use a
-    # comma as the decimal separator AND as the column separator, which makes
-    # standard comma-delimited parsing impossible ("7,15" splits into two
-    # fields instead of one).  The fix is to export / save the CSV with a
-    # semicolon column delimiter (common in European Excel / LibreOffice
-    # locales).  We auto-detect the delimiter here so that both the semicolon
-    # format (locale commas for decimals) and the standard comma format
-    # (period decimals) work without any manual change to this script.
+
     with open(filepath, newline='', encoding='utf-8-sig') as probe:
         first_line = probe.readline()
     delimiter = ';' if ';' in first_line else ','
@@ -632,48 +542,19 @@ def load_csv(filepath: str) -> List[CalcRow]:
             cr.cp_height_m     = _flt(raw, "cp_height_m", default=0.0)
             cr.num_radials     = int(_flt(raw, "num_radials", default=1))
 
-            # BUG 1 + BUG 3 COMBINED FIX:
-            # The CSV L_over_lhalf was computed against a single fixed reference
-            # wavelength (the 160m band), so every row carries the same wrong
-            # fraction (e.g. 0.178 for all bands).
-            #
-            # Naively recomputing from the CSV lambda_half_m column still
-            # produces a slightly different ratio than calc_empirical uses,
-            # because lambda_half_m is rounded (e.g. 19.93 m vs the exact
-            # c/(2f) = 20.965 m at 7.15 MHz). That rounding discrepancy makes
-            # Section 2 (which reads cr.R_wire_ohm) disagree with Section 4
-            # (which calls calc_empirical directly) — Bug 3.
-            #
-            # Fix: always derive L_over_lhalf from the exact c/(2f) formula,
-            # matching what calc_empirical computes internally.  This makes
-            # cr.R_wire_ohm / cr.X_wire_ohm identical to calc_empirical's
-            # output and eliminates the cross-section inconsistency.
             if cr.freq_mhz > 0:
                 c_mhz = 299.792458
                 lambda_half_exact = (c_mhz / cr.freq_mhz) * 0.5
                 cr.L_over_lhalf = cr.wire_len_m / lambda_half_exact
 
-            # BUG 1 FIX: Always recompute R_wire / X_wire from the corrected
-            # L_over_lhalf (now derived from the correct per-band lambda_half_m).
-            # The CSV values were computed from the wrong (160m-reference)
-            # L_over_lhalf, so we must override them unconditionally.
-            # BUG 5 FIX: also recompute vswr_no_cp from the new R/X so that
-            # the three values printed in Section 2 are mutually consistent.
             if cr.L_over_lhalf > 0:
                 arg = math.pi * cr.L_over_lhalf
                 cr.R_wire_ohm = 50 * (80 ** (math.cos(arg) ** 2))
                 cr.X_wire_ohm = 1500 * math.sin(2 * arg)
-                # BUG 5 FIX: keep vswr_no_cp consistent with the recomputed R/X
-                # (antenna side, ref 50 Ω, no UnUn — matches what Section 2 displays).
                 _g5 = math.hypot(cr.R_wire_ohm - 50, cr.X_wire_ohm) / \
                       math.hypot(cr.R_wire_ohm + 50, cr.X_wire_ohm)
                 cr.vswr_no_cp = (1 + _g5) / (1 - _g5) if _g5 < 1 else 999.0
 
-            # FIX #7 — Recompute avoidance_score per band from actual L/λ½.
-            # The CSV stores a single wire-length score from the Length Sweep
-            # sheet, which is identical for every row and therefore wrong for
-            # multi-band comparisons.  The correct score measures how far this
-            # specific wire is from resonance at THIS band's frequency.
             if cr.L_over_lhalf > 0:
                 frac = cr.L_over_lhalf % 1.0   # fractional part of L/(λ/2)
                 computed_score = min(frac, 1.0 - frac)  # 0=resonance, 0.5=best
@@ -686,21 +567,6 @@ def load_csv(filepath: str) -> List[CalcRow]:
 
             rows.append(cr)
 
-    # FIX #7 — Decide whether to use CSV avoidance scores or computed ones.
-    # The comment in the per-row block above promises "only override when all
-    # rows are identical (copy-paste artifact)", but the old code set
-    # _computed_avoidance unconditionally and _avoidance_score() always returned
-    # it, silently discarding meaningful per-band CSV values.
-    #
-    # Correct implementation:
-    #   • Collect all non-zero CSV avoidance scores across all rows.
-    #   • If every row has the same value (single unique score) — that is the
-    #     classic copy-paste artifact from the Length Sweep sheet where one
-    #     wire-level score is pasted into every band cell.  In that case use the
-    #     per-band computed scores.
-    #   • If the scores differ between rows the user supplied genuine per-band
-    #     values; keep them and set _computed_avoidance = csv value so
-    #     _avoidance_score() returns the original.
     all_csv_scores = [r.avoidance_score for r in rows if r.avoidance_score > 0]
     use_computed = (len(set(all_csv_scores)) <= 1)  # True = uniform/absent → override
 
@@ -710,10 +576,6 @@ def load_csv(filepath: str) -> List[CalcRow]:
             pass
         else:
             # Distinct per-band CSV values — honour them when present (> 0).
-            # FIX A: when csv_score == 0 the cell was blank in the spreadsheet
-            # (not a genuine "zero avoidance" value).  In that case keep the
-            # per-row L/λ½ derived value that was computed in the loop above
-            # rather than overwriting it with 0.0.
             if r.avoidance_score > 0:
                 r._computed_avoidance = r.avoidance_score
             # else: leave _computed_avoidance as set from L/λ½ in the per-row block
@@ -722,10 +584,6 @@ def load_csv(filepath: str) -> List[CalcRow]:
 
 
 def _avoidance_score(cr: 'CalcRow') -> float:
-    """
-    FIX #7: Return the per-band avoidance score, preferring the value
-    computed from L/λ½ over the potentially-uniform CSV value.
-    """
     return getattr(cr, '_computed_avoidance', cr.avoidance_score)
 
 
@@ -751,13 +609,6 @@ def calc_empirical(wire_len_m: float, freq_mhz: float,
     Returns (R_wire_ohm, X_wire_ohm, vswr50) using the spreadsheet empirical model:
       R = 50 * 80^cos²(π * L/λ½)
       X = 1500 * sin(2π * L/λ½)
-
-    FIX #6: The UnUn is an impedance transformer, not a power divider.
-    A N:1 UnUn presents Z_feed / N to the coax, so we divide R and X by N
-    (not N²).  The VSWR returned is what the transmitter actually sees through
-    the balun — which is the quantity that matters for matching assessment.
-    The raw wire impedance (R_wire, X_wire) is returned unchanged so the
-    report can still show both the antenna-side and coax-side values.
     """
     c_mhz = 299.792458   # speed of light / 1e6 → MHz·m/s
     lambda_half = (c_mhz / freq_mhz) * 0.5
@@ -767,8 +618,6 @@ def calc_empirical(wire_len_m: float, freq_mhz: float,
     arg = math.pi * ratio
     R = 50 * (80 ** (math.cos(arg) ** 2))
     X = 1500 * math.sin(2 * arg)
-    # FIX #6: correct UnUn impedance transformation — divide by N, not N²
-    # (an ideal N:1 UnUn transforms Z by factor N, so Z_coax = Z_antenna / N)
     R_in = R / unun_ratio if unun_ratio > 0 else R
     X_in = X / unun_ratio if unun_ratio > 0 else X
     Z0 = 50.0
@@ -873,10 +722,6 @@ def analyse_model_vs_nec(
     info(f"Active bands in CSV  : {len(active_rows)} "
          f"({', '.join(r.band for r in active_rows)})")
 
-    # -----------------------------------------------------------------------
-    # BUG 1 FIX: Warn when the CSV unun_ratio differs from the user-entered
-    # value so the mismatch is never silent.  All VSWR calculations in this
-    # report use the user-entered unun_ratio; the CSV column is informational.
     _csv_ununs_in_report = {r.unun_ratio for r in calc_rows if r.unun_ratio > 0}
     for _csv_u in _csv_ununs_in_report:
         if abs(_csv_u - unun_ratio) > 0.1:
@@ -917,18 +762,6 @@ def analyse_model_vs_nec(
             info(f"  Wire L = {cr.wire_len_m:.3f} m  →  L/λ½ = {cr.L_over_lhalf:.4f}  "
                  f"({cr.L_over_lhalf:.3f}×λ/2)")
 
-            # ---- Empirical model recap ----
-            # FIX #6: show both raw-wire VSWR and post-UnUn VSWR
-            # Bug A fix: always use the global unun_ratio passed by the caller.
-            # The CSV column cr.unun_ratio may differ from the user-entered value
-            # (e.g. CSV has 27, user entered 9), causing silent inconsistencies
-            # across sections.  The global parameter is the single source of truth.
-            # FIX B: use cr.wire_len_m (from the CSV row) instead of the global
-            # wire_len_m for the empirical model calls in this section so that
-            # cr.R_wire_ohm / cr.X_wire_ohm (which were derived from cr.wire_len_m
-            # in load_csv) and calc_empirical are always computed from the same
-            # reference length.  If the user typed a different length at the prompt
-            # the two values would be inconsistent; using cr.wire_len_m avoids that.
             unun = unun_ratio
             sec2_wire = cr.wire_len_m if cr.wire_len_m > 0 else wire_len_m
             _, _, vswr_unun_no_cp = calc_empirical(sec2_wire, cr.freq_mhz, unun)
@@ -938,23 +771,13 @@ def analyse_model_vs_nec(
             info(f"  ┌─ EMPIRICAL MODEL (spreadsheet formulas)")
             info(f"  │  R_wire   = {cr.R_wire_ohm:8.1f} Ω  (antenna side)")
             info(f"  │  X_wire   = {cr.X_wire_ohm:+8.1f} Ω   ({_impedance_region(cr.R_wire_ohm, cr.X_wire_ohm)})")
-            # BUG 2 FIX: cr.vswr_no_cp in the CSV is computed THROUGH the
-            # UnUn (it is the post-transformer VSWR without CP correction),
-            # NOT the raw antenna-side VSWR.  The old label "[antenna side,
-            # no UnUn]" was factually wrong and confused callers comparing it
-            # to NEC2 results.  We now recompute the true antenna-side VSWR
-            # from R_wire_ohm / X_wire_ohm (which are always in sync after
-            # the BUG 5 fix in load_csv) and show both values with correct
-            # labels so the report is internally consistent.
-            # True antenna-side VSWR (ref 50 Ω, no UnUn)
+
             _g_raw = math.hypot(cr.R_wire_ohm - 50, cr.X_wire_ohm) / \
                      math.hypot(cr.R_wire_ohm + 50, cr.X_wire_ohm)
             _vswr_raw = (1 + _g_raw) / (1 - _g_raw) if _g_raw < 1 else 999.0
             info(f"  │  VSWR(antenna side, ref 50Ω, no UnUn) = {_vswr_raw:.2f}"
                  f"  → {_vswr_label(_vswr_raw)}")
             # Also show the CSV vswr_no_cp with a corrected label for traceability
-            # FIX #5: note that the CSV vswr_with_cp uses a series CP model
-            # which is physically incorrect for end-fed antennas; flag it
             if cr.vswr_no_cp:
                 info(f"  │  VSWR(no CP correction, ref 50Ω)  = {cr.vswr_no_cp:.2f}"
                      f"  → {_vswr_label(cr.vswr_no_cp)}"
@@ -969,18 +792,12 @@ def analyse_model_vs_nec(
                 info(f"  │  Zcp (counterpoise)  = {cr.Zcp_ohm:.1f} Ω  "
                      f"(CP length {cr.cp_len_m:.2f} m, height {cr.cp_height_m:.1f} m, "
                      f"{cr.num_radials} radial(s))")
-            # FIX #7: use per-band computed avoidance score
+
             avoid = _avoidance_score(cr)
             rating = _avoidance_rating(avoid)
             info(f"  │  Avoidance score      = {avoid:.4f}  [{rating}]  (per-band, computed)")
 
             # ---- NEC2 result lookup ----
-            # BUG 5 FIX: The delta comparison must use the SAME reference system
-            # for both sides.  NEC2 VSWR is antenna-side (ref 50Ω, no UnUn).
-            # The old code compared that against cr.vswr_with_cp which is the
-            # model's post-UnUn, post-CP-correction value — apples vs oranges.
-            # Correct comparison: NEC2 post-UnUn VSWR  vs  model post-UnUn VSWR
-            # (what the transmitter actually sees through the same UnUn).
             for run, rlabel in [
                 (run_h, "NEC2 – HORIZ. CP"),
                 (run_v, "NEC2 – VERT.  CP"),
@@ -988,24 +805,20 @@ def analyse_model_vs_nec(
                 if run is None:
                     continue
                 fmap = run.freq_map()
-                # FIX #3: nearest-neighbor with generous tolerance + report
-                # the closest available frequency even when no match is found
+
                 best_key = min(fmap.keys(), key=lambda k: abs(k - cr.freq_mhz)) \
                     if fmap else None
                 if best_key is None:
                     warn(f"  No NEC2 data at all in {rlabel} — check parser output above.")
                     continue
                 delta_f = best_key - cr.freq_mhz
-                # FIX #3: raised tolerance from 0.3 to 0.75 MHz and report
-                # the nearest point even when outside tolerance
+
                 if abs(delta_f) > 0.75:
                     warn(f"  No NEC2 data near {cr.freq_mhz:.3f} MHz for {rlabel}"
                          f" (closest: {best_key:.3f} MHz, Δf={delta_f:+.3f} MHz)."
                          f" Add a sweep point at {cr.freq_mhz:.3f} MHz to your NEC2 deck.")
                     continue
-                # MEDIUM fix: if the closest NEC2 point is more than ~100 kHz away,
-                # quantify the empirical model's impedance change over that frequency
-                # offset so the user can judge the interpolation error magnitude.
+
                 if abs(delta_f) > 0.1:
                     R_at_nec, X_at_nec, _ = calc_empirical(wire_len_m, best_key, 1.0)
                     R_at_band, X_at_band, _ = calc_empirical(wire_len_m, cr.freq_mhz, 1.0)
@@ -1030,9 +843,7 @@ def analyse_model_vs_nec(
                 info(f"  │  |Z|_sim  = {fp.Z_mag:8.1f} Ω   phase = {fp.Z_phase_deg:+.1f}°")
                 info(f"  │  VSWR_sim = {fp.vswr50:8.2f}  → {_vswr_label(fp.vswr50)}"
                      f"  [antenna side, ref 50Ω]")
-                # BUG 5 FIX: compute NEC2 post-UnUn VSWR for apples-to-apples delta.
-                # Model post-UnUn VSWR comes from calc_empirical(unun=unun) which
-                # divides both R and X by the UnUn ratio before computing VSWR.
+
                 if unun > 1.0:
                     R_in = fp.R_ohm / unun
                     X_in = fp.X_ohm / unun
@@ -1043,9 +854,6 @@ def analyse_model_vs_nec(
                 else:
                     vswr_nec2_unun = fp.vswr50
 
-                # BUG 5 FIX: compare post-UnUn NEC2 vs post-UnUn model (same reference).
-                # FIX B: use cr.wire_len_m here as well so the model reference is
-                # always derived from the same wire length as cr.R_wire_ohm.
                 _, _, vswr_model_unun = calc_empirical(sec2_wire, cr.freq_mhz, unun)
                 delta_vswr = vswr_nec2_unun - vswr_model_unun
                 arrow = _delta_arrow(delta_vswr, 0.5)
@@ -1078,8 +886,6 @@ def analyse_model_vs_nec(
     # -----------------------------------------------------------------------
     # SECTION 3 — Horizontal CP vs. Vertical CP Delta Analysis
     # -----------------------------------------------------------------------
-    # Bug F fix: initialize outside the if-block so Section 8 never sees NameError
-    # when only one NEC2 file is supplied.
     delta_R_list:    List[float] = []
     delta_X_list:    List[float] = []
     delta_vswr_list: List[float] = []
@@ -1178,15 +984,12 @@ def analyse_model_vs_nec(
         err_X:    List[float] = []
         err_vswr: List[float] = []
 
-        # FIX #9: per-frequency table header
         info(f"  {'Freq':>8}  {'R_sim':>8}  {'R_mod':>8}  {'ΔR%':>7}  "
              f"{'X_sim':>8}  {'X_mod':>8}  {'ΔX(Ω)':>8}  {'VSWR_sim':>9}  {'VSWR_mod':>9}")
         info("  " + "─" * 88)
 
         for fp in sorted(run.freqs, key=lambda p: p.freq_mhz):
             f = fp.freq_mhz
-            # FIX #9: match to nearest calc_row; always recompute empirical
-            # values from formula so we aren't dependent on CSV completeness
             cr_match = None
             best_df = 999.0
             for cr in calc_rows:
@@ -1195,7 +998,7 @@ def analyse_model_vs_nec(
                     best_df = df
                     cr_match = cr
 
-            unun_row = unun_ratio   # Bug A fix: always use the global unun_ratio
+            unun_row = unun_ratio
             # Always recompute empirical to avoid stale/missing CSV values
             R_ref, X_ref, vswr_emp = calc_empirical(wire_len_m, f, unun_row)
 
@@ -1213,7 +1016,7 @@ def analyse_model_vs_nec(
                 info(f"  {f:8.3f}  (no valid R/X data)")
 
         blank()
-        # FIX #9: summary statistics
+
         if err_R:
             n = len(err_R)
             mean_eR = sum(err_R) / n
@@ -1271,10 +1074,8 @@ def analyse_model_vs_nec(
         if not cr.active:
             continue
         freq = cr.freq_mhz
-        # Bug A fix: always use the global unun_ratio, not cr.unun_ratio from CSV.
         unun = unun_ratio
 
-        # FIX #3: raised tolerance to 0.75 MHz; FIX #6: compute post-UnUn VSWR
         def nec_vswr(run):
             if run is None:
                 return None, None
@@ -1285,7 +1086,7 @@ def analyse_model_vs_nec(
             if abs(key - freq) > 0.75:   # FIX #3: was 0.3
                 return None, None
             fp_ = fmap[key]
-            # FIX #6: VSWR through UnUn
+
             if unun > 1.0:
                 R_in = fp_.R_ohm / unun
                 X_in = fp_.X_ohm / unun
@@ -1299,11 +1100,7 @@ def analyse_model_vs_nec(
         vswr_v_raw, vswr_v_unun = nec_vswr(run_v)
         vswr_h_s = f"{vswr_h_unun:8.2f}" if vswr_h_unun else "   n/a  "
         vswr_v_s = f"{vswr_v_unun:8.2f}" if vswr_v_unun else "   n/a  "
-        # BUG 4 FIX: The two calc_empirical calls were identical — the second
-        # never incorporated Zcp, so vswr_wcp_unun was the same as vswr_no_unun.
-        # Correct fix: the with-CP column derives its VSWR from the CP-corrected
-        # impedance: Z_eff = R_wire + (R_cp + jX_cp) with Zcp from the CSV.
-        # We then divide by the UnUn ratio for the transmitter-side reference.
+
         _, _, vswr_no_unun = calc_empirical(wire_len_m, freq, unun)
         m_no = f"{vswr_no_unun:8.2f}"
         if cr.Zcp_ohm and cr.Zcp_ohm != 0.0:
@@ -1335,7 +1132,6 @@ def analyse_model_vs_nec(
             else:
                 verdict = f"{Fore.RED}Poor — high mismatch loss{Style.RESET_ALL}"
 
-            # FIX #7: use per-band avoidance score
             avoid = _avoidance_score(cr)
             if avoid > 0.12:
                 model_ok = f"{Fore.GREEN}✓{Style.RESET_ALL}"
@@ -1377,12 +1173,7 @@ def analyse_model_vs_nec(
                 note = f"{Fore.YELLOW}Significant loss — check ground, mismatch{Style.RESET_ALL}"
             if fp.efficiency < 0.5:
                 note += f"  {Fore.RED}[low η={fp.efficiency*100:.0f}%]{Style.RESET_ALL}"
-            # Bug H fix + BUG 3 FIX: flag NVIS operating mode so users expecting DX
-            # are not misled.  After the BUG 3 convention fix, toa_deg is elevation
-            # from horizon (0° = horizon = DX, 90° = zenith = NVIS).  NVIS therefore
-            # corresponds to toa_deg > 85° (near-zenith).  The old threshold of
-            # < 5° was accidentally correct when toa_deg stored NEC2 THETA (zenith
-            # = 0), but would now flag DX angles instead of NVIS angles.
+
             if fp.toa_deg > 85.0:
                 note += f"  {Fore.CYAN}[NVIS — regional 0-600 km, not DX]{Style.RESET_ALL}"
             info(f"  {fp.freq_mhz:8.3f}  {fp.gain_dbi:+9.2f}  {fp.toa_deg:8.1f}  "
@@ -1390,7 +1181,7 @@ def analyse_model_vs_nec(
 
     if not any_gain:
         info("  No gain or RP data available in NEC2 files.")
-        # FIX #8: check if RP card was missing from the .nec deck
+
         missing_rp = []
         for run, rlabel in [(run_h, "H-CP"), (run_v, "V-CP")]:
             if run is not None and not getattr(run, '_has_rp_card', True):
@@ -1463,11 +1254,6 @@ def analyse_model_vs_nec(
     recs = []
 
     # VSWR-based
-    # Bug B fix: compute post-UnUn VSWR (what the transmitter sees) instead of
-    #   raw antenna-side fp.vswr50, which is always huge for end-fed wires and
-    #   caused every band to be flagged as "very poor match" even when the UnUn
-    #   brings the mismatch to an acceptable level.
-    # Bug C fix: raised tolerance from 0.3 MHz to 0.75 MHz to match Sections 2/5.
     for cr in active:
         sims = []
         for run in [run_h, run_v]:
@@ -1475,9 +1261,9 @@ def analyse_model_vs_nec(
                 continue
             fmap = run.freq_map()
             key  = min(fmap.keys(), key=lambda k: abs(k - cr.freq_mhz)) if fmap else None
-            if key and abs(key - cr.freq_mhz) <= 0.75:   # Bug C fix: was 0.3
+            if key and abs(key - cr.freq_mhz) <= 0.75:
                 fp_ = fmap[key]
-                # Bug B fix: apply UnUn transformation before comparing thresholds
+
                 if unun_ratio > 1.0:
                     R_in = fp_.R_ohm / unun_ratio
                     X_in = fp_.X_ohm / unun_ratio
@@ -1669,8 +1455,7 @@ def plot_comparison(
         fmap_v = run_v.freq_map()
         common = sorted(set(fmap_h.keys()) & set(fmap_v.keys()))
         dVSWR  = [fmap_v[f].vswr50 - fmap_h[f].vswr50 for f in common]
-        # FIX C: dR was computed but never used in the original code (dead variable).
-        # Now plotted as a secondary axis so the resistance shift is also visible.
+
         dR     = [fmap_v[f].R_ohm  - fmap_h[f].R_ohm  for f in common]
         ax5.bar(common, dVSWR, width=0.08, color=[
             "green" if d < 0 else "red" for d in dVSWR], label="ΔVSWR")
