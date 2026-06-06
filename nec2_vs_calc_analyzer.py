@@ -3,7 +3,10 @@
 =============================================================================
   NEC2 vs. Long Wire Antenna Calculator — Exhaustive Comparison Analyzer
   Author: based on LU3VEA LongWire_Antenna_Calculator.xlsx (CC0 v1.0)
-  Usage:  python nec2_vs_calc_analyzer.py
+  Usage:  python nec2_vs_calc_analyzer.py [options]
+
+  All arguments are optional; any omitted value is requested interactively.
+  Run with --help for the full argument reference.
 =============================================================================
 
 This script:
@@ -1739,6 +1742,205 @@ def ask_file(prompt: str, required: bool = True) -> Optional[str]:
             return path
 
 
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    p = argparse.ArgumentParser(
+        prog="nec2_vs_calc_analyzer.py",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            NEC2 vs. Long Wire Antenna Calculator — Exhaustive Comparison Analyzer
+            Author: based on LU3VEA LongWire_Antenna_Calculator.xlsx (CC0 v1.0)
+
+            WHAT THIS SCRIPT DOES
+            ─────────────────────
+            Reads one or two NEC2 output files (.out) — one for a horizontal
+            counterpoise (H-CP) run and one for a vertical counterpoise (V-CP) run
+            — together with a spreadsheet-exported CSV of empirical reference values,
+            then produces an 8-section comparison report and an optional multi-panel
+            matplotlib chart.
+
+            The report covers:
+              Section 1  NEC2 impedance sweep (R, X, |Z|, phase, VSWR, gain)
+              Section 2  Per-band: NEC2 vs. empirical model (VSWR, R, X, gain)
+              Section 3  H-CP vs. V-CP delta analysis (ΔR, ΔX, ΔVSWR)
+              Section 4  Systematic error statistics of the empirical formulas
+              Section 5  Band-by-band matching verdict table
+              Section 6  Gain & radiation pattern notes (if RP data present)
+              Section 7  Root-cause analysis of model vs. NEC2 discrepancies
+              Section 8  Actionable recommendations
+
+            INTERACTIVE vs. BATCH MODE
+            ──────────────────────────
+            All arguments are optional.  Any argument NOT supplied on the command
+            line is requested interactively at run-time (legacy behaviour).
+            Supplying ALL arguments — or using --no-interactive — enables fully
+            non-interactive/batch use (e.g. from a shell script or CI pipeline).
+
+            'default' SHORTHAND FOR --wire AND --unun
+            ──────────────────────────────────────────
+            Pass the literal string 'default' to --wire or --unun to instruct the
+            script to read that value directly from the CSV without asking:
+
+              --wire default   Uses the wire_len_m column value from the CSV.
+                               All active rows must agree on a single length;
+                               if they differ the script exits with an error.
+
+              --unun default   Uses the unun_ratio column value from the CSV.
+                               All rows must agree on a single ratio;
+                               if they differ the script exits with an error.
+
+            This is useful when the CSV already encodes the correct values and you
+            want a zero-prompt run without hard-coding the numbers on the CLI.
+
+            CSV FORMAT
+            ──────────
+            See the CSV COLUMN GUIDE section at the bottom of this script for the
+            full column list, required vs. optional columns, and an example.
+            The script auto-detects comma (standard) vs. semicolon (European locale)
+            CSV delimiters, and accepts UTF-8 or UTF-8-BOM encoded files.
+
+            NEC2 FILE COMPATIBILITY
+            ───────────────────────
+            Supports output from: nec2c, 4nec2, xnec2c, EZNEC export.
+            The parser recognises six different FREQUENCY= header styles and four
+            impedance extraction methods (IMPEDANCE=(R,X), ANTENNA INPUT PARAMETERS
+            table, ZIN label, and Z = R ±j X table).
+            Companion .nec input decks (--hcp-nec / --vcp-nec) are used to read
+            exact GW-card geometry for counterpoise length; without them the parser
+            falls back to CM-comment metadata.
+
+            OPTIONAL DEPENDENCIES
+            ─────────────────────
+              tabulate    — prettier ASCII tables (pip install tabulate)
+              colorama    — ANSI colour output on Windows (pip install colorama)
+              matplotlib  — comparison chart PNG (pip install matplotlib)
+        """),
+        epilog=textwrap.dedent("""\
+            FLAG REFERENCE
+            ──────────────
+            --hcp FILE        NEC2 .out for the horizontal-CP run (optional; prompted if omitted)
+            --hcp-nec FILE    Companion .nec input deck for H-CP (optional; improves CP geometry)
+            --vcp FILE        NEC2 .out for the vertical-CP run   (optional; prompted if omitted)
+            --vcp-nec FILE    Companion .nec input deck for V-CP  (optional)
+            --csv FILE        Spreadsheet reference CSV           (prompted if omitted)
+            --wire METRES     Wire length in metres, or 'default' to read from CSV
+            --unun RATIO      UnUn ratio N for N:1 transformer, or 'default' to read from CSV
+            --out-txt FILE    Output report filename  (default: nec2_comparison_report.txt)
+            --out-png FILE    Output chart filename   (default: nec2_comparison_chart.png)
+            --debug / -d      Dump first 60 lines of each .out file (parser diagnostics)
+            --no-interactive  Abort instead of prompting for any missing argument
+
+            EXAMPLES
+            ────────
+            # Fully interactive (original behaviour — prompts for every input):
+              python nec2_vs_calc_analyzer.py
+
+            # Provide H-CP file only; everything else is still prompted:
+              python nec2_vs_calc_analyzer.py --hcp antenna_h.out
+
+            # Use CSV values for wire length and UnUn without typing them:
+              python nec2_vs_calc_analyzer.py \\
+                --hcp antenna_h.out --csv reference.csv \\
+                --wire default --unun default
+
+            # Fully non-interactive batch run (no prompts at all):
+              python nec2_vs_calc_analyzer.py \\
+                --hcp     antenna_h.out  --hcp-nec antenna_h.nec \\
+                --vcp     antenna_v.out  --vcp-nec antenna_v.nec \\
+                --csv     reference.csv  \\
+                --wire    13.3           \\
+                --unun    9              \\
+                --out-txt report.txt     \\
+                --out-png chart.png
+
+            # Batch run, derive wire+UnUn from CSV, debug parser, no-prompt guard:
+              python nec2_vs_calc_analyzer.py \\
+                --hcp     antenna_h.out  \\
+                --csv     reference.csv  \\
+                --wire    default        \\
+                --unun    default        \\
+                --no-interactive         \\
+                --debug
+        """),
+    )
+
+    # ── NEC2 output files ──────────────────────────────────────────────────
+    p.add_argument(
+        "--hcp", metavar="FILE",
+        help="NEC2 .out file for the HORIZONTAL counterpoise run. "
+             "Leave unset to be prompted interactively.",
+    )
+    p.add_argument(
+        "--hcp-nec", metavar="FILE",
+        help="Companion NEC2 .nec input deck for the H-CP run (optional). "
+             "Used to read exact GW-card geometry instead of CM-comment values.",
+    )
+    p.add_argument(
+        "--vcp", metavar="FILE",
+        help="NEC2 .out file for the VERTICAL counterpoise run. "
+             "Leave unset to be prompted interactively.",
+    )
+    p.add_argument(
+        "--vcp-nec", metavar="FILE",
+        help="Companion NEC2 .nec input deck for the V-CP run (optional).",
+    )
+
+    # ── Reference CSV ──────────────────────────────────────────────────────
+    p.add_argument(
+        "--csv", metavar="FILE",
+        help="Spreadsheet-calculated reference CSV file. "
+             "See the CSV COLUMN GUIDE at the bottom of this script.",
+    )
+
+    # ── Antenna parameters ─────────────────────────────────────────────────
+    p.add_argument(
+        "--wire", metavar="METRES",
+        help=(
+            "Antenna wire length in metres (e.g. 13.3).  "
+            "Pass 'default' to use the wire_len_m value found in the CSV "
+            "without prompting (all active rows must agree on a single length; "
+            "if they differ the script exits with an error).  "
+            "Leave unset to be prompted interactively."
+        ),
+    )
+    p.add_argument(
+        "--unun", metavar="RATIO",
+        help=(
+            "UnUn impedance ratio N for an N:1 transformer (e.g. 9 for a 9:1 "
+            "UnUn, 1 for direct 50 Ω feed, 4 for a 4:1 balun).  "
+            "Pass 'default' to use the unun_ratio value found in the CSV "
+            "without prompting (all rows must agree on a single value; if they "
+            "differ the script exits with an error).  "
+            "When omitted entirely the value is read from the CSV unun_ratio "
+            "column if all rows agree, otherwise 9 is used as the interactive "
+            "default."
+        ),
+    )
+
+    # ── Output files ───────────────────────────────────────────────────────
+    p.add_argument(
+        "--out-txt", metavar="FILE", default=None,
+        help="Output text report filename (default: nec2_comparison_report.txt).",
+    )
+    p.add_argument(
+        "--out-png", metavar="FILE", default=None,
+        help="Output chart filename (default: nec2_comparison_chart.png).",
+    )
+
+    # ── Flags ──────────────────────────────────────────────────────────────
+    p.add_argument(
+        "--debug", "-d", action="store_true",
+        help="Print the first 60 lines of each .out file for parser diagnostics.",
+    )
+    p.add_argument(
+        "--no-interactive", action="store_true",
+        help="Exit with an error instead of prompting for any missing argument. "
+             "Useful in batch/CI contexts where stdin is not a terminal.",
+    )
+
+    return p
+
+
 def main():
     print()
     print(f"{Fore.CYAN}{'═'*70}")
@@ -1747,91 +1949,213 @@ def main():
     print(f"{'═'*70}{Style.RESET_ALL}")
     print()
 
-    # ── FIX #1: --debug flag ──
-    debug_mode = "--debug" in sys.argv or "-d" in sys.argv
+    # ── Parse CLI arguments ────────────────────────────────────────────────
+    parser = _build_arg_parser()
+    # Use parse_known_args so that unrecognised tokens (e.g. stray filenames
+    # passed by old callers) don't cause an immediate hard failure.
+    args, _unknown = parser.parse_known_args()
+
+    # Keep the legacy bare --debug / -d detection for callers that still pass
+    # those flags without going through argparse (harmless duplication).
+    debug_mode = args.debug
+
     if debug_mode:
         print(f"  {Fore.YELLOW}DEBUG MODE ON — first 60 lines of each .out file will be printed.{Style.RESET_ALL}")
         print()
 
-    # ── NEC2 files ──
-    print("  Provide the NEC2 OUTPUT file(s) (.out) from your simulation runs.")
-    print("  You can supply one or both counterpoise orientations.")
-    print()
+    # Helper: if --no-interactive was requested, abort instead of prompting.
+    def _require(name: str):
+        if args.no_interactive:
+            print(f"\n{Fore.RED}  Error: --{name} is required in non-interactive mode.{Style.RESET_ALL}")
+            sys.exit(1)
 
-    print(f"  {Fore.WHITE}[1] NEC2 output — HORIZONTAL counterpoise{Style.RESET_ALL}")
-    print("      (antenna horizontal + counterpoise wire in-line/horizontal)")
-    path_h = ask_file("  Path to H-CP NEC2 .out file (press Enter to skip)", required=False)
-    # BUG 4 FIX: the companion .nec input deck may have a different basename than the
-    # .out file (e.g. antenna_horizontal.nec vs antenna_counterpoise_horizontal.out).
-    # Asking explicitly lets the user supply any filename; the parser is then called
-    # with the correct companion path so GW-card geometry is always read accurately.
-    path_h_nec = None
-    if path_h:
-        print("      To read exact CP geometry from GW cards, supply the corresponding")
-        print("      NEC2 INPUT deck (.nec/.inp).  Press Enter to skip (falls back to")
-        print("      the CM comment in the .out file, which may differ by a few mm).")
-        path_h_nec = ask_file(
-            "  Path to H-CP NEC2 .nec input file (press Enter to skip)", required=False)
+    # ── [1] H-CP NEC2 .out file ───────────────────────────────────────────
+    if args.hcp is not None:
+        # Provided on CLI — validate immediately.
+        if not os.path.isfile(args.hcp):
+            print(f"  {Fore.RED}H-CP file not found: {args.hcp}{Style.RESET_ALL}")
+            sys.exit(1)
+        path_h = args.hcp
+    else:
+        _require("hcp")
+        print("  Provide the NEC2 OUTPUT file(s) (.out) from your simulation runs.")
+        print("  You can supply one or both counterpoise orientations.")
+        print()
+        print(f"  {Fore.WHITE}[1] NEC2 output — HORIZONTAL counterpoise{Style.RESET_ALL}")
+        print("      (antenna horizontal + counterpoise wire in-line/horizontal)")
+        path_h = ask_file("  Path to H-CP NEC2 .out file (press Enter to skip)", required=False)
 
-    print()
-    print(f"  {Fore.WHITE}[2] NEC2 output — VERTICAL counterpoise{Style.RESET_ALL}")
-    print("      (antenna horizontal + counterpoise drooping vertically)")
-    path_v = ask_file("  Path to V-CP NEC2 .out file (press Enter to skip)", required=False)
-    # BUG 4 FIX: same companion .nec prompt for the vertical run.
-    path_v_nec = None
-    if path_v:
-        print("      Optional: companion NEC2 input deck for exact V-CP geometry.")
-        path_v_nec = ask_file(
-            "  Path to V-CP NEC2 .nec input file (press Enter to skip)", required=False)
+    # ── [1b] H-CP companion .nec deck ────────────────────────────────────
+    if args.hcp_nec is not None:
+        if not os.path.isfile(args.hcp_nec):
+            print(f"  {Fore.YELLOW}  Warning: H-CP .nec file not found: {args.hcp_nec} — skipping.{Style.RESET_ALL}")
+            path_h_nec = None
+        else:
+            path_h_nec = args.hcp_nec
+    else:
+        path_h_nec = None
+        if path_h and not args.no_interactive:
+            print("      To read exact CP geometry from GW cards, supply the corresponding")
+            print("      NEC2 INPUT deck (.nec/.inp).  Press Enter to skip (falls back to")
+            print("      the CM comment in the .out file, which may differ by a few mm).")
+            path_h_nec = ask_file(
+                "  Path to H-CP NEC2 .nec input file (press Enter to skip)", required=False)
+
+    # ── [2] V-CP NEC2 .out file ───────────────────────────────────────────
+    if args.vcp is not None:
+        if not os.path.isfile(args.vcp):
+            print(f"  {Fore.RED}V-CP file not found: {args.vcp}{Style.RESET_ALL}")
+            sys.exit(1)
+        path_v = args.vcp
+    else:
+        _require("vcp")
+        print()
+        print(f"  {Fore.WHITE}[2] NEC2 output — VERTICAL counterpoise{Style.RESET_ALL}")
+        print("      (antenna horizontal + counterpoise drooping vertically)")
+        path_v = ask_file("  Path to V-CP NEC2 .out file (press Enter to skip)", required=False)
+
+    # ── [2b] V-CP companion .nec deck ────────────────────────────────────
+    if args.vcp_nec is not None:
+        if not os.path.isfile(args.vcp_nec):
+            print(f"  {Fore.YELLOW}  Warning: V-CP .nec file not found: {args.vcp_nec} — skipping.{Style.RESET_ALL}")
+            path_v_nec = None
+        else:
+            path_v_nec = args.vcp_nec
+    else:
+        path_v_nec = None
+        if path_v and not args.no_interactive:
+            print("      Optional: companion NEC2 input deck for exact V-CP geometry.")
+            path_v_nec = ask_file(
+                "  Path to V-CP NEC2 .nec input file (press Enter to skip)", required=False)
 
     if path_h is None and path_v is None:
         print(f"\n{Fore.RED}  At least one NEC2 file must be provided.{Style.RESET_ALL}")
         sys.exit(1)
 
-    # ── CSV ──
-    print()
-    print(f"  {Fore.WHITE}[3] Spreadsheet-calculated reference CSV{Style.RESET_ALL}")
-    print("      (see CSV column guide at end of this script)")
-    path_csv = ask_file("  Path to reference CSV file")
+    # ── [3] Reference CSV ─────────────────────────────────────────────────
+    if args.csv is not None:
+        if not os.path.isfile(args.csv):
+            print(f"  {Fore.RED}CSV file not found: {args.csv}{Style.RESET_ALL}")
+            sys.exit(1)
+        path_csv = args.csv
+    else:
+        _require("csv")
+        print()
+        print(f"  {Fore.WHITE}[3] Spreadsheet-calculated reference CSV{Style.RESET_ALL}")
+        print("      (see CSV column guide at end of this script)")
+        path_csv = ask_file("  Path to reference CSV file")
 
-    # ── Antenna parameters ──
-    print()
-    wire_len_str = ask("  Antenna wire length (m)", "13.3")
-    wire_len_m   = float(wire_len_str)
-
-    # BUG 1 FIX: load the CSV early (read-only probe) to detect the unun_ratio
-    # stored in all rows so we can offer it as the default.  When all CSV rows
-    # agree on a single value it is shown as the default so the user does not
-    # silently use the wrong transformer ratio (the old hard-coded default of 9
-    # would mismatch a CSV computed with 27:1 without any warning).
+    # ── [4] Wire length ───────────────────────────────────────────────────
+    # Probe CSV for both unun and wire defaults regardless of interactive mode.
     _csv_unun_default = "9"
+    _csv_wire_default = "13.3"
     try:
         _probe_rows = load_csv(path_csv)
+        # ── unun default from CSV ──
         _csv_ununs = {r.unun_ratio for r in _probe_rows if r.unun_ratio > 0}
         if len(_csv_ununs) == 1:
             _u = list(_csv_ununs)[0]
             _csv_unun_default = str(int(_u)) if _u == int(_u) else str(_u)
-            print(f"  {Fore.CYAN}ℹ  CSV unun_ratio column = {_csv_unun_default}"
-                  f" (all rows agree — using as default){Style.RESET_ALL}")
+            if args.unun is None:
+                print(f"  {Fore.CYAN}ℹ  CSV unun_ratio column = {_csv_unun_default}"
+                      f" (all rows agree — using as default){Style.RESET_ALL}")
+        # ── wire default from CSV ──
+        _csv_wires = {r.wire_len_m for r in _probe_rows if r.wire_len_m > 0}
+        if len(_csv_wires) == 1:
+            _w = list(_csv_wires)[0]
+            _csv_wire_default = str(int(_w)) if _w == int(_w) else str(_w)
     except Exception:
         pass
 
-    unun_str   = ask("  UnUn ratio (e.g. 9 for 9:1, 1 for direct)", _csv_unun_default)
-    unun_ratio = float(unun_str)
+    if args.wire is not None:
+        wire_str = str(args.wire).strip().lower()
+        if wire_str == "default":
+            # Resolve from CSV
+            _csv_wires_active = {r.wire_len_m for r in _probe_rows
+                                  if r.wire_len_m > 0 and r.active}
+            _csv_wires_all = {r.wire_len_m for r in _probe_rows if r.wire_len_m > 0}
+            _resolve_set = _csv_wires_active if _csv_wires_active else _csv_wires_all
+            if len(_resolve_set) == 0:
+                print(f"\n{Fore.RED}  --wire default: no wire_len_m values found in CSV."
+                      f"  Supply an explicit value in metres.{Style.RESET_ALL}")
+                sys.exit(1)
+            if len(_resolve_set) > 1:
+                print(f"\n{Fore.RED}  --wire default: CSV wire_len_m values are not uniform "
+                      f"({sorted(_resolve_set)}).  Supply an explicit value with --wire METRES."
+                      f"{Style.RESET_ALL}")
+                sys.exit(1)
+            wire_len_m = list(_resolve_set)[0]
+            print(f"  {Fore.CYAN}ℹ  --wire default → {wire_len_m} m (from CSV){Style.RESET_ALL}")
+        else:
+            try:
+                wire_len_m = float(wire_str)
+            except ValueError:
+                print(f"\n{Fore.RED}  --wire: invalid value '{args.wire}'."
+                      f"  Use a number in metres (e.g. 13.3) or the word 'default'."
+                      f"{Style.RESET_ALL}")
+                sys.exit(1)
+    else:
+        _require("wire")
+        print()
+        wire_len_str = ask("  Antenna wire length (m)", _csv_wire_default)
+        wire_len_m   = float(wire_len_str)
 
-    # ── Output ──
-    print()
-    out_txt = ask("  Output report filename (.txt)", "nec2_comparison_report.txt")
-    out_png = ask("  Output chart filename (.png)", "nec2_comparison_chart.png")
+    # ── [5] UnUn ratio ────────────────────────────────────────────────────
+    if args.unun is not None:
+        unun_str = str(args.unun).strip().lower()
+        if unun_str == "default":
+            # Resolve from CSV
+            _csv_ununs_check = {r.unun_ratio for r in _probe_rows if r.unun_ratio > 0}
+            if len(_csv_ununs_check) == 0:
+                print(f"\n{Fore.RED}  --unun default: no unun_ratio values found in CSV."
+                      f"  Supply an explicit ratio with --unun N.{Style.RESET_ALL}")
+                sys.exit(1)
+            if len(_csv_ununs_check) > 1:
+                print(f"\n{Fore.RED}  --unun default: CSV unun_ratio values are not uniform "
+                      f"({sorted(_csv_ununs_check)}).  Supply an explicit value with --unun N."
+                      f"{Style.RESET_ALL}")
+                sys.exit(1)
+            unun_ratio = list(_csv_ununs_check)[0]
+            print(f"  {Fore.CYAN}ℹ  --unun default → {unun_ratio}:1 (from CSV){Style.RESET_ALL}")
+        else:
+            try:
+                unun_ratio = float(unun_str)
+            except ValueError:
+                print(f"\n{Fore.RED}  --unun: invalid value '{args.unun}'."
+                      f"  Use a number (e.g. 9) or the word 'default'."
+                      f"{Style.RESET_ALL}")
+                sys.exit(1)
+    else:
+        _require("unun")
+        unun_str   = ask("  UnUn ratio (e.g. 9 for 9:1, 1 for direct)", _csv_unun_default)
+        unun_ratio = float(unun_str)
 
-    # ── Parse ──
+    # ── [6] Output filenames ──────────────────────────────────────────────
+    if args.out_txt is not None:
+        out_txt = args.out_txt
+    else:
+        _require("out-txt")
+        print()
+        out_txt = ask("  Output report filename (.txt)", "nec2_comparison_report.txt")
+
+    if args.out_png is not None:
+        out_png = args.out_png
+    else:
+        _require("out-png")
+        # Only ask if matplotlib is available; otherwise silently skip.
+        if HAS_MPL:
+            out_png = ask("  Output chart filename (.png)", "nec2_comparison_chart.png")
+        else:
+            out_png = "nec2_comparison_chart.png"
+
+    # ── Parse ─────────────────────────────────────────────────────────────
     print()
     print("  Parsing files…")
 
     run_h, run_v = None, None
     if path_h:
         run_h = parse_nec2_output(path_h, debug=debug_mode,
-                                    explicit_nec_path=path_h_nec)  # BUG 4 FIX
+                                    explicit_nec_path=path_h_nec)
         run_h.label = "Horizontal CP"
         n = len(run_h.freqs)
         if n == 0:
@@ -1842,7 +2166,7 @@ def main():
                   f"  CP={run_h.cp_len_m:.2f} m, type={run_h.cp_type}")
     if path_v:
         run_v = parse_nec2_output(path_v, debug=debug_mode,
-                                    explicit_nec_path=path_v_nec)  # BUG 4 FIX
+                                    explicit_nec_path=path_v_nec)
         run_v.label = "Vertical CP"
         n = len(run_v.freqs)
         if n == 0:
@@ -1856,13 +2180,12 @@ def main():
     print(f"  CSV : {len(calc_rows)} rows loaded"
           f" ({sum(1 for r in calc_rows if r.active)} active bands).")
 
-    # ── Analyse ──
+    # ── Analyse ───────────────────────────────────────────────────────────
     print()
     print("  Running analysis…")
     report = analyse_model_vs_nec(run_h, run_v, calc_rows, wire_len_m, unun_ratio)
 
-    # ── Write report ──
-    # Strip ANSI codes for file output
+    # ── Write report ──────────────────────────────────────────────────────
     ansi_esc = re.compile(r'\x1b\[[0-9;]*m')
     clean_report = ansi_esc.sub('', report)
     with open(out_txt, 'w', encoding='utf-8') as fh:
@@ -1870,7 +2193,7 @@ def main():
     print(report)
     print(f"\n  📄  Full report saved → {out_txt}")
 
-    # ── Plot ──
+    # ── Plot ──────────────────────────────────────────────────────────────
     plot_comparison(run_h, run_v, calc_rows, wire_len_m, out_png)
 
 
