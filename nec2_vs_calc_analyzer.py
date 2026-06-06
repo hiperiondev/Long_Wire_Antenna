@@ -240,18 +240,30 @@ def _safe_float(s: str) -> float:
 #   and extracts wire lengths from GW cards to identify the CP wire.
 # ---------------------------------------------------------------------------
 
-def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run):
+def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run,
+                             explicit_nec_path: Optional[str] = None):
     """
     Try to find a companion .nec input deck and parse CP length from GW cards.
     Wire 1 is assumed to be the antenna; Wire 2 (if present) is the CP.
     Also detects CP type (horizontal vs vertical) from z-coordinates.
+
+    BUG 4 FIX: accepts an explicit_nec_path so the caller can supply a companion
+    file whose basename differs from the .out file (e.g. antenna_horizontal.nec
+    paired with antenna_counterpoise_horizontal.out).  If explicit_nec_path is
+    given and the file exists it is used directly; otherwise the old same-basename
+    search is attempted as a fallback.
     """
-    base = os.path.splitext(out_filepath)[0]
-    for ext in ('.nec', '.NEC', '.inp', '.INP'):
-        nec_path = base + ext
-        if os.path.isfile(nec_path):
-            break
+    nec_path = None
+    if explicit_nec_path and os.path.isfile(explicit_nec_path):
+        nec_path = explicit_nec_path
     else:
+        base = os.path.splitext(out_filepath)[0]
+        for ext in ('.nec', '.NEC', '.inp', '.INP'):
+            candidate = base + ext
+            if os.path.isfile(candidate):
+                nec_path = candidate
+                break
+    if nec_path is None:
         return  # no input deck found — leave cp_len_m as parsed from CM comments
 
     wires = []
@@ -299,7 +311,8 @@ def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run):
     run._cp_from_deck = True
 
 
-def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
+def parse_nec2_output(filepath: str, debug: bool = False,
+                      explicit_nec_path: Optional[str] = None) -> NEC2Run:
     """
     Parse a NEC2 .out file produced by nec2c, 4nec2, xnec2c, or EZNEC export.
 
@@ -358,7 +371,9 @@ def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
         run.cp_type = "none"
 
     # ── FIX #2: override CP geometry from companion .nec deck ───────────────
-    _parse_cp_from_nec_deck(filepath, run)
+    # BUG 4 FIX: forward the explicit_nec_path so a user-supplied filename
+    # that differs from the .out basename is honoured without guessing.
+    _parse_cp_from_nec_deck(filepath, run, explicit_nec_path=explicit_nec_path)
 
     # --- split into per-frequency blocks ---
     # FIX #1: try all five frequency patterns; use the one that finds the most hits
@@ -392,12 +407,21 @@ def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
             fp.X_ohm = _safe_float(m.group(2))
 
         # Method 2: ANTENNA INPUT PARAMETERS table
-        # Bug G fix: search only within the text after the section header to avoid
-        # matching CURRENTS AND LOCATION rows that share the same column structure.
+        # Bug G fix: search only within the text after the section header AND
+        # before the CURRENTS AND LOCATION section, which shares the exact same
+        # column structure.  Without the upper bound the regex matches the first
+        # CURRENTS row (not the impedance row) whenever CURRENTS precedes the
+        # impedance line — a layout that is possible in non-standard NEC2 outputs.
         if fp.R_ohm == 0.0:
             sec_m = _RE_ANTINPUT_SECTION.search(block)
             antinput_text = block[sec_m.start():] if sec_m else ""
-            m = _RE_ANTINPUT.search(antinput_text)
+            # Slice off everything from CURRENTS AND LOCATION onwards so that
+            # _RE_ANTINPUT can never accidentally match a current-table row.
+            curr_pos = antinput_text.find('CURRENTS AND LOCATION')
+            if curr_pos < 0:
+                curr_pos = antinput_text.upper().find('CURRENTS AND LOCATION')
+            search_text = antinput_text[:curr_pos] if curr_pos >= 0 else antinput_text
+            m = _RE_ANTINPUT.search(search_text)
             if m:
                 fp.R_ohm = _safe_float(m.group(1))
                 fp.X_ohm = _safe_float(m.group(2))
@@ -457,7 +481,15 @@ def parse_nec2_output(filepath: str, debug: bool = False) -> NEC2Run:
         if rp_gains:
             best = max(rp_gains, key=lambda t: t[2])
             fp.gain_dbi = best[2]
-            fp.toa_deg  = best[0]
+            # BUG 3 FIX: NEC2 RP THETA is measured FROM THE ZENITH
+            # (0° = straight up, 90° = horizon), which is the OPPOSITE of the
+            # ham-radio take-off angle convention (0° = horizon = DX, 90° =
+            # zenith = NVIS).  Storing NEC2 THETA directly made the report
+            # show "take-off = 0°" for a pure NVIS antenna, which reads as
+            # excellent DX to anyone not aware of the convention inversion.
+            # Fix: convert here so that all downstream code, labels, and the
+            # NVIS flag all use the correct elevation-from-horizon angle.
+            fp.toa_deg = 90.0 - best[0]  # ham TOA = 90° − NEC2_THETA
 
         fp.vswr50 = fp.compute_vswr50()
         run.freqs.append(fp)
@@ -533,8 +565,17 @@ def _flt(row: dict, name: str, default: float = 0.0) -> float:
     v = _col(row, name, None)
     if v is None or str(v).strip() in ("", "—", "-", "N/A", "n/a"):
         return default
+    s = str(v).strip()
+    # DATA fix: only convert a leading-comma decimal separator (European locale)
+    # when the entire string is numeric — digits, commas, dots, and an optional
+    # leading minus.  A broad s.replace(',', '.') would corrupt string columns
+    # that legitimately contain commas (e.g. quality_rating "Good, excellent")
+    # and would misparse thousands-separator notation (1,234 → 1.234 ≠ 1234).
+    import re as _re
+    if _re.fullmatch(r'-?[\d,\.]+', s):
+        s = s.replace(',', '.')
     try:
-        return float(str(v).replace(',', '.'))
+        return float(s)
     except ValueError:
         return default
 
@@ -613,10 +654,17 @@ def load_csv(filepath: str) -> List[CalcRow]:
             # L_over_lhalf (now derived from the correct per-band lambda_half_m).
             # The CSV values were computed from the wrong (160m-reference)
             # L_over_lhalf, so we must override them unconditionally.
+            # BUG 5 FIX: also recompute vswr_no_cp from the new R/X so that
+            # the three values printed in Section 2 are mutually consistent.
             if cr.L_over_lhalf > 0:
                 arg = math.pi * cr.L_over_lhalf
                 cr.R_wire_ohm = 50 * (80 ** (math.cos(arg) ** 2))
                 cr.X_wire_ohm = 1500 * math.sin(2 * arg)
+                # BUG 5 FIX: keep vswr_no_cp consistent with the recomputed R/X
+                # (antenna side, ref 50 Ω, no UnUn — matches what Section 2 displays).
+                _g5 = math.hypot(cr.R_wire_ohm - 50, cr.X_wire_ohm) / \
+                      math.hypot(cr.R_wire_ohm + 50, cr.X_wire_ohm)
+                cr.vswr_no_cp = (1 + _g5) / (1 - _g5) if _g5 < 1 else 999.0
 
             # FIX #7 — Recompute avoidance_score per band from actual L/λ½.
             # The CSV stores a single wire-length score from the Length Sweep
@@ -634,6 +682,33 @@ def load_csv(filepath: str) -> List[CalcRow]:
                 cr._computed_avoidance = cr.avoidance_score
 
             rows.append(cr)
+
+    # FIX #7 — Decide whether to use CSV avoidance scores or computed ones.
+    # The comment in the per-row block above promises "only override when all
+    # rows are identical (copy-paste artifact)", but the old code set
+    # _computed_avoidance unconditionally and _avoidance_score() always returned
+    # it, silently discarding meaningful per-band CSV values.
+    #
+    # Correct implementation:
+    #   • Collect all non-zero CSV avoidance scores across all rows.
+    #   • If every row has the same value (single unique score) — that is the
+    #     classic copy-paste artifact from the Length Sweep sheet where one
+    #     wire-level score is pasted into every band cell.  In that case use the
+    #     per-band computed scores.
+    #   • If the scores differ between rows the user supplied genuine per-band
+    #     values; keep them and set _computed_avoidance = csv value so
+    #     _avoidance_score() returns the original.
+    all_csv_scores = [r.avoidance_score for r in rows if r.avoidance_score > 0]
+    use_computed = (len(set(all_csv_scores)) <= 1)  # True = uniform/absent → override
+
+    for r in rows:
+        if use_computed:
+            # Keep _computed_avoidance as already set per-row above (from L/λ½).
+            pass
+        else:
+            # Distinct per-band CSV values — honour them; align _computed_avoidance.
+            r._computed_avoidance = r.avoidance_score
+
     return rows
 
 
@@ -790,6 +865,17 @@ def analyse_model_vs_nec(
          f"({', '.join(r.band for r in active_rows)})")
 
     # -----------------------------------------------------------------------
+    # BUG 1 FIX: Warn when the CSV unun_ratio differs from the user-entered
+    # value so the mismatch is never silent.  All VSWR calculations in this
+    # report use the user-entered unun_ratio; the CSV column is informational.
+    _csv_ununs_in_report = {r.unun_ratio for r in calc_rows if r.unun_ratio > 0}
+    for _csv_u in _csv_ununs_in_report:
+        if abs(_csv_u - unun_ratio) > 0.1:
+            warn(f"CSV unun_ratio={_csv_u:.0f} differs from user-entered "
+                 f"{unun_ratio:.0f}. Spreadsheet VSWR values were computed with "
+                 f"{_csv_u:.0f}:1. Re-run and enter {_csv_u:.0f} at the UnUn "
+                 f"prompt for a consistent comparison.")
+
     # SECTION 1 — NEC2 Frequency Sweep Summary
     # -----------------------------------------------------------------------
     for run, label in [(run_h, "HORIZONTAL CP"), (run_v, "VERTICAL CP")]:
@@ -836,16 +922,33 @@ def analyse_model_vs_nec(
             info(f"  ┌─ EMPIRICAL MODEL (spreadsheet formulas)")
             info(f"  │  R_wire   = {cr.R_wire_ohm:8.1f} Ω  (antenna side)")
             info(f"  │  X_wire   = {cr.X_wire_ohm:+8.1f} Ω   ({_impedance_region(cr.R_wire_ohm, cr.X_wire_ohm)})")
+            # BUG 2 FIX: cr.vswr_no_cp in the CSV is computed THROUGH the
+            # UnUn (it is the post-transformer VSWR without CP correction),
+            # NOT the raw antenna-side VSWR.  The old label "[antenna side,
+            # no UnUn]" was factually wrong and confused callers comparing it
+            # to NEC2 results.  We now recompute the true antenna-side VSWR
+            # from R_wire_ohm / X_wire_ohm (which are always in sync after
+            # the BUG 5 fix in load_csv) and show both values with correct
+            # labels so the report is internally consistent.
+            # True antenna-side VSWR (ref 50 Ω, no UnUn)
+            _g_raw = math.hypot(cr.R_wire_ohm - 50, cr.X_wire_ohm) / \
+                     math.hypot(cr.R_wire_ohm + 50, cr.X_wire_ohm)
+            _vswr_raw = (1 + _g_raw) / (1 - _g_raw) if _g_raw < 1 else 999.0
+            info(f"  │  VSWR(antenna side, ref 50Ω, no UnUn) = {_vswr_raw:.2f}"
+                 f"  → {_vswr_label(_vswr_raw)}")
+            # Also show the CSV vswr_no_cp with a corrected label for traceability
             # FIX #5: note that the CSV vswr_with_cp uses a series CP model
             # which is physically incorrect for end-fed antennas; flag it
             if cr.vswr_no_cp:
-                info(f"  │  VSWR(no CP, ref 50Ω)  = {cr.vswr_no_cp:.2f}  → {_vswr_label(cr.vswr_no_cp)}"
-                     f"  [antenna side, no UnUn]")
+                info(f"  │  VSWR(no CP correction, ref 50Ω)  = {cr.vswr_no_cp:.2f}"
+                     f"  → {_vswr_label(cr.vswr_no_cp)}"
+                     f"  [CSV value — recomputed from R/X above]")
             info(f"  │  VSWR(post-{unun:.0f}:1 UnUn)  = {vswr_unun_no_cp:.2f}  → {_vswr_label(vswr_unun_no_cp)}"
                  f"  [← transmitter sees this]")
             if cr.vswr_with_cp:
                 info(f"  │  VSWR(w/ CP, model)    = {cr.vswr_with_cp:.2f}  → {_vswr_label(cr.vswr_with_cp)}"
-                     f"  [⚠ series-CP model — may be inaccurate]")
+                     f"  [⚠ series-CP model — may be inaccurate."
+                     f" NEC2 result (VSWR_H / VSWR_V) supersedes both model columns.]")
             if cr.Zcp_ohm:
                 info(f"  │  Zcp (counterpoise)  = {cr.Zcp_ohm:.1f} Ω  "
                      f"(CP length {cr.cp_len_m:.2f} m, height {cr.cp_height_m:.1f} m, "
@@ -884,6 +987,19 @@ def analyse_model_vs_nec(
                          f" (closest: {best_key:.3f} MHz, Δf={delta_f:+.3f} MHz)."
                          f" Add a sweep point at {cr.freq_mhz:.3f} MHz to your NEC2 deck.")
                     continue
+                # MEDIUM fix: if the closest NEC2 point is more than ~100 kHz away,
+                # quantify the empirical model's impedance change over that frequency
+                # offset so the user can judge the interpolation error magnitude.
+                if abs(delta_f) > 0.1:
+                    R_at_nec, X_at_nec, _ = calc_empirical(wire_len_m, best_key, 1.0)
+                    R_at_band, X_at_band, _ = calc_empirical(wire_len_m, cr.freq_mhz, 1.0)
+                    dR_interp = R_at_band - R_at_nec
+                    dX_interp = X_at_band - X_at_nec
+                    warn(f"  Frequency offset {delta_f:+.3f} MHz for {rlabel}: empirical"
+                         f" model predicts ΔR≈{dR_interp:+.0f} Ω, ΔX≈{dX_interp:+.0f} Ω"
+                         f" across this gap — actual NEC2 shift may differ."
+                         f" Consider adding {cr.freq_mhz:.3f} MHz as an explicit FR"
+                         f" sweep point for a reliable comparison.")
                 fp = fmap[best_key]
                 info(f"  ├─ {rlabel}  (NEC2 freq={best_key:.3f} MHz, Δf={delta_f:+.3f} MHz)")
                 if cr.R_wire_ohm:
@@ -1243,11 +1359,13 @@ def analyse_model_vs_nec(
                 note = f"{Fore.YELLOW}Significant loss — check ground, mismatch{Style.RESET_ALL}"
             if fp.efficiency < 0.5:
                 note += f"  {Fore.RED}[low η={fp.efficiency*100:.0f}%]{Style.RESET_ALL}"
-            # Bug H fix: flag NVIS operating mode so users expecting DX are not misled
-            # by a TOA near 0° (zenith).  A horizontal wire at low height radiates
-            # most power straight up — excellent for regional (0-600 km) contacts,
-            # useless for DX.  This is physically correct, not a simulation error.
-            if fp.toa_deg < 5.0:
+            # Bug H fix + BUG 3 FIX: flag NVIS operating mode so users expecting DX
+            # are not misled.  After the BUG 3 convention fix, toa_deg is elevation
+            # from horizon (0° = horizon = DX, 90° = zenith = NVIS).  NVIS therefore
+            # corresponds to toa_deg > 85° (near-zenith).  The old threshold of
+            # < 5° was accidentally correct when toa_deg stored NEC2 THETA (zenith
+            # = 0), but would now flag DX angles instead of NVIS angles.
+            if fp.toa_deg > 85.0:
                 note += f"  {Fore.CYAN}[NVIS — regional 0-600 km, not DX]{Style.RESET_ALL}"
             info(f"  {fp.freq_mhz:8.3f}  {fp.gain_dbi:+9.2f}  {fp.toa_deg:8.1f}  "
                  f"{fp.efficiency*100:10.1f}%  {note}")
@@ -1619,11 +1737,28 @@ def main():
     print(f"  {Fore.WHITE}[1] NEC2 output — HORIZONTAL counterpoise{Style.RESET_ALL}")
     print("      (antenna horizontal + counterpoise wire in-line/horizontal)")
     path_h = ask_file("  Path to H-CP NEC2 .out file (press Enter to skip)", required=False)
+    # BUG 4 FIX: the companion .nec input deck may have a different basename than the
+    # .out file (e.g. antenna_horizontal.nec vs antenna_counterpoise_horizontal.out).
+    # Asking explicitly lets the user supply any filename; the parser is then called
+    # with the correct companion path so GW-card geometry is always read accurately.
+    path_h_nec = None
+    if path_h:
+        print("      To read exact CP geometry from GW cards, supply the corresponding")
+        print("      NEC2 INPUT deck (.nec/.inp).  Press Enter to skip (falls back to")
+        print("      the CM comment in the .out file, which may differ by a few mm).")
+        path_h_nec = ask_file(
+            "  Path to H-CP NEC2 .nec input file (press Enter to skip)", required=False)
 
     print()
     print(f"  {Fore.WHITE}[2] NEC2 output — VERTICAL counterpoise{Style.RESET_ALL}")
     print("      (antenna horizontal + counterpoise drooping vertically)")
     path_v = ask_file("  Path to V-CP NEC2 .out file (press Enter to skip)", required=False)
+    # BUG 4 FIX: same companion .nec prompt for the vertical run.
+    path_v_nec = None
+    if path_v:
+        print("      Optional: companion NEC2 input deck for exact V-CP geometry.")
+        path_v_nec = ask_file(
+            "  Path to V-CP NEC2 .nec input file (press Enter to skip)", required=False)
 
     if path_h is None and path_v is None:
         print(f"\n{Fore.RED}  At least one NEC2 file must be provided.{Style.RESET_ALL}")
@@ -1639,8 +1774,26 @@ def main():
     print()
     wire_len_str = ask("  Antenna wire length (m)", "13.3")
     wire_len_m   = float(wire_len_str)
-    unun_str     = ask("  UnUn ratio (e.g. 9 for 9:1, 1 for direct)", "9")
-    unun_ratio   = float(unun_str)
+
+    # BUG 1 FIX: load the CSV early (read-only probe) to detect the unun_ratio
+    # stored in all rows so we can offer it as the default.  When all CSV rows
+    # agree on a single value it is shown as the default so the user does not
+    # silently use the wrong transformer ratio (the old hard-coded default of 9
+    # would mismatch a CSV computed with 27:1 without any warning).
+    _csv_unun_default = "9"
+    try:
+        _probe_rows = load_csv(path_csv)
+        _csv_ununs = {r.unun_ratio for r in _probe_rows if r.unun_ratio > 0}
+        if len(_csv_ununs) == 1:
+            _u = list(_csv_ununs)[0]
+            _csv_unun_default = str(int(_u)) if _u == int(_u) else str(_u)
+            print(f"  {Fore.CYAN}ℹ  CSV unun_ratio column = {_csv_unun_default}"
+                  f" (all rows agree — using as default){Style.RESET_ALL}")
+    except Exception:
+        pass
+
+    unun_str   = ask("  UnUn ratio (e.g. 9 for 9:1, 1 for direct)", _csv_unun_default)
+    unun_ratio = float(unun_str)
 
     # ── Output ──
     print()
@@ -1653,7 +1806,8 @@ def main():
 
     run_h, run_v = None, None
     if path_h:
-        run_h = parse_nec2_output(path_h, debug=debug_mode)  # FIX #1
+        run_h = parse_nec2_output(path_h, debug=debug_mode,
+                                    explicit_nec_path=path_h_nec)  # BUG 4 FIX
         run_h.label = "Horizontal CP"
         n = len(run_h.freqs)
         if n == 0:
@@ -1663,7 +1817,8 @@ def main():
             print(f"  H-CP: {n} frequency points loaded."
                   f"  CP={run_h.cp_len_m:.2f} m, type={run_h.cp_type}")
     if path_v:
-        run_v = parse_nec2_output(path_v, debug=debug_mode)  # FIX #1
+        run_v = parse_nec2_output(path_v, debug=debug_mode,
+                                    explicit_nec_path=path_v_nec)  # BUG 4 FIX
         run_v.label = "Vertical CP"
         n = len(run_v.freqs)
         if n == 0:

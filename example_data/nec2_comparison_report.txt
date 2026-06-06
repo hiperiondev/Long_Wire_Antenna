@@ -7,7 +7,7 @@
   NEC2 file (horiz. CP): antenna_counterpoise_horizontal.out
      CP length          : 9.965 m  |  type: horizontal  |  source: GW geometry
   NEC2 file (vert.  CP): antenna_counterpoise_verticall.out
-     CP length          : 5.000 m  |  type: vertical  |  source: GW geometry
+     CP length          : 9.965 m  |  type: vertical  |  source: GW geometry
   Spreadsheet CSV rows : 11
   Active bands in CSV  : 2 (40m, 20m)
 
@@ -16,44 +16,44 @@
 ════════════════════════════════════════════════════════════════════════════════
         Freq       R (Ω)       X (Ω)     |Z| (Ω)    ∠ (°)     VSWR     Gain  Region
   ────────────────────────────────────────────────────────────────────────────────
-       7.000        81.8      +234.8       248.6    +70.8    15.67  +5.20 dBi  Inductive reactance dominant
-       7.500       107.4      +394.3       408.6    +74.8    31.52  +5.52 dBi  Inductive reactance dominant
-       8.000       143.7      +569.4       587.2    +75.8    48.33  +5.79 dBi  Inductive reactance dominant
-       8.500       196.9      +769.5       794.3    +75.6    64.33  +6.04 dBi  Inductive reactance dominant
-       9.000       279.4     +1008.6      1046.6    +74.5    78.58  +6.24 dBi  Inductive reactance dominant
-       9.500       417.7     +1309.6      1374.6    +72.3    90.58  +6.42 dBi  Inductive reactance dominant
-      10.000       678.0     +1710.4      1839.9    +68.4    99.92  +6.55 dBi  Near λ/2 (very high Z – voltage maximum)
-      10.500      1260.9     +2253.1      2581.9    +60.8   105.77  +6.63 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.000      2854.7     +2644.2      3891.2    +42.8   106.09  +6.58 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.500      4749.3      -171.8      4752.4     -2.1    95.11  +6.33 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.000      1919.2     -1484.8      2426.5    -37.7    61.37  +6.47 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.500      1019.1      -267.5      1053.6    -14.7    21.79  +7.10 dBi  Capacitive reactance dominant
-      13.000      1448.0      +806.7      1657.6    +29.1    37.96  +6.47 dBi  Near λ/2 (very high Z – voltage maximum)
-      13.500      3162.6      +955.9      3303.9    +16.8    69.03  +5.86 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.000      3781.0     -1481.1      4060.7    -21.4    87.23  +6.30 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.500      2021.8     -2357.7      3105.9    -49.4    95.44  +6.89 dBi  Near λ/2 (very high Z – voltage maximum)
+       7.000       121.0      +233.5       263.0    +62.6    11.76  +6.05 dBi  Inductive reactance dominant
+       7.500       159.8      +385.4       417.2    +67.5    22.06  +6.06 dBi  Inductive reactance dominant
+       8.000       211.4      +546.7       586.2    +68.9    32.71  +6.10 dBi  Inductive reactance dominant
+       8.500       282.1      +723.3       776.3    +68.7    42.89  +6.17 dBi  Inductive reactance dominant
+       9.000       382.5      +922.6       998.8    +67.5    52.28  +6.27 dBi  Inductive reactance dominant
+       9.500       533.5     +1155.4      1272.6    +65.2    60.80  +6.41 dBi  Inductive reactance dominant
+      10.000       780.3     +1433.8      1632.4    +61.4    68.35  +6.56 dBi  Near λ/2 (very high Z – voltage maximum)
+      10.500      1234.1     +1754.0      2144.6    +54.9    74.57  +6.72 dBi  Near λ/2 (very high Z – voltage maximum)
+      11.000      2174.0     +1941.9      2915.0    +41.8    78.18  +6.83 dBi  Near λ/2 (very high Z – voltage maximum)
+      11.500      3575.9      +825.8      3670.0    +13.0    75.33  +6.87 dBi  Near λ/2 (very high Z – voltage maximum)
+      12.000      2423.9     -1018.8      2629.3    -22.8    57.05  +7.21 dBi  Near λ/2 (very high Z – voltage maximum)
+      12.500      1209.4      -381.6      1268.2    -17.5    26.60  +7.96 dBi  Capacitive reactance dominant
+      13.000      1283.5      +553.6      1397.8    +23.3    30.45  +7.64 dBi  Inductive reactance dominant
+      13.500      2354.1     +1129.8      2611.2    +25.6    57.93  +7.10 dBi  Near λ/2 (very high Z – voltage maximum)
+      14.000      4058.6      -153.3      4061.5     -2.2    81.29  +7.53 dBi  Near λ/2 (very high Z – voltage maximum)
+      14.500      2926.8     -2404.3      3787.7    -39.4    98.04  +8.36 dBi  Near λ/2 (very high Z – voltage maximum)
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 1 — NEC2 IMPEDANCE SWEEP  [VERTICAL CP]
 ════════════════════════════════════════════════════════════════════════════════
         Freq       R (Ω)       X (Ω)     |Z| (Ω)    ∠ (°)     VSWR     Gain  Region
   ────────────────────────────────────────────────────────────────────────────────
-       7.000       253.2      +579.0       632.0    +66.4    31.72  -3.73 dBi  Inductive reactance dominant
-       7.500       283.1      +722.4       775.9    +68.6    42.68  -2.69 dBi  Inductive reactance dominant
-       8.000       325.2      +884.4       942.3    +69.8    54.75  -1.68 dBi  Inductive reactance dominant
-       8.500       385.9     +1074.0      1141.2    +70.2    67.62  -0.69 dBi  Inductive reactance dominant
-       9.000       477.7     +1305.2      1389.9    +69.9    80.97  +0.29 dBi  Inductive reactance dominant
-       9.500       627.4     +1601.6      1720.1    +68.6    94.39  +1.30 dBi  Near λ/2 (very high Z – voltage maximum)
-      10.000       902.4     +2004.3      2198.1    +65.8   107.13  +2.34 dBi  Near λ/2 (very high Z – voltage maximum)
-      10.500      1512.3     +2565.7      2978.2    +59.5   117.33  +3.41 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.000      3205.4     +2995.5      4387.2    +43.1   120.10  +4.46 dBi  Near λ/2 (very high Z – voltage maximum)
-      11.500      5261.0       +39.0      5261.1     +0.4   105.23  +5.18 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.000      2502.3     -1486.5      2910.5    -30.7    67.71  +4.91 dBi  Near λ/2 (very high Z – voltage maximum)
-      12.500      1507.6      -607.8      1625.5    -22.0    35.06  +3.08 dBi  Near λ/2 (very high Z – voltage maximum)
-      13.000      1481.2       +52.5      1482.1     +2.0    29.66  +0.34 dBi  Predominantly resistive (good match region)
-      13.500      1841.0      +410.6      1886.2    +12.6    38.65  -1.85 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.000      2414.0      +382.2      2444.1     +9.0    49.49  -2.90 dBi  Near λ/2 (very high Z – voltage maximum)
-      14.500      2895.7      -161.5      2900.2     -3.2    58.09  -3.30 dBi  Near λ/2 (very high Z – voltage maximum)
+       7.000        95.1      +213.1       233.4    +66.0    11.90  +2.96 dBi  Inductive reactance dominant
+       7.500       123.4      +365.6       385.9    +71.4    24.50  +3.16 dBi  Inductive reactance dominant
+       8.000       162.3      +530.9       555.2    +73.0    38.27  +3.36 dBi  Inductive reactance dominant
+       8.500       217.8      +716.7       749.1    +73.1    51.73  +3.58 dBi  Inductive reactance dominant
+       9.000       301.2      +933.9       981.2    +72.1    64.08  +3.81 dBi  Inductive reactance dominant
+       9.500       435.2     +1198.5      1275.1    +70.0    74.82  +4.07 dBi  Inductive reactance dominant
+      10.000       671.6     +1533.0      1673.7    +66.3    83.48  +4.38 dBi  Near λ/2 (very high Z – voltage maximum)
+      10.500      1145.2     +1950.0      2261.4    +59.6    89.34  +4.74 dBi  Near λ/2 (very high Z – voltage maximum)
+      11.000      2215.2     +2272.9      3173.8    +45.7    90.96  +5.16 dBi  Near λ/2 (very high Z – voltage maximum)
+      11.500      3936.6     +1128.6      4095.2    +16.0    85.20  +5.58 dBi  Near λ/2 (very high Z – voltage maximum)
+      12.000      2983.7     -1050.8      3163.3    -19.4    67.08  +5.81 dBi  Near λ/2 (very high Z – voltage maximum)
+      12.500      1645.3      -744.6      1806.0    -24.4    39.65  +5.17 dBi  Near λ/2 (very high Z – voltage maximum)
+      13.000      1570.0       -17.1      1570.1     -0.6    31.40  +3.08 dBi  Near λ/2 (very high Z – voltage maximum)
+      13.500      2330.4      +148.6      2335.1     +3.6    46.80  +0.93 dBi  Near λ/2 (very high Z – voltage maximum)
+      14.000      2786.5      -922.2      2935.1    -18.3    61.84  +0.02 dBi  Near λ/2 (very high Z – voltage maximum)
+      14.500      1948.3     -1716.1      2596.3    -41.4    69.21  +0.19 dBi  Near λ/2 (very high Z – voltage maximum)
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 2 — PER-BAND: NEC2 vs. EMPIRICAL MODEL (VSWR/IMPEDANCE)
@@ -68,27 +68,29 @@
     │  VSWR(antenna side, ref 50Ω, no UnUn) = 243.56  → POOR     
     │  VSWR(no CP correction, ref 50Ω)  = 243.56  → POOR       [CSV value — recomputed from R/X above]
     │  VSWR(post-27:1 UnUn)  = 21.89  → POOR       [← transmitter sees this]
-    │  VSWR(w/ CP, model)    = 14.46  → POOR       [⚠ series-CP model — may be inaccurate]
+    │  VSWR(w/ CP, model)    = 14.46  → POOR       [⚠ series-CP model — may be inaccurate. NEC2 result (VSWR_H / VSWR_V) supersedes both model columns.]
     │  Zcp (counterpoise)  = 30.0 Ω  (CP length 9.96 m, height 5.0 m, 1 radial(s))
-    │  Avoidance score      = 0.3656  [★★★ EXCELLENT]  (per-band, computed)
+    │  Avoidance score      = 0.3660  [★★★ EXCELLENT]  (per-band, computed)
+  ⚠    Frequency offset -0.150 MHz for NEC2 – HORIZ. CP: empirical model predicts ΔR≈+13 Ω, ΔX≈-87 Ω across this gap — actual NEC2 shift may differ. Consider adding 7.150 MHz as an explicit FR sweep point for a reliable comparison.
     ├─ NEC2 – HORIZ. CP  (NEC2 freq=7.000 MHz, Δf=-0.150 MHz)
-    │  R_sim    =     81.8 Ω   Δ vs model = -22.6 Ω  (-21.7%)
-    │  X_sim    =   +234.8 Ω   Δ vs model = +1356.2 Ω
-    │  |Z|_sim  =    248.6 Ω   phase = +70.8°
-    │  VSWR_sim =    15.67  → POOR       [antenna side, ref 50Ω]
-    │  VSWR(post-27:1 UnUn)=   17.01  → POOR       [← transmitter sees this]
-    │  ΔVSWR(post-UnUn) NEC2 vs model = -4.88  ▼ -4.9  [NEC2=17.01  model=21.89  — same ref]
-  ⚠     NEC2 VSWR is LOWER than model by 4.9. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
-    │  Gain     = +5.20 dBi   take-off = 90.0°   efficiency = 96.2%
+    │  R_sim    =    121.0 Ω   Δ vs model = +16.6 Ω  (+15.9%)
+    │  X_sim    =   +233.5 Ω   Δ vs model = +1354.9 Ω
+    │  |Z|_sim  =    263.0 Ω   phase = +62.6°
+    │  VSWR_sim =    11.76  → POOR       [antenna side, ref 50Ω]
+    │  VSWR(post-27:1 UnUn)=   11.49  → POOR       [← transmitter sees this]
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -10.40  ▼ -10.4  [NEC2=11.49  model=21.89  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 10.4. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
+    │  Gain     = +6.05 dBi   take-off = 70.0°   efficiency = 97.4%
+  ⚠    Frequency offset -0.150 MHz for NEC2 – VERT.  CP: empirical model predicts ΔR≈+13 Ω, ΔX≈-87 Ω across this gap — actual NEC2 shift may differ. Consider adding 7.150 MHz as an explicit FR sweep point for a reliable comparison.
     ├─ NEC2 – VERT.  CP  (NEC2 freq=7.000 MHz, Δf=-0.150 MHz)
-    │  R_sim    =    253.2 Ω   Δ vs model = +148.8 Ω  (+142.6%)
-    │  X_sim    =   +579.0 Ω   Δ vs model = +1700.5 Ω
-    │  |Z|_sim  =    632.0 Ω   phase = +66.4°
-    │  VSWR_sim =    31.72  → POOR       [antenna side, ref 50Ω]
-    │  VSWR(post-27:1 UnUn)=    6.34  → POOR       [← transmitter sees this]
-    │  ΔVSWR(post-UnUn) NEC2 vs model = -15.55  ▼ -15.5  [NEC2=6.34  model=21.89  — same ref]
-  ⚠     NEC2 VSWR is LOWER than model by 15.5. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
-    │  Gain     = -3.73 dBi   take-off = 72.5°   efficiency = 98.6%
+    │  R_sim    =     95.1 Ω   Δ vs model = -9.3 Ω  (-8.9%)
+    │  X_sim    =   +213.1 Ω   Δ vs model = +1334.6 Ω
+    │  |Z|_sim  =    233.4 Ω   phase = +66.0°
+    │  VSWR_sim =    11.90  → POOR       [antenna side, ref 50Ω]
+    │  VSWR(post-27:1 UnUn)=   14.55  → POOR       [← transmitter sees this]
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -7.34  ▼ -7.3  [NEC2=14.55  model=21.89  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 7.3. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
+    │  Gain     = +2.96 dBi   take-off = 60.0°   efficiency = 96.7%
 
 
   ── Band 20m  —  f_center = 14.1750 MHz ────────────────────────────────────────
@@ -99,27 +101,29 @@
     │  VSWR(antenna side, ref 50Ω, no UnUn) = 119.80  → POOR     
     │  VSWR(no CP correction, ref 50Ω)  = 119.80  → POOR       [CSV value — recomputed from R/X above]
     │  VSWR(post-27:1 UnUn)  = 7.66  → POOR       [← transmitter sees this]
-    │  VSWR(w/ CP, model)    = 12.04  → POOR       [⚠ series-CP model — may be inaccurate]
+    │  VSWR(w/ CP, model)    = 12.04  → POOR       [⚠ series-CP model — may be inaccurate. NEC2 result (VSWR_H / VSWR_V) supersedes both model columns.]
     │  Zcp (counterpoise)  = 55.0 Ω  (CP length 9.96 m, height 5.0 m, 1 radial(s))
-    │  Avoidance score      = 0.2577  [★★★ EXCELLENT]  (per-band, computed)
+    │  Avoidance score      = 0.2580  [★★★ EXCELLENT]  (per-band, computed)
+  ⚠    Frequency offset -0.175 MHz for NEC2 – HORIZ. CP: empirical model predicts ΔR≈-96 Ω, ΔX≈+0 Ω across this gap — actual NEC2 shift may differ. Consider adding 14.175 MHz as an explicit FR sweep point for a reliable comparison.
     ├─ NEC2 – HORIZ. CP  (NEC2 freq=14.000 MHz, Δf=-0.175 MHz)
-    │  R_sim    =   3781.0 Ω   Δ vs model = +3378.9 Ω  (+840.2%)
-    │  X_sim    =  -1481.1 Ω   Δ vs model = -2979.3 Ω
-    │  |Z|_sim  =   4060.7 Ω   phase = -21.4°
-    │  VSWR_sim =    87.23  → POOR       [antenna side, ref 50Ω]
-    │  VSWR(post-27:1 UnUn)=    3.28  → MARGINAL   [← transmitter sees this]
-    │  ΔVSWR(post-UnUn) NEC2 vs model = -4.38  ▼ -4.4  [NEC2=3.28  model=7.66  — same ref]
-  ⚠     NEC2 VSWR is LOWER than model by 4.4. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
-    │  Gain     = +6.30 dBi   take-off = 72.5°   efficiency = 97.9%
+    │  R_sim    =   4058.6 Ω   Δ vs model = +3656.5 Ω  (+909.3%)
+    │  X_sim    =   -153.3 Ω   Δ vs model = -1651.5 Ω
+    │  |Z|_sim  =   4061.5 Ω   phase = -2.2°
+    │  VSWR_sim =    81.29  → POOR       [antenna side, ref 50Ω]
+    │  VSWR(post-27:1 UnUn)=    3.01  → MARGINAL   [← transmitter sees this]
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -4.65  ▼ -4.6  [NEC2=3.01  model=7.66  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 4.6. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
+    │  Gain     = +7.53 dBi   take-off = 30.0°   efficiency = 97.8%
+  ⚠    Frequency offset -0.175 MHz for NEC2 – VERT.  CP: empirical model predicts ΔR≈-96 Ω, ΔX≈+0 Ω across this gap — actual NEC2 shift may differ. Consider adding 14.175 MHz as an explicit FR sweep point for a reliable comparison.
     ├─ NEC2 – VERT.  CP  (NEC2 freq=14.000 MHz, Δf=-0.175 MHz)
-    │  R_sim    =   2414.0 Ω   Δ vs model = +2011.9 Ω  (+500.3%)
-    │  X_sim    =   +382.2 Ω   Δ vs model = -1116.0 Ω
-    │  |Z|_sim  =   2444.1 Ω   phase = +9.0°
-    │  VSWR_sim =    49.49  → POOR       [antenna side, ref 50Ω]
-    │  VSWR(post-27:1 UnUn)=    1.85  → GOOD       [← transmitter sees this]
-    │  ΔVSWR(post-UnUn) NEC2 vs model = -5.81  ▼ -5.8  [NEC2=1.85  model=7.66  — same ref]
-  ⚠     NEC2 VSWR is LOWER than model by 5.8. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
-    │  Gain     = -2.90 dBi   take-off = 32.5°   efficiency = 98.8%
+    │  R_sim    =   2786.5 Ω   Δ vs model = +2384.4 Ω  (+592.9%)
+    │  X_sim    =   -922.2 Ω   Δ vs model = -2420.4 Ω
+    │  |Z|_sim  =   2935.1 Ω   phase = -18.3°
+    │  VSWR_sim =    61.84  → POOR       [antenna side, ref 50Ω]
+    │  VSWR(post-27:1 UnUn)=    2.35  → GOOD       [← transmitter sees this]
+    │  ΔVSWR(post-UnUn) NEC2 vs model = -5.31  ▼ -5.3  [NEC2=2.35  model=7.66  — same ref]
+  ⚠     NEC2 VSWR is LOWER than model by 5.3. The antenna may be seeing a more favourable ground or a resonance effect not captured by the sinusoidal empirical model.
+    │  Gain     = +0.02 dBi   take-off = 20.0°   efficiency = 98.3%
 
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -132,33 +136,33 @@
 
         Freq       R_H       R_V       ΔR       X_H       X_V       ΔX   VSWR_H   VSWR_V    ΔVSWR
   ────────────────────────────────────────────────────────────────────────────────
-       7.000      81.8     253.2   +171.4    +234.8    +579.0   +344.3    15.67    31.72   +16.05
-       7.500     107.4     283.1   +175.6    +394.3    +722.4   +328.1    31.52    42.68   +11.16
-       8.000     143.7     325.2   +181.5    +569.4    +884.4   +315.0    48.33    54.75    +6.42
-       8.500     196.9     385.9   +189.0    +769.5   +1074.0   +304.5    64.33    67.62    +3.29
-       9.000     279.4     477.7   +198.4   +1008.6   +1305.2   +296.6    78.58    80.97    +2.39
-       9.500     417.7     627.4   +209.7   +1309.6   +1601.6   +292.0    90.58    94.39    +3.81
-      10.000     678.0     902.4   +224.4   +1710.4   +2004.3   +293.9    99.92   107.13    +7.21
-      10.500    1260.9    1512.3   +251.4   +2253.1   +2565.7   +312.6   105.77   117.33   +11.56
-      11.000    2854.7    3205.4   +350.7   +2644.2   +2995.5   +351.3   106.09   120.10   +14.02
-      11.500    4749.3    5261.0   +511.7    -171.8     +39.0   +210.8    95.11   105.23   +10.12
-      12.000    1919.2    2502.3   +583.1   -1484.8   -1486.5     -1.7    61.37    67.71    +6.34
-      12.500    1019.1    1507.6   +488.5    -267.5    -607.8   -340.3    21.79    35.06   +13.27
-      13.000    1448.0    1481.2    +33.2    +806.7     +52.5   -754.2    37.96    29.66    -8.30
-      13.500    3162.6    1841.0  -1321.6    +955.9    +410.6   -545.3    69.03    38.65   -30.38
-      14.000    3781.0    2414.0  -1367.0   -1481.1    +382.2  +1863.3    87.23    49.49   -37.73
-      14.500    2021.8    2895.7   +873.9   -2357.7    -161.5  +2196.2    95.44    58.09   -37.34
+       7.000     121.0      95.1    -25.9    +233.5    +213.1    -20.4    11.76    11.90    +0.14
+       7.500     159.8     123.4    -36.4    +385.4    +365.6    -19.8    22.06    24.50    +2.45
+       8.000     211.4     162.3    -49.2    +546.7    +530.9    -15.8    32.71    38.27    +5.56
+       8.500     282.1     217.8    -64.2    +723.3    +716.7     -6.5    42.89    51.73    +8.85
+       9.000     382.5     301.2    -81.3    +922.6    +933.9    +11.2    52.28    64.08   +11.81
+       9.500     533.5     435.2    -98.3   +1155.4   +1198.5    +43.1    60.80    74.82   +14.02
+      10.000     780.3     671.6   -108.7   +1433.8   +1533.0    +99.2    68.35    83.48   +15.13
+      10.500    1234.1    1145.2    -88.9   +1754.0   +1950.0   +196.0    74.57    89.34   +14.78
+      11.000    2174.0    2215.2    +41.2   +1941.9   +2272.9   +331.0    78.18    90.96   +12.78
+      11.500    3575.9    3936.6   +360.7    +825.8   +1128.6   +302.8    75.33    85.20    +9.87
+      12.000    2423.9    2983.7   +559.8   -1018.8   -1050.8    -32.0    57.05    67.08   +10.03
+      12.500    1209.4    1645.3   +435.9    -381.6    -744.6   -363.0    26.60    39.65   +13.05
+      13.000    1283.5    1570.0   +286.5    +553.6     -17.1   -570.8    30.45    31.40    +0.95
+      13.500    2354.1    2330.4    -23.7   +1129.8    +148.6   -981.2    57.93    46.80   -11.13
+      14.000    4058.6    2786.5  -1272.1    -153.3    -922.2   -768.9    81.29    61.84   -19.45
+      14.500    2926.8    1948.3   -978.5   -2404.3   -1716.1   +688.2    98.04    69.21   -28.84
 
 
   ── Statistical Summary of H-CP vs. V-CP Differences ───────────────────────────
-    ΔR_feed  (V-CP minus H-CP) Ω  : mean=+109.61  RMS=595.26  max=-1367.00
-    ΔX_feed  (V-CP minus H-CP) Ω  : mean=+341.70  RMS=799.25  max=+2196.21
-    ΔVSWR    (V-CP minus H-CP)    : mean=-0.51  RMS=17.62  max=-37.73
+    ΔR_feed  (V-CP minus H-CP) Ω  : mean=-71.44  RMS=456.76  max=-1272.10
+    ΔX_feed  (V-CP minus H-CP) Ω  : mean=-69.18  RMS=413.73  max=-981.22
+    ΔVSWR    (V-CP minus H-CP)    : mean=+3.75  RMS=13.15  max=-28.84
 
 
   ── Physical Interpretation ────────────────────────────────────────────────────
-  ⚠    Vertical CP raises feedpoint R slightly more than horizontal CP. This is expected: a vertical drop brings the wire closer to the soil surface, increasing capacitive loading and ground-return loss.
-  ✔    Vertical CP improves VSWR on average versus horizontal CP.
+  ⚠    Horizontal CP raises feedpoint R more. Mutual coupling between the in-line CP and the antenna wire is adding series resistance.
+  ⚠    Vertical CP worsens VSWR on average. Consider horizontal CP or multiple radials to reduce the counterpoise impedance.
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 4 — EMPIRICAL MODEL ACCURACY vs. NEC2  (Systematic Error)
@@ -172,55 +176,55 @@
   ── Error statistics — HORIZ. CP ───────────────────────────────────────────────
         Freq     R_sim     R_mod      ΔR%     X_sim     X_mod     ΔX(Ω)   VSWR_sim   VSWR_mod
     ────────────────────────────────────────────────────────────────────────────────────────
-       7.000      81.8      91.5    -10.6%    +234.8   -1034.3   +1269.1      15.67      23.44
-       7.500     107.4     147.4    -27.1%    +394.3   -1293.3   +1687.6      31.52      17.62
-       8.000     143.7     258.7    -44.5%    +569.4   -1452.5   +2021.9      48.33      11.36
-       8.500     196.9     473.8    -58.4%    +769.5   -1499.5   +2269.0      64.33       6.56
-       9.000     279.4     863.6    -67.7%   +1008.6   -1430.7   +2439.3      78.58       3.69
-       9.500     417.7    1496.3    -72.1%   +1309.6   -1251.6   +2561.2      90.58       2.36
-      10.000     678.0    2361.7    -71.3%   +1710.4    -975.7   +2686.1      99.92       2.16
-      10.500    1260.9    3278.2    -61.5%   +2253.1    -624.6   +2877.7     105.77       2.53
-      11.000    2854.7    3901.8    -26.8%   +2644.2    -225.3   +2869.5     106.09       2.90
-      11.500    4749.3    3928.9    +20.9%    -171.8    +191.5    -363.3      95.11       2.92
-      12.000    1919.2    3345.2    -42.6%   -1484.8    +593.4   -2078.2      61.37       2.57
-      12.500    1019.1    2438.4    -58.2%    -267.5    +949.6   -1217.1      21.79       2.17
-      13.000    1448.0    1559.3     -7.1%    +806.7   +1232.4    -425.7      37.96       2.31
-      13.500    3162.6     905.5   +249.3%    +955.9   +1420.1    -464.2      69.03       3.53
-      14.000    3781.0     497.9   +659.3%   -1481.1   +1498.2   -2979.3      87.23       6.26
-      14.500    2021.8     271.6   +644.5%   -2357.7   +1460.6   -3818.3      95.44      10.90
+       7.000     121.0      91.5    +32.3%    +233.5   -1034.3   +1267.8      11.76      23.44
+       7.500     159.8     147.4     +8.4%    +385.4   -1293.3   +1678.7      22.06      17.62
+       8.000     211.4     258.7    -18.3%    +546.7   -1452.5   +1999.2      32.71      11.36
+       8.500     282.1     473.8    -40.5%    +723.3   -1499.5   +2222.8      42.89       6.56
+       9.000     382.5     863.6    -55.7%    +922.6   -1430.7   +2353.4      52.28       3.69
+       9.500     533.5    1496.3    -64.3%   +1155.4   -1251.6   +2407.0      60.80       2.36
+      10.000     780.3    2361.7    -67.0%   +1433.8    -975.7   +2409.5      68.35       2.16
+      10.500    1234.1    3278.2    -62.4%   +1754.0    -624.6   +2378.6      74.57       2.53
+      11.000    2174.0    3901.8    -44.3%   +1941.9    -225.3   +2167.2      78.18       2.90
+      11.500    3575.9    3928.9     -9.0%    +825.8    +191.5    +634.3      75.33       2.92
+      12.000    2423.9    3345.2    -27.5%   -1018.8    +593.4   -1612.2      57.05       2.57
+      12.500    1209.4    2438.4    -50.4%    -381.6    +949.6   -1331.2      26.60       2.17
+      13.000    1283.5    1559.3    -17.7%    +553.6   +1232.4    -678.8      30.45       2.31
+      13.500    2354.1     905.5   +160.0%   +1129.8   +1420.1    -290.3      57.93       3.53
+      14.000    4058.6     497.9   +715.1%    -153.3   +1498.2   -1651.5      81.29       6.26
+      14.500    2926.8     271.6   +977.8%   -2404.3   +1460.6   -3864.9      98.04      10.90
 
-    R error  : n=16  mean=+64.1%  RMS=242.8%  range=[-72.1%, +659.3%]
-  ✖    R model error is large (RMS 243%). The empirical formula should NOT be used for matching design without NEC2 confirmation.
-    X error  : n=16  mean=+583.4 Ω  RMS=2232.1 Ω  range=[-3818.3, +2877.7] Ω
-  ⚠    Reactance model has large error (RMS 2232 Ω). The sinusoidal X formula ignores end-loading and ground proximity.
-    VSWR error: n=16  mean=+62.84  RMS=71.07  range=[-7.78, +103.24]
+    R error  : n=16  mean=+89.8%  RMS=307.9%  range=[-67.0%, +977.8%]
+  ✖    R model error is large (RMS 308%). The empirical formula should NOT be used for matching design without NEC2 confirmation.
+    X error  : n=16  mean=+630.6 Ω  RMS=1997.5 Ω  range=[-3864.9, +2409.5] Ω
+  ⚠    Reactance model has large error (RMS 1997 Ω). The sinusoidal X formula ignores end-loading and ground proximity.
+    VSWR error: n=16  mean=+47.94  RMS=55.19  range=[-11.68, +87.14]
     (VSWR computed post-27:1 UnUn — transmitter-side reference)
 
   ── Error statistics — VERT.  CP ───────────────────────────────────────────────
         Freq     R_sim     R_mod      ΔR%     X_sim     X_mod     ΔX(Ω)   VSWR_sim   VSWR_mod
     ────────────────────────────────────────────────────────────────────────────────────────
-       7.000     253.2      91.5   +176.7%    +579.0   -1034.3   +1613.4      31.72      23.44
-       7.500     283.1     147.4    +92.0%    +722.4   -1293.3   +2015.7      42.68      17.62
-       8.000     325.2     258.7    +25.7%    +884.4   -1452.5   +2336.9      54.75      11.36
-       8.500     385.9     473.8    -18.5%   +1074.0   -1499.5   +2573.5      67.62       6.56
-       9.000     477.7     863.6    -44.7%   +1305.2   -1430.7   +2735.9      80.97       3.69
-       9.500     627.4    1496.3    -58.1%   +1601.6   -1251.6   +2853.2      94.39       2.36
-      10.000     902.4    2361.7    -61.8%   +2004.3    -975.7   +2980.0     107.13       2.16
-      10.500    1512.3    3278.2    -53.9%   +2565.7    -624.6   +3190.3     117.33       2.53
-      11.000    3205.4    3901.8    -17.8%   +2995.5    -225.3   +3220.8     120.10       2.90
-      11.500    5261.0    3928.9    +33.9%     +39.0    +191.5    -152.5     105.23       2.92
-      12.000    2502.3    3345.2    -25.2%   -1486.5    +593.4   -2079.9      67.71       2.57
-      12.500    1507.6    2438.4    -38.2%    -607.8    +949.6   -1557.4      35.06       2.17
-      13.000    1481.2    1559.3     -5.0%     +52.5   +1232.4   -1179.9      29.66       2.31
-      13.500    1841.0     905.5   +103.3%    +410.6   +1420.1   -1009.5      38.65       3.53
-      14.000    2414.0     497.9   +384.8%    +382.2   +1498.2   -1115.9      49.49       6.26
-      14.500    2895.7     271.6   +966.3%    -161.5   +1460.6   -1622.1      58.09      10.90
+       7.000      95.1      91.5     +3.9%    +213.1   -1034.3   +1247.4      11.90      23.44
+       7.500     123.4     147.4    -16.3%    +365.6   -1293.3   +1658.9      24.50      17.62
+       8.000     162.3     258.7    -37.3%    +530.9   -1452.5   +1983.4      38.27      11.36
+       8.500     217.8     473.8    -54.0%    +716.7   -1499.5   +2216.2      51.73       6.56
+       9.000     301.2     863.6    -65.1%    +933.9   -1430.7   +2364.6      64.08       3.69
+       9.500     435.2    1496.3    -70.9%   +1198.5   -1251.6   +2450.1      74.82       2.36
+      10.000     671.6    2361.7    -71.6%   +1533.0    -975.7   +2508.7      83.48       2.16
+      10.500    1145.2    3278.2    -65.1%   +1950.0    -624.6   +2574.6      89.34       2.53
+      11.000    2215.2    3901.8    -43.2%   +2272.9    -225.3   +2498.2      90.96       2.90
+      11.500    3936.6    3928.9     +0.2%   +1128.6    +191.5    +937.1      85.20       2.92
+      12.000    2983.7    3345.2    -10.8%   -1050.8    +593.4   -1644.2      67.08       2.57
+      12.500    1645.3    2438.4    -32.5%    -744.6    +949.6   -1694.2      39.65       2.17
+      13.000    1570.0    1559.3     +0.7%     -17.1   +1232.4   -1249.6      31.40       2.31
+      13.500    2330.4     905.5   +157.4%    +148.6   +1420.1   -1271.5      46.80       3.53
+      14.000    2786.5     497.9   +459.6%    -922.2   +1498.2   -2420.4      61.84       6.26
+      14.500    1948.3     271.6   +617.4%   -1716.1   +1460.6   -3176.7      69.21      10.90
 
-    R error  : n=16  mean=+91.2%  RMS=268.0%  range=[-61.8%, +966.3%]
-  ✖    R model error is large (RMS 268%). The empirical formula should NOT be used for matching design without NEC2 confirmation.
-    X error  : n=16  mean=+925.1 Ω  RMS=2191.9 Ω  range=[-2079.9, +3220.8] Ω
-  ⚠    Reactance model has large error (RMS 2192 Ω). The sinusoidal X formula ignores end-loading and ground proximity.
-    VSWR error: n=16  mean=+62.33  RMS=70.95  range=[+8.28, +117.20]
+    R error  : n=16  mean=+48.3%  RMS=200.5%  range=[-71.6%, +617.4%]
+  ✖    R model error is large (RMS 201%). The empirical formula should NOT be used for matching design without NEC2 confirmation.
+    X error  : n=16  mean=+561.4 Ω  RMS=2084.0 Ω  range=[-3176.7, +2574.6] Ω
+  ⚠    Reactance model has large error (RMS 2084 Ω). The sinusoidal X formula ignores end-loading and ground proximity.
+    VSWR error: n=16  mean=+51.69  RMS=58.78  range=[-11.55, +88.06]
     (VSWR computed post-27:1 UnUn — transmitter-side reference)
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -230,8 +234,8 @@
 
     Band      f(MHz)      VSWR_H     VSWR_V     Model(nCP)    Model(wCP)    Verdict                            
     ─────────────────────────────────────────────────────────────────────────────────────────────
-    40m       7.1500         17.01      6.34     21.89     17.02  Poor — high mismatch loss  [score=0.366: ✓]
-    20m       14.1750         3.28      1.85      7.66      6.78  Good — tuner helpful  [score=0.258: ✓]
+    40m       7.1500         11.49     14.55     21.89     17.02  Poor — high mismatch loss  [score=0.366: ✓]
+    20m       14.1750         3.01      2.35      7.66      6.78  Good — tuner helpful  [score=0.258: ✓]
 
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -241,42 +245,42 @@
   ── Gain summary — HORIZ. CP ───────────────────────────────────────────────────
         Freq    MaxGain    TOA(°)   Efficiency  Note
     ─────────────────────────────────────────────────────────────────
-       7.000      +5.20      90.0        96.2%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-       7.500      +5.52      90.0        96.6%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-       8.000      +5.79      90.0        96.9%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-       8.500      +6.04      90.0        97.2%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-       9.000      +6.24      90.0        97.5%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-       9.500      +6.42      90.0        97.6%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      10.000      +6.55      90.0        97.8%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      10.500      +6.63      87.5        97.8%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      11.000      +6.58      85.0        97.7%  Above isotropic — good radiation
-      11.500      +6.33      80.0        97.5%  Above isotropic — good radiation
-      12.000      +6.47      67.5        96.9%  Above isotropic — good radiation
-      12.500      +7.10      62.5        96.5%  Above isotropic — good radiation
-      13.000      +6.47      65.0        97.1%  Above isotropic — good radiation
-      13.500      +5.86      75.0        97.7%  Above isotropic — good radiation
-      14.000      +6.30      72.5        97.9%  Above isotropic — good radiation
-      14.500      +6.89      67.5        98.0%  Above isotropic — good radiation
+       7.000      +6.05      70.0        97.4%  Above isotropic — good radiation
+       7.500      +6.06      62.5        97.7%  Above isotropic — good radiation
+       8.000      +6.10      55.0        98.0%  Above isotropic — good radiation
+       8.500      +6.17      52.5        98.1%  Above isotropic — good radiation
+       9.000      +6.27      47.5        98.2%  Above isotropic — good radiation
+       9.500      +6.41      45.0        98.3%  Above isotropic — good radiation
+      10.000      +6.56      42.5        98.4%  Above isotropic — good radiation
+      10.500      +6.72      40.0        98.3%  Above isotropic — good radiation
+      11.000      +6.83      37.5        98.2%  Above isotropic — good radiation
+      11.500      +6.87      37.5        98.0%  Above isotropic — good radiation
+      12.000      +7.21      35.0        97.5%  Above isotropic — good radiation
+      12.500      +7.96      32.5        97.1%  Above isotropic — good radiation
+      13.000      +7.64      32.5        97.3%  Above isotropic — good radiation
+      13.500      +7.10      30.0        97.7%  Above isotropic — good radiation
+      14.000      +7.53      30.0        97.8%  Above isotropic — good radiation
+      14.500      +8.36      30.0        97.7%  Above isotropic — good radiation
 
   ── Gain summary — VERT.  CP ───────────────────────────────────────────────────
         Freq    MaxGain    TOA(°)   Efficiency  Note
     ─────────────────────────────────────────────────────────────────
-       7.000      -3.73      72.5        98.6%  Significant loss — check ground, mismatch
-       7.500      -2.69      77.5        98.5%  Slight loss vs isotropic — acceptable
-       8.000      -1.68      82.5        98.5%  Slight loss vs isotropic — acceptable
-       8.500      -0.69      85.0        98.4%  Slight loss vs isotropic — acceptable
-       9.000      +0.29      85.0        98.4%  Above isotropic — good radiation
-       9.500      +1.30      87.5        98.3%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      10.000      +2.34      87.5        98.2%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      10.500      +3.41      90.0        98.1%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      11.000      +4.46      90.0        97.9%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      11.500      +5.18      90.0        97.7%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      12.000      +4.91      90.0        97.7%  Above isotropic — good radiation  [NVIS — regional 0-600 km, not DX]
-      12.500      +3.08      75.0        98.1%  Above isotropic — good radiation
-      13.000      +0.34      55.0        98.5%  Above isotropic — good radiation
-      13.500      -1.85      40.0        98.7%  Slight loss vs isotropic — acceptable
-      14.000      -2.90      32.5        98.8%  Slight loss vs isotropic — acceptable
-      14.500      -3.30      30.0        98.9%  Significant loss — check ground, mismatch
+       7.000      +2.96      60.0        96.7%  Above isotropic — good radiation
+       7.500      +3.16      55.0        97.0%  Above isotropic — good radiation
+       8.000      +3.36      52.5        97.3%  Above isotropic — good radiation
+       8.500      +3.58      47.5        97.5%  Above isotropic — good radiation
+       9.000      +3.81      45.0        97.7%  Above isotropic — good radiation
+       9.500      +4.07      45.0        97.9%  Above isotropic — good radiation
+      10.000      +4.38      42.5        98.0%  Above isotropic — good radiation
+      10.500      +4.74      40.0        98.0%  Above isotropic — good radiation
+      11.000      +5.16      37.5        98.1%  Above isotropic — good radiation
+      11.500      +5.58      37.5        98.0%  Above isotropic — good radiation
+      12.000      +5.81      35.0        97.8%  Above isotropic — good radiation
+      12.500      +5.17      32.5        97.7%  Above isotropic — good radiation
+      13.000      +3.08      27.5        97.8%  Above isotropic — good radiation
+      13.500      +0.93      22.5        98.1%  Above isotropic — good radiation
+      14.000      +0.02      20.0        98.3%  Above isotropic — good radiation
+      14.500      +0.19      22.5        98.4%  Above isotropic — good radiation
 
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 7 — ROOT-CAUSE ANALYSIS OF MODEL vs. NEC2 DISCREPANCIES
@@ -329,13 +333,13 @@
 ════════════════════════════════════════════════════════════════════════════════
   SECTION 8 — RECOMMENDATIONS
 ════════════════════════════════════════════════════════════════════════════════
-    1. [40m] NEC2 VSWR = 17.0 (post-27:1 UnUn) → very poor match. Adjust wire
+    1. [40m] NEC2 VSWR = 14.6 (post-27:1 UnUn) → very poor match. Adjust wire
        length (±0.2 m steps) or add more radials. Consider a tuner (ATU) for this
        band.
-    2. [20m] NEC2 VSWR = 3.3 (post-27:1 UnUn) → marginal. A tuner is recommended.
+    2. [20m] NEC2 VSWR = 3.0 (post-27:1 UnUn) → marginal. A tuner is recommended.
        Verify UnUn ratio is correct.
-    3. Vertical CP gives lower average VSWR; drop the counterpoise vertically from
-       the feedpoint.
+    3. Horizontal CP gives lower average VSWR; prefer this orientation if
+       mechanical constraints allow.
     4. Always verify feedpoint impedance with a vector network analyser (VNA)
        before connecting the final coaxial run.  NEC2 is more accurate than the
        spreadsheet, but physical installations still differ from the model.
