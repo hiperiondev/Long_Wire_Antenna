@@ -132,7 +132,7 @@ WIRE_RADIUS_M = 0.001       # 1 mm copper wire
 DEFAULT_HEIGHT_M = 8.0      # antenna wire height above ground
 DEFAULT_GROUND_COND = 0.005 # S/m  (average ground)
 DEFAULT_GROUND_DIEL = 13.0  # relative permittivity
-SEGS_PER_HALF_WAVE = 21     # NEC2 segments per half wavelength (odd, centred source)
+SEGS_PER_HALF_WAVE = 21     # NEC2 segments per half wavelength
 
 # NEC2C search paths (searched in order after PATH)
 NEC2C_SEARCH_PATHS = [
@@ -219,10 +219,15 @@ def find_nec2c(explicit: Optional[str] = None,
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _segs(length_m: float, highest_freq_mhz: float) -> int:
-    """Return an odd number of segments appropriate for the wire length."""
+    """Return an odd number of segments appropriate for the wire length.
+
+    Odd segment count is preferred for NEC2 numerical stability and to give
+    a well-defined physical centre segment.  The source (EX card) is placed
+    at segment 1 (the near end / feedpoint junction), not the centre segment.
+    """
     lambda_half = C_MHZ / (2.0 * highest_freq_mhz) if highest_freq_mhz else 10.0
     n = max(7, int(length_m / lambda_half * SEGS_PER_HALF_WAVE))
-    return n if n % 2 == 1 else n + 1   # keep odd for centred source
+    return n if n % 2 == 1 else n + 1   # keep odd for numerical stability
 
 
 def write_nec_deck(
@@ -246,8 +251,10 @@ def write_nec_deck(
       Wire 2  (CP, horiz): horizontal, z = cp_height_m,   x = 0..-cp_len_m
       Wire 2  (CP, vert) : vertical,   x = 0, z = wire_height_m..cp_height_m
 
-    Source (EX): last segment of Wire 1 (the far end → end-fed).
-    The feedpoint is the junction of Wire 1 end / Wire 2 start.
+    Source (EX): first segment of Wire 1 (x=0, the near end — the feedpoint
+    junction where Wire 1 meets the counterpoise).  This is correct for an
+    end-fed long-wire: the feed/UnUn sits at x=0 where the CP connects,
+    and the wire extends away from it to x = wire_len_m.
     """
     highest_f = max(freqs_mhz)
     segs_ant = _segs(wire_len_m, highest_f)
@@ -269,16 +276,6 @@ def write_nec_deck(
 
         # Wire 2: counterpoise
         if cp_type == "horizontal":
-            # BUG FIX: the horizontal CP must be connected to the feedpoint
-            # at (0, 0, wire_height_m).  The previous code placed GW 2 starting
-            # at (0, 0, cp_height_m), which is spatially disconnected from the
-            # antenna feedpoint, so NEC2 treated the CP as a floating wire.
-            #
-            # Correct model: a vertical drop wire (GW 2) descends from the
-            # feedpoint to cp_height_m, then the horizontal CP wire (GW 3)
-            # extends outward at that height.  cp_len_m is the horizontal
-            # wire length; the vertical drop is always added as a connecting
-            # section (it represents the physical feedline / lead-in).
             drop_len = wire_height_m - cp_height_m
             if drop_len > 0.01:
                 segs_drop = max(5, _segs(drop_len, highest_f))
@@ -310,8 +307,11 @@ def write_nec_deck(
             cp_bottom_z = max(cp_height_m, wire_height_m - cp_len_m)
             vert_len    = wire_height_m - cp_bottom_z        # actual vertical drop
             horiz_rem   = cp_len_m - vert_len                # remainder, if any
-            # Recompute segment count for the actual vertical length actually used
-            segs_cp_v = max(5, _segs(cp_len_m, highest_f))
+            # Segment count for the vertical drop must be sized for vert_len,
+            # NOT for the full cp_len_m.  Using cp_len_m over-segments the
+            # vertical portion when the CP bends into an L-shape, producing
+            # an incorrect segment density that can degrade NEC2 accuracy.
+            segs_cp_v = max(5, _segs(vert_len, highest_f))
             if segs_cp_v % 2 == 0:
                 segs_cp_v += 1
             fh.write(f"GW 2 {segs_cp_v} "
@@ -328,14 +328,16 @@ def write_nec_deck(
                          f"{-horiz_rem:.3f} 0.0 {cp_bottom_z:.3f} "
                          f"{wire_radius_m:.5f}\n")
 
-        fh.write("GE 1\n")           # ground plane present
+        fh.write("GE 0\n")           # no image ground plane; Sommerfeld-Norton via GN 2
 
         # Ground (Sommerfeld-Norton)
         fh.write(f"GN 2 0 0 0 {ground_diel:.1f} {ground_cond:.4f}\n")
 
-        # Excitation: middle segment of wire 1 (nearest to the feed junction).
+        # Excitation: segment 1 of Wire 1 — the near-end segment at x=0, which is
+        # the feedpoint junction where the antenna wire meets the counterpoise.
         # Wire 1 runs from x=0 (seg 1) to x=wire_len_m (seg segs_ant).
-        # The CP connects at x=0, so segment 1 is the correct feedpoint.
+        # Placing EX at seg 1 puts the voltage source in the middle of that
+        # segment, which is the standard NEC2 end-feed modeling approach.
         fh.write("EX 0 1 1 0 1.0 0.0\n")
 
         # Frequency sweep — FR + XQ + minimal RP idiom per frequency.
@@ -410,6 +412,8 @@ class CandidateResult:
     band_X_tx:  Dict[str, float] = field(default_factory=dict)
     # Source tag per band: "NEC2-H", "NEC2-V", or "empirical"
     band_imp_src: Dict[str, str] = field(default_factory=dict)
+    # CP orientation that produced the lowest VSWR per band ("H", "V", or "empirical")
+    band_cp_src: Dict[str, str] = field(default_factory=dict)
 
     # Aggregate scores (lower = better)
     score_vswr:      float = 999.0   # weighted mean VSWR across active bands
@@ -488,7 +492,11 @@ def score_candidate(
             if not fmap:
                 continue
             key = min(fmap.keys(), key=lambda k: abs(k - freq))
-            if abs(key - freq) > 0.75:
+            # Adaptive tolerance: 4% of target frequency, clamped to [0.15, 0.75] MHz.
+            # This avoids cross-band contamination when many bands are active while
+            # still accommodating minor NEC2 output rounding on any band.
+            _tol = max(0.15, min(0.75, 0.04 * freq))
+            if abs(key - freq) > _tol:
                 continue
             fp = fmap[key]
             R_ant, X_ant = fp.R_ohm, fp.X_ohm
@@ -536,10 +544,18 @@ def score_candidate(
                 res.nec2_ok = False
                 imp_src = "empirical"
 
-        # Store antenna-side and Tx-side impedance
+        # Store antenna-side and Tx-side impedance, plus which CP orientation won
         res.band_R_ant[cr.band]   = round(best_R, 2)
         res.band_X_ant[cr.band]   = round(best_X, 2)
         res.band_imp_src[cr.band] = imp_src
+        # Record the winning CP orientation key so find_best_unun can reuse it
+        # without re-running NEC2 or re-introducing a ratio-dependent bias.
+        if imp_src == "NEC2-H":
+            res.band_cp_src[cr.band] = "H"
+        elif imp_src == "NEC2-V":
+            res.band_cp_src[cr.band] = "V"
+        else:
+            res.band_cp_src[cr.band] = "empirical"
         if unun_ratio > 1.0:
             res.band_R_tx[cr.band] = round(best_R / unun_ratio, 3)
             res.band_X_tx[cr.band] = round(best_X / unun_ratio, 3)
@@ -551,19 +567,6 @@ def score_candidate(
         vswr_penalties.append(_vswr_score_single(best_vswr))
 
     # ── Avoidance score: computed over ALL bands in the CSV ─────────────
-    # BUG FIX: previously avoidance was computed only for active bands.
-    # This meant a wire could sit right at resonance on inactive bands
-    # (e.g. 30m, 60m) with zero penalty.  Since avoidance is a property
-    # of the wire geometry against the spectrum — independent of whether
-    # the operator transmits on that band — ALL bands in the CSV are
-    # included.  VSWR scoring is still restricted to active bands only.
-    #
-    # BUG FIX (retained from earlier version): penalise proximity to BOTH
-    # bad zones:
-    #   d_half    = distance to nearest λ/2 multiple  (frac ∈ {0, 1})
-    #   d_quarter = distance to nearest λ/4 multiple  (frac = 0.5)
-    #   avoidance = min(d_half, d_quarter)
-    # Maximum = 0.25 at frac = 0.25 or 0.75 (3λ/8, 7λ/8 — ideal mid-points).
     for cr in calc_rows:       # ALL bands, not just active
         freq = cr.freq_mhz
         lambda_half = C_MHZ / (2.0 * freq)
@@ -577,17 +580,6 @@ def score_candidate(
 
     # Counterpoise λ/4 proximity bonus: reward CP lengths near an ODD multiple
     # of λ/4 (i.e. λ/4, 3λ/4, 5λ/4 …) which provide a low-Z return path.
-    # BUG FIX: the previous formula  0.5 - abs(cp_frac - 0.5)  was inverted —
-    # it gave ZERO bonus when cp_len was at λ/4 (the ideal CP length) and the
-    # MAXIMUM bonus at 3λ/8 (a non-resonant mid-point).
-    #
-    # Correct formula: cosine that peaks at every odd multiple of λ/4.
-    #   score = 0.25 * (1 − cos(π * cp_ratio))
-    #   • cp_ratio=0   → 0.0  (zero length — no path)
-    #   • cp_ratio=1   → 0.5  (λ/4   — ideal, low Z)  ← maximum = 0.5
-    #   • cp_ratio=2   → 0.0  (λ/2   — high Z, bad)
-    #   • cp_ratio=3   → 0.5  (3λ/4  — ideal, low Z)  ← maximum = 0.5
-    # CP bonus also covers ALL bands (same reasoning as avoidance above).
     cp_lambda_quarter_scores = []
     for cr in calc_rows:       # ALL bands
         lq = C_MHZ / (4.0 * cr.freq_mhz)
@@ -630,7 +622,6 @@ def score_candidate(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def build_search_grid(
-    calc_rows: List[CalcRow],
     wire_min: float,
     wire_max: float,
     wire_step: float,
@@ -752,26 +743,67 @@ def nec2_sweep(
                 else:
                     runs_by_type[cpt] = None
 
-            # Score with all available runs
+            # Score each CP orientation separately — a real antenna has ONE physical
+            # CP orientation.  Mixing H-CP for band A and V-CP for band B produces
+            # an impossible hybrid geometry whose simulated VSWR cannot be reproduced
+            # on the bench.  We therefore score H and V independently and keep
+            # whichever orientation yields the lower combined score overall.
             run_h = runs_by_type.get("horizontal")
             run_v = runs_by_type.get("vertical")
 
             if len(cp_types) == 1:
-                cpt_label = cp_types[0]
+                # Only one orientation simulated — no ambiguity.
+                cand = score_candidate(
+                    wire_len_m=w,
+                    cp_len_m=c,
+                    calc_rows=calc_rows,
+                    unun_ratio=unun_ratio,
+                    run_h=run_h,
+                    run_v=run_v,
+                    cp_type_hint=cp_types[0],
+                    nec2_strict=True,
+                )
+                results.append(cand)
             else:
-                cpt_label = "both"
+                # Both orientations simulated: score each one with ONLY its own run,
+                # then keep the better candidate.  This guarantees every stored VSWR
+                # value corresponds to a single physical geometry.
+                candidates_this = []
+                for cpt, r_h, r_v in [
+                    ("horizontal", run_h, None),
+                    ("vertical",   None,  run_v),
+                ]:
+                    if runs_by_type.get(cpt) is None:
+                        # NEC2 failed for this orientation — skip it so we don't
+                        # pollute results with VSWR=999 from a transient failure.
+                        continue
+                    c_cand = score_candidate(
+                        wire_len_m=w,
+                        cp_len_m=c,
+                        calc_rows=calc_rows,
+                        unun_ratio=unun_ratio,
+                        run_h=r_h,
+                        run_v=r_v,
+                        cp_type_hint=cpt,
+                        nec2_strict=True,
+                    )
+                    candidates_this.append(c_cand)
 
-            cand = score_candidate(
-                wire_len_m=w,
-                cp_len_m=c,
-                calc_rows=calc_rows,
-                unun_ratio=unun_ratio,
-                run_h=run_h,
-                run_v=run_v,
-                cp_type_hint=cpt_label,
-                nec2_strict=True,
-            )
-            results.append(cand)
+                if not candidates_this:
+                    # Both NEC2 runs failed — fall back to a single empirical candidate.
+                    cand = score_candidate(
+                        wire_len_m=w,
+                        cp_len_m=c,
+                        calc_rows=calc_rows,
+                        unun_ratio=unun_ratio,
+                        cp_type_hint="both",
+                        nec2_strict=False,
+                    )
+                    results.append(cand)
+                else:
+                    # Keep the orientation with the lower combined score.
+                    best_cand = min(candidates_this, key=lambda r: r.score_combined)
+                    results.append(best_cand)
 
     if verbose:
         print(f"  NEC2 sweep complete. {total} runs processed.           ")
@@ -811,8 +843,10 @@ def pareto_front(results: List[CandidateResult]) -> List[CandidateResult]:
 # UnUn OPTIMISER
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Standard commercially available UnUn impedance ratios
-STANDARD_UNUN_RATIOS: List[float] = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0, 16.0, 25.0]
+# Standard commercially available UnUn impedance ratios.
+# 36:1, 49:1 and 64:1 are widely used for end-fed long-wire and EFHW antennas
+# whose high antenna-side impedance (often 1000–5000 Ω) demands a large step-down.
+STANDARD_UNUN_RATIOS: List[float] = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0, 16.0, 25.0, 36.0, 49.0, 64.0]
 
 @dataclass
 class UnUnResult:
@@ -938,9 +972,14 @@ def find_best_unun(
     Given the best antenna geometry (wire_len, cp_len), sweep UnUn ratios
     to find which one minimises aggregate VSWR across all active bands.
 
-    Impedance source priority (same as score_candidate):
-      1. NEC2 horizontal CP run
-      2. NEC2 vertical CP run
+    Impedance source priority:
+      1. Impedances already stored in `best.band_R_ant` / `best.band_X_ant`
+         (produced by score_candidate during the sweep, using the per-band
+         optimal H/V CP choice).  Reusing these guarantees that the UnUn
+         analysis and the best-candidate breakdown section of the report are
+         always consistent with each other.
+      2. Fresh NEC2 runs (run_h, run_v) — used only for bands not already
+         present in best.band_R_ant (e.g. if the geometry was partially re-run).
       3. Empirical model  (only when nec2_strict=False)
 
     When nec2_strict=True and a band has no NEC2 data, that band is skipped
@@ -949,7 +988,7 @@ def find_best_unun(
     Returns an UnUnResult with:
       • Per-standard-ratio VSWR table
       • Best standard ratio
-      • Best continuous ratio (golden-section search)
+      • Best continuous ratio (golden-section search, range 1:1 … 100:1)
       • Per-band optimal ratio
     """
     active = [r for r in calc_rows if r.active]
@@ -957,41 +996,50 @@ def find_best_unun(
         return UnUnResult()
 
     # ── Collect per-band antenna impedance ────────────────────────────────
+    # Priority: sweep-stored values (consistent with report breakdown) →
+    #           fresh NEC2 re-run → empirical fallback.
     band_impedances: List[Tuple[str, float, float]] = []  # (band, R, X)
 
     for cr in active:
         freq = cr.freq_mhz
-        R_ant, X_ant = None, None
+        R_ant: Optional[float] = None
+        X_ant: Optional[float] = None
 
-        # BUG FIX: the previous code always preferred run_h over run_v
-        # ('break' after first hit), but score_candidate selects whichever
-        # source yields the lower VSWR.  Using run_h unconditionally means
-        # the UnUn analysis can end up with completely different (and much
-        # worse) impedance values than those that ranked the best candidate.
-        # Fix: iterate both runs and pick the one that gives lower VSWR at
-        # the current UnUn ratio — matching the logic in score_candidate.
-        best_R_local: Optional[float] = None
-        best_X_local: Optional[float] = None
-        best_v_local: Optional[float] = None
+        # 1. Reuse sweep-stored impedance (best per-band H/V already chosen)
+        if cr.band in best.band_R_ant and cr.band in best.band_X_ant:
+            R_ant = best.band_R_ant[cr.band]
+            X_ant = best.band_X_ant[cr.band]
 
-        for run in [run_h, run_v]:
-            if run is None:
-                continue
-            fmap = run.freq_map()
-            if not fmap:
-                continue
-            key = min(fmap.keys(), key=lambda k: abs(k - freq))
-            if abs(key - freq) > 0.75:
-                continue
-            fp = fmap[key]
-            v_here = _vswr_for_ratio(fp.R_ohm, fp.X_ohm, current_unun, z0)
-            if best_v_local is None or v_here < best_v_local:
-                best_v_local = v_here
-                best_R_local = fp.R_ohm
-                best_X_local = fp.X_ohm
-
-        R_ant = best_R_local
-        X_ant = best_X_local
+        # 2. Fresh NEC2 run (fallback if band not in stored data)
+        if R_ant is None and (run_h is not None or run_v is not None):
+            best_R_local: Optional[float] = None
+            best_X_local: Optional[float] = None
+            best_vswr_local: float = 999.0
+            for run in [run_h, run_v]:
+                if run is None:
+                    continue
+                fmap = run.freq_map()
+                if not fmap:
+                    continue
+                key = min(fmap.keys(), key=lambda k: abs(k - freq))
+                # Use the same adaptive tolerance as score_candidate to stay consistent.
+                # Hardcoding 0.75 MHz is 5× too loose at 160 m / 80 m and could
+                # accidentally accept a neighbour-band impedance value.
+                _tol = max(0.15, min(0.75, 0.04 * freq))
+                if abs(key - freq) > _tol:
+                    continue
+                fp = fmap[key]
+                # Use VSWR (not |Z|) as the selection criterion — consistent with
+                # how score_candidate picks the best CP orientation during the sweep.
+                # Minimising |Z| is NOT the same as minimising VSWR: the optimal
+                # impedance is the one closest to Z0 after the UnUn transformation.
+                cand_vswr = _vswr_for_ratio(fp.R_ohm, fp.X_ohm, current_unun)
+                if best_R_local is None or cand_vswr < best_vswr_local:
+                    best_vswr_local = cand_vswr
+                    best_R_local = fp.R_ohm
+                    best_X_local = fp.X_ohm
+            R_ant = best_R_local
+            X_ant = best_X_local
 
         if R_ant is None:
             if nec2_strict:
@@ -1029,15 +1077,35 @@ def find_best_unun(
     def _obj(n: float) -> float:
         return _aggregate_vswr_penalty(band_impedances, n)
 
-    cont_n, cont_score = _golden_section_min(_obj, 1.0, 36.0)
+    cont_n, cont_score = _golden_section_min(_obj, 1.0, 100.0)
     result.best_continuous_ratio = round(cont_n, 2)
     result.best_continuous_score = round(cont_score, 4)
+
+    # Warn when the optimum lands on (or very near) a search boundary,
+    # which means the true minimum may lie beyond the search range.
+    _BOUNDARY_TOL = 0.5   # flag if within 0.5 of either end
+    if cont_n <= 1.0 + _BOUNDARY_TOL:
+        import warnings
+        warnings.warn(
+            f"UnUn continuous optimum ({cont_n:.2f}:1) is at the lower search bound "
+            "(1.0:1). The true optimum may be a direct connection (no transformer). "
+            "Re-run without an UnUn if that makes physical sense.",
+            RuntimeWarning, stacklevel=2,
+        )
+    elif cont_n >= 100.0 - _BOUNDARY_TOL:
+        import warnings
+        warnings.warn(
+            f"UnUn continuous optimum ({cont_n:.2f}:1) hit the upper search bound "
+            "(100.0:1). The true minimum-VSWR ratio may be even higher. "
+            "Inspect the antenna-side impedance and consider a custom winding ratio.",
+            RuntimeWarning, stacklevel=2,
+        )
 
     # ── Per-band best ratio (independent search per band) ─────────────────
     for band, R, X in band_impedances:
         def _band_obj(n: float, _R=R, _X=X) -> float:
             return _vswr_for_ratio(_R, _X, n, z0)
-        n_opt, _ = _golden_section_min(_band_obj, 1.0, 36.0)
+        n_opt, _ = _golden_section_min(_band_obj, 1.0, 100.0)
         result.per_band_best_ratio[band] = round(n_opt, 2)
         result.per_band_best_vswr[band]  = round(_vswr_for_ratio(R, X, n_opt, z0), 3)
 
@@ -1087,15 +1155,14 @@ def write_report(
     band_labels = [f"{b}(*)" if b in active_band_set else b for b in all_bands_list]
     ln(f"Active bands    : {len(active)} of {len(calc_rows)}"
        f"  ({', '.join(band_labels)})  (* = scored for VSWR)")
-    # BUG FIX: ranked passed in is already sliced to top_n, so len(ranked)
-    # always printed the top-N limit (e.g. 20), not the real grid size.
-    # total_candidates is now passed explicitly from main().
+
     display_total = total_candidates if total_candidates > 0 else len(ranked)
     ln(f"Total candidates: {display_total}")
     lines.append("")
 
     # ── TOP 20 RANKING ───────────────────────────────────────────────────
-    h1("TOP 20 CANDIDATES  (lower combined score = better)")
+    top_n = len(ranked)
+    h1(f"TOP {top_n} CANDIDATES  (lower combined score = better)")
     header = (f"  {'#':>3}  {'Wire(m)':>8}  {'CP(m)':>7}  {'CP type':>10}  "
               f"{'Score':>7}  {'mVSWRpen':>9}  {'Avoid':>7}  "
               + "  ".join(f"{b:>7}" for b in bands)
@@ -1103,7 +1170,7 @@ def write_report(
     lines.append(header)
     lines.append("  " + "─" * (len(header) - 2))
 
-    for rank, r in enumerate(ranked[:20], 1):
+    for rank, r in enumerate(ranked[:top_n], 1):
         band_cols = "  ".join(
             f"{r.band_vswr.get(b, 999):7.2f}" for b in bands
         )
@@ -1144,7 +1211,7 @@ def write_report(
         ln("Per-band results:")
         ln(f"  {'Band':>8}  {'Active':>6}  {'VSWR(Tx)':>9}  {'Avoid':>8}  {'Rating':>22}  {'VSWR label'}")
         ln("  " + "─" * 80)
-        # BUG FIX: show avoidance for ALL bands, VSWR only for active bands.
+
         for cr in calc_rows:
             b = cr.band
             a = best.band_avoidance.get(b, 0.0)
@@ -1195,8 +1262,14 @@ def write_report(
         ln(f"Used UnUn ratio (this run) : {unun_ratio:.1f}:1")
 
         # Continuous optimum
-        ln(f"Continuous optimum         : {unun_result.best_continuous_ratio:.2f}:1"
-           f"  (mean VSWR penalty {unun_result.best_continuous_score:.4f})")
+        cont_n = unun_result.best_continuous_ratio
+        boundary_note = ""
+        if cont_n >= 99.5:
+            boundary_note = "  ⚠ HIT UPPER BOUND — true optimum may be >100:1"
+        elif cont_n <= 1.5:
+            boundary_note = "  ⚠ HIT LOWER BOUND — try no transformer"
+        ln(f"Continuous optimum         : {cont_n:.2f}:1"
+           f"  (mean VSWR penalty {unun_result.best_continuous_score:.4f}){boundary_note}")
 
         # Nearest standard ratio
         std_n = unun_result.best_standard_ratio
@@ -1230,8 +1303,7 @@ def write_report(
             )
             marker = " ◄ BEST" if n == std_n else (
                      " ← CURRENT" if n == unun_ratio else "")
-            # BUG FIX: {n:5.0f} rounds 1.5 → "2", causing two "2:1" rows.
-            # Use {n:.4g} which prints "1.5" for 1.5 and "2" for 2.0.
+
             ratio_str = f"{n:.4g}"
             ln(f"  {ratio_str:>5}:1  {score:7.4f}  {bv_cols}{marker}")
 
@@ -1275,9 +1347,12 @@ def write_report(
 
         ("Counterpoise length selection",
          "The counterpoise acts as the missing half of the antenna system.  A length near"
-         " λ/4 at the operating frequency provides a low-impedance return path.  The"
-         " optimizer penalises CP lengths that are resonant (λ/2 or λ/4) on multiple"
-         " bands simultaneously — the same logic as for the antenna wire."),
+         " λ/4 at the operating frequency (or an odd multiple thereof: 3λ/4, 5λ/4 …)"
+         " provides a low-impedance return path and is actively rewarded by the optimizer."
+         " Lengths near an even multiple of λ/4 (i.e. λ/2, λ, 3λ/2 …) produce a"
+         " high-impedance return path and receive no reward.  This bonus is intentionally"
+         " small relative to the VSWR term so that CP resonance can nudge a close pair of"
+         " candidates but cannot override a poor VSWR match."),
 
         ("VSWR after UnUn",
          f"All VSWR values shown are referred to the TRANSMITTER side (50 Ω coaxial)"
@@ -1348,9 +1423,6 @@ def export_best_csv(
             lhalf = C_MHZ / (2.0 * freq) if freq else 0.0
             w = best.wire_len_m
 
-            # BUG FIX: always used the empirical formula for R/X even when
-            # NEC2-computed impedances are available in the best candidate.
-            # Use NEC2 data first; fall back to empirical only when absent.
             if (cr.band in best.band_R_ant and
                     cr.band in best.band_X_ant and
                     best.nec2_ok):
@@ -1363,6 +1435,12 @@ def export_best_csv(
                 R = max(1.0, 50 * (80 ** cos2))   # clamp R ≥ 1 Ω
                 X = 1500 * math.sin(2 * arg)
 
+            # vswr_no_cp: VSWR seen at the ANTENNA FEED POINT (50 Ω reference,
+            # no UnUn transformation) — i.e. how well a 50 Ω coax would match
+            # the raw antenna impedance without any transformer.
+            # This is the conventional definition used by nec2_vs_calc_analyzer
+            # for this column and matches what a VNA would read at the antenna
+            # terminal before any matching network.
             g = math.hypot(R - 50, X) / math.hypot(R + 50, X)
             vswr_no = (1 + g) / (1 - g) if g < 1 else 999.0
 
@@ -1751,7 +1829,7 @@ def main() -> None:
     # ── Build search grid ────────────────────────────────────────────────
     wire_range = (args.wire_min, args.wire_max, args.wire_step)
     cp_range   = (args.cp_min,  args.cp_max,  args.cp_step)
-    grid = build_search_grid(calc_rows, *wire_range, *cp_range)
+    grid = build_search_grid(*wire_range, *cp_range)
     print(f"  Grid size     : {len(grid)} (wire) × (cp) pairs")
 
     cp_types = (["horizontal", "vertical"] if args.cp_type == "both"
@@ -1796,11 +1874,16 @@ def main() -> None:
             verbose=verbose,
         )
     else:
+        _emp_cp = args.cp_type if args.cp_type != "both" else "horizontal"
+        if args.cp_type == "both":
+            print(f"  {Fore.YELLOW}Note: empirical model ignores CP geometry for VSWR;"
+                  f" cp_type forced to 'horizontal' for the cp-avoidance label"
+                  f" (CP length avoidance is still evaluated for all bands).{Style.RESET_ALL}")
         results = empirical_sweep(
             grid=grid,
             calc_rows=calc_rows,
             unun_ratio=unun_ratio,
-            cp_type=args.cp_type if args.cp_type != "both" else "horizontal",
+            cp_type=_emp_cp,
             verbose=verbose,
         )
 
@@ -1938,7 +2021,11 @@ def main() -> None:
     # ── Write outputs ────────────────────────────────────────────────────
     print("  Writing outputs …")
 
-    # Use the recommended UnUn ratio for the CSV export if it's better
+    # Use the recommended UnUn ratio for the CSV export if it's better.
+    # NOTE: write_report is called with the original unun_ratio (the one used
+    # during the sweep and shown in the per-band impedance tables) so the report
+    # and the CSV both document their respective ratio clearly.  If the recommended
+    # ratio differs, a note is printed here and the CSV header carries export_unun.
     export_unun = unun_ratio
     if unun_result is not None:
         std_n = unun_result.best_standard_ratio
