@@ -1,0 +1,160 @@
+
+════════════════════════════════════════════════════════════════════════════════
+  NEC2 ANTENNA LENGTH OPTIMIZER REPORT
+════════════════════════════════════════════════════════════════════════════════
+  Analyzer module : /mnt/sda3/opt/Desarrollos/Long_Wire_Antenna/example_data/../nec2_vs_calc_analyzer.py
+  Evaluation mode : NEC2
+  UnUn ratio      : 27.0:1
+  Wire range      : 11.30 m … 15.30 m  step 0.250 m
+  CP range        : 7.96 m … 11.96 m  step 0.250 m
+  Active bands    : 2 of 11  (160m, 80m, 60m, 40m(*), 30m, 20m(*), 17m, 15m, 12m, 10m, 6m)  (* = scored for VSWR)
+  Total candidates: 289
+
+
+════════════════════════════════════════════════════════════════════════════════
+  TOP 20 CANDIDATES  (lower combined score = better)
+════════════════════════════════════════════════════════════════════════════════
+    #   Wire(m)    CP(m)     CP type    Score   mVSWRpen    Avoid      40m      20m  NEC2
+  ───────────────────────────────────────────────────────────────────────────────────────
+    1    15.300   10.215    vertical    8.469      2.556   0.1177     9.51     3.17  ✓
+    2    15.300    9.965    vertical    8.504      2.557   0.1177     9.61     3.14  ✓
+    3    15.300   10.465    vertical    8.518      2.639   0.1177     9.41     3.45  ✓
+    4    15.300    9.715    vertical    8.625      2.644   0.1177     9.71     3.36  ✓
+    5    15.300   10.715    vertical    8.638      2.792   0.1177     9.31     3.95  ✓
+    6    15.050   10.215    vertical    8.762      2.630   0.1194    10.17     3.17  ✓
+    7    15.050    9.965    vertical    8.796      2.625   0.1194    10.30     3.12  ✓
+    8    15.050   10.465    vertical    8.812      2.719   0.1194    10.05     3.48  ✓
+    9    15.300   10.965    vertical    8.812      3.000   0.1177     9.21     4.61  ✓
+   10    15.300    9.465    vertical    8.826      2.810   0.1177     9.81     3.83  ✓
+   11    15.050    9.715    vertical    8.918      2.709   0.1194    10.42     3.33  ✓
+   12    15.050   10.715    vertical    8.930      2.875   0.1194     9.93     3.99  ✓
+   13    15.300   11.215    vertical    9.022      3.246   0.1177     9.11     5.38  ✓
+   14    14.800   10.215    vertical    9.022      2.692   0.1176    10.81     3.16  ✓
+   15    14.800    9.965    vertical    9.058      2.684   0.1176    10.96     3.09  ✓
+   16    14.800   10.465    vertical    9.071      2.783   0.1176    10.67     3.48  ✓
+   17    15.300    9.215    vertical    9.093      3.043   0.1177     9.91     4.49  ✓
+   18    15.050   10.965    vertical    9.098      3.083   0.1194     9.81     4.65  ✓
+   19    15.050    9.465    vertical    9.126      2.877   0.1194    10.54     3.80  ✓
+   20    14.800    9.715    vertical    9.185      2.768   0.1176    11.10     3.30  ✓
+
+════════════════════════════════════════════════════════════════════════════════
+  PARETO-OPTIMAL FRONT  (6 candidates)
+════════════════════════════════════════════════════════════════════════════════
+  Candidates not dominated on both VSWR-penalty and avoidance score.
+
+    1  wire=15.300 m  cp=10.215 m  (vertical)  score=8.469  VSWR=[   9.51     3.17]  avoid=0.1177
+    2  wire=15.050 m  cp=9.965 m  (vertical)  score=8.796  VSWR=[  10.30     3.12]  avoid=0.1194
+    3  wire=14.300 m  cp=9.965 m  (vertical)  score=9.558  VSWR=[  12.36     3.03]  avoid=0.1245
+    4  wire=14.050 m  cp=9.965 m  (vertical)  score=9.816  VSWR=[  13.15     3.00]  avoid=0.1302
+    5  wire=13.800 m  cp=9.965 m  (vertical)  score=10.044  VSWR=[  13.92     2.96]  avoid=0.1412
+    6  wire=13.550 m  cp=9.965 m  (vertical)  score=10.269  VSWR=[  14.72     2.91]  avoid=0.1437
+
+════════════════════════════════════════════════════════════════════════════════
+  BEST CANDIDATE — DETAILED BREAKDOWN
+════════════════════════════════════════════════════════════════════════════════
+  Wire length   : 15.300 m
+  CP length     : 10.215 m   (vertical orientation)
+  Combined score: 8.4691
+  VSWR penalty  : 2.5563  (mean across active bands; combined uses mean+1.5×worst)
+  Avoidance     : 0.1177  (mean across ALL bands in CSV)
+  NEC2 data used: YES
+
+  Per-band results:
+        Band  Active   VSWR(Tx)     Avoid                  Rating  VSWR label
+    ────────────────────────────────────────────────────────────────────────────────
+        160m      no          —    0.1939                ★★  GOOD  —
+         80m      no          —    0.1274                ★★  GOOD  —
+         60m      no          —    0.0470      ✗   RESONANCE RISK  —
+         40m     YES       9.51    0.2298           ★★★ EXCELLENT  POOR
+         30m      no          —    0.0335      ✗   RESONANCE RISK  —
+         20m     YES       3.17    0.0531      ✗   RESONANCE RISK  MARGINAL
+         17m      no          —    0.1507                ★★  GOOD  —
+         15m      no          —    0.1664                ★★  GOOD  —
+         12m      no          —    0.0456      ✗   RESONANCE RISK  —
+         10m      no          —    0.0553      ✗   RESONANCE RISK  —
+          6m      no          —    0.1923                ★★  GOOD  —
+
+  Per-band impedance (antenna side and transmitter side):
+        Band   freq MHz    R_ant Ω    X_ant Ω    |Z_ant|Ω    R_tx Ω    X_tx Ω    |Z_tx|Ω    VSWR      Source
+    ────────────────────────────────────────────────────────────────────────────────────────────────────
+         40m     7.1500      161.1     +492.7       518.3      5.97    +18.25      19.20    9.51      NEC2-V
+         20m    14.1750     4209.3     -509.4      4240.0    155.90    -18.87     157.04    3.17      NEC2-V
+    (UnUn 27:1 — antenna-side Z divided by 27 to give Tx-side Z)
+
+════════════════════════════════════════════════════════════════════════════════
+  UnUn RATIO ANALYSIS  (for best antenna geometry)
+════════════════════════════════════════════════════════════════════════════════
+  Used UnUn ratio (this run) : 27.0:1
+  Continuous optimum         : 36.00:1  (mean VSWR penalty 2.3245)
+  Best standard ratio        : 25:1  (mean VSWR penalty 2.4517)
+
+  Standard ratio sweep:
+     Ratio    Score      40m      20m
+    ───────────────────────────────────
+        1:1   8.3945    60.61    85.42
+      1.5:1   7.5187    40.58    56.95
+        2:1   6.9006    30.62    42.71
+        3:1   6.0388    20.77    28.47
+        4:1   5.4398    15.95    21.36
+        6:1   4.6300    11.35    14.24
+        9:1   3.8949     8.65     9.49
+       12:1   3.4481     7.64     7.12
+       16:1   2.9914     7.29     5.34
+       25:1   2.4517     7.99     3.42 ◄ BEST
+
+  Antenna-side impedance (independent of UnUn ratio):
+        Band    R_ant Ω    X_ant Ω   |Z_ant| Ω      θ °
+    ────────────────────────────────────────────────────
+         40m      219.2     +783.6       813.7    +74.4
+         20m     4209.3     -509.4      4240.0     -6.9
+
+  Per-band optimal ratio (independent, continuous):
+        Band    Best ratio     VSWR
+    ──────────────────────────────────
+         40m       16.27:1    7.285
+         20m       36.00:1    2.380
+
+  Note: per-band ratios optimise each band independently and may
+        conflict with each other.  The aggregate score above is the
+        correct metric for a single multi-band UnUn.
+
+════════════════════════════════════════════════════════════════════════════════
+  PHYSICAL INTERPRETATION
+════════════════════════════════════════════════════════════════════════════════
+  1. Wire length selection
+     The optimal wire avoids being a multiple of λ/2 (voltage maximum: very
+     high Z) and λ/4 (current maximum: very low Z) on ALL bands in the CSV
+     simultaneously — including those marked inactive for VSWR scoring.  The
+     avoidance score quantifies this across all bands: ≥0.20 = ★★★ EXCELLENT.
+
+  2. Counterpoise length selection
+     The counterpoise acts as the missing half of the antenna system.  A length
+     near λ/4 at the operating frequency provides a low-impedance return path.
+     The optimizer penalises CP lengths that are resonant (λ/2 or λ/4) on
+     multiple bands simultaneously — the same logic as for the antenna wire.
+
+  3. VSWR after UnUn
+     All VSWR values shown are referred to the TRANSMITTER side (50 Ω coaxial)
+     AFTER the 27:1 UnUn.  The antenna-side impedance is divided by 27 before
+     computing VSWR.  A well-chosen UnUn ratio can improve or worsen match: if
+     VSWR is poor on every band consider trying 4:1 or 16:1 instead of 27:1.
+
+  4. NEC2 vs empirical
+     When nec2c is available, the optimizer runs a full Sommerfeld-Norton
+     ground simulation for each candidate.  Without NEC2, the empirical
+     formulas R = 50·80^cos²(π·L/λ½) and X = 1500·sin(2π·L/λ½) are used.  The
+     empirical model overestimates impedance accuracy near resonances; NEC2
+     results are always preferred.  Cross-validate with
+     nec2_vs_calc_analyzer.py.
+
+  5. Next steps
+     1. Take the top-3 wire/CP pairs and feed them into
+     nec2_vs_calc_analyzer.py   for the full 8-section report with H-CP vs.
+     V-CP comparison.2. Validate with a VNA before cutting the final wire.3. If
+     VSWR > 3 on any priority band, try a different UnUn ratio or add   a
+     second CP radial cut to λ/4 for that specific band.
+
+
+════════════════════════════════════════════════════════════════════════════════
+  END OF OPTIMIZER REPORT
+════════════════════════════════════════════════════════════════════════════════
