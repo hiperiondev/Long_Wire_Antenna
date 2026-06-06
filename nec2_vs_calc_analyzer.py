@@ -706,8 +706,14 @@ def load_csv(filepath: str) -> List[CalcRow]:
             # Keep _computed_avoidance as already set per-row above (from L/λ½).
             pass
         else:
-            # Distinct per-band CSV values — honour them; align _computed_avoidance.
-            r._computed_avoidance = r.avoidance_score
+            # Distinct per-band CSV values — honour them when present (> 0).
+            # FIX A: when csv_score == 0 the cell was blank in the spreadsheet
+            # (not a genuine "zero avoidance" value).  In that case keep the
+            # per-row L/λ½ derived value that was computed in the loop above
+            # rather than overwriting it with 0.0.
+            if r.avoidance_score > 0:
+                r._computed_avoidance = r.avoidance_score
+            # else: leave _computed_avoidance as set from L/λ½ in the per-row block
 
     return rows
 
@@ -914,8 +920,15 @@ def analyse_model_vs_nec(
             # The CSV column cr.unun_ratio may differ from the user-entered value
             # (e.g. CSV has 27, user entered 9), causing silent inconsistencies
             # across sections.  The global parameter is the single source of truth.
+            # FIX B: use cr.wire_len_m (from the CSV row) instead of the global
+            # wire_len_m for the empirical model calls in this section so that
+            # cr.R_wire_ohm / cr.X_wire_ohm (which were derived from cr.wire_len_m
+            # in load_csv) and calc_empirical are always computed from the same
+            # reference length.  If the user typed a different length at the prompt
+            # the two values would be inconsistent; using cr.wire_len_m avoids that.
             unun = unun_ratio
-            _, _, vswr_unun_no_cp = calc_empirical(wire_len_m, cr.freq_mhz, unun)
+            sec2_wire = cr.wire_len_m if cr.wire_len_m > 0 else wire_len_m
+            _, _, vswr_unun_no_cp = calc_empirical(sec2_wire, cr.freq_mhz, unun)
             R_cp_coax = (cr.R_wire_ohm / unun) if unun else cr.R_wire_ohm
             X_cp_coax = (cr.X_wire_ohm / unun) if unun else cr.X_wire_ohm
 
@@ -1028,7 +1041,9 @@ def analyse_model_vs_nec(
                     vswr_nec2_unun = fp.vswr50
 
                 # BUG 5 FIX: compare post-UnUn NEC2 vs post-UnUn model (same reference).
-                _, _, vswr_model_unun = calc_empirical(wire_len_m, cr.freq_mhz, unun)
+                # FIX B: use cr.wire_len_m here as well so the model reference is
+                # always derived from the same wire length as cr.R_wire_ohm.
+                _, _, vswr_model_unun = calc_empirical(sec2_wire, cr.freq_mhz, unun)
                 delta_vswr = vswr_nec2_unun - vswr_model_unun
                 arrow = _delta_arrow(delta_vswr, 0.5)
                 info(f"  │  ΔVSWR(post-UnUn) NEC2 vs model = {delta_vswr:+.2f}  {arrow}"
@@ -1651,12 +1666,21 @@ def plot_comparison(
         fmap_v = run_v.freq_map()
         common = sorted(set(fmap_h.keys()) & set(fmap_v.keys()))
         dVSWR  = [fmap_v[f].vswr50 - fmap_h[f].vswr50 for f in common]
+        # FIX C: dR was computed but never used in the original code (dead variable).
+        # Now plotted as a secondary axis so the resistance shift is also visible.
         dR     = [fmap_v[f].R_ohm  - fmap_h[f].R_ohm  for f in common]
         ax5.bar(common, dVSWR, width=0.08, color=[
-            "green" if d < 0 else "red" for d in dVSWR])
+            "green" if d < 0 else "red" for d in dVSWR], label="ΔVSWR")
         ax5.axhline(0, color="black", linewidth=0.8)
-        ax5.set_title("ΔVSWR  (V-CP minus H-CP)")
+        ax5.set_title("ΔVSWR & ΔR  (V-CP minus H-CP)")
         ax5.set_xlabel("Frequency (MHz)"); ax5.set_ylabel("ΔVSWR")
+        ax5_r = ax5.twinx()
+        ax5_r.plot(common, dR, "D--", color="purple", markersize=4, label="ΔR (Ω)")
+        ax5_r.set_ylabel("ΔR (Ω)", color="purple")
+        ax5_r.tick_params(axis='y', labelcolor='purple')
+        lines1, labels1 = ax5.get_legend_handles_labels()
+        lines2, labels2 = ax5_r.get_legend_handles_labels()
+        ax5.legend(lines1 + lines2, labels1 + labels2, fontsize=7)
         ax5.grid(True, alpha=0.3, axis='y')
 
     # ── Plot 6: R/X error (NEC2 vs model) ──
