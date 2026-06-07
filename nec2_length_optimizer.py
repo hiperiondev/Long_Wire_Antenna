@@ -20,9 +20,24 @@
     • A scatter plot PNG       (optimizer_plot.png)
     • A ready-to-use CSV       (optimizer_best.csv)  in nec2_vs_calc_analyzer format
 
-  Usage:
+  Usage (with CSV):
     python nec2_length_optimizer.py --csv my_bands.csv [options]
-    python nec2_length_optimizer.py --help
+
+  Usage (without CSV):
+    # Known bands — --freqs is optional (centre frequency auto-resolved):
+    python nec2_length_optimizer.py --bands 40m,20m,15m \
+        --wire-len 21.0 --cp-len 5.0 --unun 9 [options]
+
+    # Custom/unknown bands — --freqs required:
+    python nec2_length_optimizer.py --bands 40m,20m,15m --freqs 7.1,14.2,21.2 \\
+        --wire-len 21.0 --cp-len 5.0 --unun 9 [options]
+
+  Active band selection:
+    python nec2_length_optimizer.py --csv my_bands.csv --active-bands 40m,20m
+    python nec2_length_optimizer.py --bands 40m,20m,15m --freqs 7.1,14.2,21.2 \\
+        --active-bands 40m,20m --wire-len 21.0 --cp-len 5.0
+
+  python nec2_length_optimizer.py --help
 
   NEC2C binary discovery (in order):
     1. --nec2c /path/to/nec2c      (explicit CLI flag)
@@ -111,7 +126,10 @@ try:
     CalcRow          = _mod.CalcRow
     NEC2Run          = _mod.NEC2Run
     FreqPoint        = _mod.FreqPoint
-    _avoidance_score = _mod._avoidance_score
+    # NOTE: _avoidance_score is intentionally NOT imported — this optimizer
+    # computes avoidance inline in score_candidate using the corrected formula
+    # (distance to nearest λ/4 multiple, max = 0.125).  The upstream function
+    # uses a different formula and different thresholds.
     _avoidance_rating= _mod._avoidance_rating
     VSWR_THRESHOLDS  = _mod.VSWR_THRESHOLDS
     ANALYZER_PATH    = str(_analyzer_path)
@@ -121,6 +139,26 @@ except ImportError as _e:
     print("       Place nec2_vs_calc_analyzer.py in the same directory as this script")
     print(f"       or add its directory to PYTHONPATH.{Style.RESET_ALL}")
     sys.exit(1)
+
+
+# Override the imported _avoidance_rating with thresholds calibrated for the
+# corrected avoidance formula (max achievable = 0.125, midway between two λ/4
+# resonances).  The upstream analyzer uses the old formula (max ≈ 0.25–0.50)
+# so its thresholds (≥0.20 = EXCELLENT) are unreachable here and must be
+# replaced.  New thresholds:
+#   ≥ 0.10  → ★★★ EXCELLENT   (≥ 80 % of max)
+#   ≥ 0.06  → ★★  GOOD
+#   ≥ 0.03  → ★   MARGINAL
+#   < 0.03  → ✗   RESONANCE RISK
+def _avoidance_rating(score: float) -> str:
+    if score >= 0.10:
+        return "★★★ EXCELLENT"
+    elif score >= 0.06:
+        return "★★  GOOD"
+    elif score >= 0.03:
+        return "★   MARGINAL"
+    else:
+        return "✗   RESONANCE RISK"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -145,6 +183,51 @@ NEC2C_SEARCH_PATHS = [
 ]
 
 NEC2C_NAMES = ["nec2c", "nec2c-mpich"]   # tried on PATH
+
+# ── Amateur-radio band → ITU centre frequency (MHz) ──────────────────────
+# Used when --bands is given without --freqs.
+# Keys are accepted case-insensitively and with or without the trailing 'm'.
+# Covers all ITU amateur HF bands plus the most common VHF/UHF bands.
+# Each value is the band's nominal centre frequency used by the optimizer;
+# the user can always override any individual frequency with --freqs.
+BAND_CENTRE_FREQ_MHZ: Dict[str, float] = {
+    # LF / MF
+    "2200m": 0.1365,
+    "630m":  0.475,
+    # HF
+    "160m":  1.850,
+    "80m":   3.650,
+    "60m":   5.350,
+    "40m":   7.100,
+    "30m":  10.125,
+    "20m":  14.175,
+    "17m":  18.118,
+    "15m":  21.225,
+    "12m":  24.940,
+    "10m":  28.500,
+    "6m":   50.200,
+    # VHF / UHF (less common for long-wire, included for completeness)
+    "4m":   70.200,
+    "2m":  144.200,
+    "70cm": 432.100,
+    "23cm": 1296.200,
+}
+
+def _lookup_band_freq(name: str) -> Optional[float]:
+    """
+    Return the centre frequency in MHz for a named amateur band.
+
+    Accepts the band name case-insensitively and with or without the
+    trailing 'm' (e.g. '40m', '40M', '40', '2200m' all work).
+    Returns None when the name is not in the table.
+    """
+    key = name.strip().lower()
+    if key in BAND_CENTRE_FREQ_MHZ:
+        return BAND_CENTRE_FREQ_MHZ[key]
+    # Try appending 'm' if the user omitted it (e.g. '40' → '40m')
+    if key + "m" in BAND_CENTRE_FREQ_MHZ:
+        return BAND_CENTRE_FREQ_MHZ[key + "m"]
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -259,8 +342,6 @@ def write_nec_deck(
     highest_f = max(freqs_mhz)
     segs_ant = _segs(wire_len_m, highest_f)
     segs_cp  = max(5, _segs(cp_len_m, highest_f))
-    if segs_cp % 2 == 0:
-        segs_cp += 1
 
     with open(nec_path, "w") as fh:
         fh.write(f"CM NEC2 Long Wire Optimizer Deck\n")
@@ -279,8 +360,6 @@ def write_nec_deck(
             drop_len = wire_height_m - cp_height_m
             if drop_len > 0.01:
                 segs_drop = max(5, _segs(drop_len, highest_f))
-                if segs_drop % 2 == 0:
-                    segs_drop += 1
                 # GW 2: vertical drop — connects feedpoint to CP height
                 fh.write(f"GW 2 {segs_drop} "
                          f"0.0 0.0 {wire_height_m:.3f} "
@@ -416,8 +495,10 @@ class CandidateResult:
     band_cp_src: Dict[str, str] = field(default_factory=dict)
 
     # Aggregate scores (lower = better)
-    score_vswr:      float = 999.0   # weighted mean VSWR across active bands
-    score_avoidance: float = 0.0     # mean avoidance score (higher = better)
+    score_vswr:      float = 999.0   # weighted mean VSWR penalty across active bands (mean only, for reporting)
+    score_vswr_raw:  float = 999.0   # mean + 1.5*worst VSWR penalty (no avoidance bonuses) — used for Pareto
+    score_avoidance: float = 0.0     # mean avoidance score over ALL bands (higher = better; used in score_combined)
+    score_avoidance_active: float = 0.0  # mean avoidance score over ACTIVE bands only (used for Pareto axis)
     score_combined:  float = 999.0   # final combined score
 
     nec2_ok:    bool = True          # False = NEC2 run failed → empirical only
@@ -518,10 +599,13 @@ def score_candidate(
         if best_vswr is None:
             if nec2_strict:
                 # NEC2 data missing for this band — mark as failed, do NOT
-                # substitute empirical values.
+                # substitute empirical values.  Use math.nan as the R/X sentinel
+                # so that find_best_unun can reliably distinguish a genuine
+                # NEC2-MISS from a real near-zero-R impedance (which R=0,X=0
+                # would ambiguously represent, leading to incorrect UnUn analysis).
                 best_vswr = 999.0
-                best_R    = 0.0
-                best_X    = 0.0
+                best_R    = math.nan
+                best_X    = math.nan
                 imp_src   = "NEC2-MISS"
                 res.nec2_ok = False
                 res.note  += f" NEC2 miss@{freq}MHz"
@@ -556,7 +640,11 @@ def score_candidate(
             res.band_cp_src[cr.band] = "V"
         else:
             res.band_cp_src[cr.band] = "empirical"
-        if unun_ratio > 1.0:
+
+        if math.isnan(best_R) or math.isnan(best_X):
+            res.band_R_tx[cr.band] = 0.0
+            res.band_X_tx[cr.band] = 0.0
+        elif unun_ratio > 1.0:
             res.band_R_tx[cr.band] = round(best_R / unun_ratio, 3)
             res.band_X_tx[cr.band] = round(best_X / unun_ratio, 3)
         else:
@@ -566,33 +654,133 @@ def score_candidate(
         res.band_vswr[cr.band] = round(best_vswr, 3)
         vswr_penalties.append(_vswr_score_single(best_vswr))
 
+    # ── Store NEC2 (or empirical) impedances for INACTIVE bands ────────
+    # Now that nec2_sweep passes ALL frequencies to the NEC2 deck, the run
+    # objects contain impedance data for every band.  Storing it here means
+    # export_best_csv can fill Z_eff_ohm for all rows and the UnUn analysis
+    # has a richer dataset to work with.  Inactive bands are NOT added to
+    # vswr_penalties (they do not affect the score), but their impedances
+    # are captured for inspection.
+    #
+    # Orientation selection: use the SAME CP orientation that won for the active
+    # bands rather than independently re-optimising per band.  The physical
+    # antenna has ONE CP orientation; picking the best orientation per inactive
+    # band would store impedances from a geometry that does not actually exist,
+    # making the exported Z_eff_ohm values inconsistent with the rest of the report.
+    #
+    # Dominant orientation = the CP source that appears most often across the
+    # active bands (ties broken in favour of H-CP).  When no active-band data
+    # exists (should not happen — guarded above), fall back to H then V.
+    _src_votes = list(res.band_cp_src.values())
+    _dominant_cp = ("H" if _src_votes.count("H") >= _src_votes.count("V")
+                    else "V") if _src_votes else "H"
+    # Build ordered list: dominant orientation first, then the other as fallback.
+    _inactive_run_order = (
+        [(run_h, "NEC2-H"), (run_v, "NEC2-V")] if _dominant_cp == "H"
+        else [(run_v, "NEC2-V"), (run_h, "NEC2-H")]
+    )
+    inactive = [r for r in calc_rows if not r.active]
+    for cr in inactive:
+        if cr.band in res.band_R_ant:
+            continue   # already stored (should not happen, but guard anyway)
+        freq = cr.freq_mhz
+        found_R: Optional[float] = None
+        found_X: Optional[float] = None
+        found_src = "empirical"
+        # Try dominant orientation first; fall back to the other only if NEC2
+        # data is absent for this frequency in the dominant run.
+        for run, src_tag in _inactive_run_order:
+            if run is None:
+                continue
+            fmap = run.freq_map()
+            if not fmap:
+                continue
+            key = min(fmap.keys(), key=lambda k: abs(k - freq))
+            _tol = max(0.15, min(0.75, 0.04 * freq))
+            if abs(key - freq) > _tol:
+                continue
+            fp = fmap[key]
+            found_R, found_X = fp.R_ohm, fp.X_ohm
+            found_src = src_tag
+            break   # use first (dominant) orientation that has data
+        if found_R is None and not nec2_strict:
+            # Empirical fallback for inactive bands (non-strict mode only)
+            lhalf = C_MHZ / (2.0 * freq) if freq else 1.0
+            ratio_l = wire_len_m / lhalf if lhalf else 0.0
+            arg = math.pi * ratio_l
+            cos2 = math.cos(arg) ** 2
+            found_R = max(1.0, 50.0 * (80.0 ** cos2))
+            found_X = 1500.0 * math.sin(2.0 * arg)
+            found_src = "empirical"
+        if found_R is not None:
+            res.band_R_ant[cr.band]   = round(found_R, 2)
+            res.band_X_ant[cr.band]   = round(found_X, 2)
+            res.band_imp_src[cr.band] = found_src
+
     # ── Avoidance score: computed over ALL bands in the CSV ─────────────
     for cr in calc_rows:       # ALL bands, not just active
         freq = cr.freq_mhz
         lambda_half = C_MHZ / (2.0 * freq)
         ratio = wire_len_m / lambda_half
         frac = ratio % 1.0
-        d_half    = min(frac, 1.0 - frac)   # distance from λ/2 (high Z)
-        d_quarter = abs(frac - 0.5)          # distance from λ/4 (low Z)
-        avoidance = min(d_half, d_quarter)   # avoid BOTH resonant extremes
+        # Resonances occur at EVERY multiple of λ/4, i.e. whenever
+        # frac ∈ {0.0, 0.25, 0.50, 0.75} (and wrapping at 1.0).
+        # In frac-space (units of λ/2) these are multiples of 0.25.
+        # The correct avoidance is the distance to the nearest such resonance:
+        #   d = frac mod 0.25    →  distance below the nearest 0.25 step
+        #   avoidance = min(d, 0.25 - d)   →  distance to NEAREST multiple
+        # Max achievable value = 0.125 (midway between two resonances).
+        d = frac % 0.25
+        avoidance = min(d, 0.25 - d)
         res.band_avoidance[cr.band] = round(avoidance, 4)
         avoidances.append(avoidance)
 
     # Counterpoise λ/4 proximity bonus: reward CP lengths near an ODD multiple
     # of λ/4 (i.e. λ/4, 3λ/4, 5λ/4 …) which provide a low-Z return path.
+    # Only active bands are used here: the CP return path matters at the
+    # OPERATING frequencies.  An inactive-band λ/4 coincidence is physically
+    # irrelevant (and could mislead the optimizer into preferring a CP length
+    # that is resonant only on bands the operator never uses).
     cp_lambda_quarter_scores = []
-    for cr in calc_rows:       # ALL bands
+    for cr in active:          # ACTIVE bands only (operating frequencies)
         lq = C_MHZ / (4.0 * cr.freq_mhz)
         cp_ratio = cp_len_m / lq
-        cp_score = 0.25 * (1.0 - math.cos(math.pi * cp_ratio))
+        # Reward CP lengths at ODD multiples of λ/4 (λ/4, 3λ/4, 5λ/4 …) which
+        # provide a low-impedance return path.  Even multiples (λ/2, λ, 3λ/2 …)
+        # give a high-impedance path and score 0.
+        cp_score = 0.25 * math.cos(math.pi * (cp_ratio - 1) / 2) ** 2
         cp_lambda_quarter_scores.append(cp_score)
 
     # Aggregate
     n = len(vswr_penalties)
     mean_vswr_penalty   = sum(vswr_penalties) / n if n else 999.0
     worst_vswr_penalty  = max(vswr_penalties) if vswr_penalties else 999.0
-    res.score_vswr      = mean_vswr_penalty          # kept for report / Pareto
+    res.score_vswr      = mean_vswr_penalty          # kept for report / readability
+    # score_vswr_raw is the VSWR-only objective (no avoidance bonuses).
+    # The Pareto front must use this as its primary axis — NOT score_combined —
+    # because score_combined already includes avoidance bonuses.  Using
+    # score_combined as a Pareto axis alongside score_avoidance would double-count
+    # avoidance: once in score_combined, and again as the second axis.  The correct
+    # Pareto trade-off is between VSWR quality and resonance avoidance, independently.
+    res.score_vswr_raw  = mean_vswr_penalty + 1.5 * worst_vswr_penalty
     res.score_avoidance = sum(avoidances) / len(avoidances) if avoidances else 0.0
+
+    # Active-band-only avoidance: mean of avoidance only for bands the operator
+    # uses.  This is the correct second axis for the Pareto front AND the correct
+    # term to use in score_combined.
+    #
+    # Using score_avoidance_active ensures the avoidance bonus in score_combined
+    # is earned only from the bands the operator is actually transmitting on,
+    # so score_combined and the per-band avoidance ratings remain consistent.
+    #
+    # score_avoidance (all-band mean) is still stored and shown in the report
+    # (avoidance column, Pareto avoid_all) for full-spectrum inspection, but it
+    # no longer feeds directly into the ranking objective.
+    active_avoidances = [res.band_avoidance[cr.band] for cr in active
+                         if cr.band in res.band_avoidance]
+    res.score_avoidance_active = (sum(active_avoidances) / len(active_avoidances)
+                                  if active_avoidances else 0.0)
+
     cp_avoid_mean       = sum(cp_lambda_quarter_scores) / len(cp_lambda_quarter_scores) \
                           if cp_lambda_quarter_scores else 0.0
 
@@ -605,13 +793,19 @@ def score_candidate(
     #   • one band bad     (pen = 5): combined VSWR term ≥ 7.5+mean → punished
     #
     # Avoidance bonuses are strictly limited relative to the VSWR terms:
-    #   max avoidance bonus  = 0.5 × 0.25 = 0.125  (avoidance max = 0.25)
-    #   max CP bonus         = 0.1 × 0.5  = 0.05   (cp_score max  = 0.5)
-    # Bonus ceiling ≈ 0.175, so avoidance can never overcome even a modest
+    #   max avoidance bonus  = 0.5 × 0.125 = 0.0625  (avoidance max = 0.125,
+    #                          frac midway between any two λ/4 resonances)
+    #   max CP bonus         = 0.1 × 0.25  = 0.025   (cp_score max  = 0.25,
+    #                          i.e. cos²(0) × 0.25 at an exact λ/4 hit)
+    # Bonus ceiling ≈ 0.088, so avoidance can never overcome even a modest
     # VSWR penalty and the ranking is truly VSWR-dominated.
+    #
+    # Note: score_avoidance_active (active bands only) is used here so that
+    # the bonus genuinely reflects resonance avoidance on the operating bands,
+    # not diluted by however many inactive bands happen to avoid resonances.
     res.score_combined = (mean_vswr_penalty
                           + 1.5 * worst_vswr_penalty
-                          - 0.5 * res.score_avoidance
+                          - 0.5 * res.score_avoidance_active
                           - 0.1 * cp_avoid_mean)
 
     return res
@@ -629,18 +823,20 @@ def build_search_grid(
     cp_max: float,
     cp_step: float,
 ) -> List[Tuple[float, float]]:
-    """Return all (wire_len, cp_len) grid combinations to evaluate."""
-    wires = []
-    w = wire_min
-    while w <= wire_max + 1e-9:
-        wires.append(round(w, 3))
-        w += wire_step
+    """Return all (wire_len, cp_len) grid combinations to evaluate.
 
-    cps = []
-    c = cp_min
-    while c <= cp_max + 1e-9:
-        cps.append(round(c, 3))
-        c += cp_step
+    Uses index-based generation (lo + i*step) instead of repeated addition.
+    Repeated floating-point addition accumulates rounding error: after many
+    steps the running total can drift enough that the final intended point
+    barely exceeds (max + 1e-9) and is silently dropped, or an extra
+    out-of-range point sneaks in.  Multiplying from the base value avoids
+    that drift because each point is computed independently.
+    """
+    n_w = round((wire_max - wire_min) / wire_step)
+    wires = [round(wire_min + i * wire_step, 3) for i in range(n_w + 1)]
+
+    n_c = round((cp_max - cp_min) / cp_step)
+    cps = [round(cp_min + i * cp_step, 3) for i in range(n_c + 1)]
 
     return list(itertools.product(wires, cps))
 
@@ -691,9 +887,14 @@ def nec2_sweep(
     cp_type requested, then score with NEC2 impedance data.
     """
     active = [r for r in calc_rows if r.active]
-    freqs  = [cr.freq_mhz for cr in active]
-    if not freqs:
+    if not active:
         raise ValueError("No active bands in CSV")
+    # Simulate ALL band frequencies in the NEC2 deck so that impedance data is
+    # available for every band — including inactive ones used for avoidance scoring
+    # and for the UnUn analysis / export CSV.  VSWR scoring in score_candidate
+    # still only touches bands where active=YES; simulating extra frequencies adds
+    # negligible runtime while enabling full-spectrum inspection.
+    freqs  = [cr.freq_mhz for cr in calc_rows]   # ALL bands, not just active
 
     results: List[CandidateResult] = []
     total = len(grid) * len(cp_types)
@@ -751,8 +952,20 @@ def nec2_sweep(
             run_h = runs_by_type.get("horizontal")
             run_v = runs_by_type.get("vertical")
 
+            # Determine the actual geometry label for a "vertical" CP: when
+            # cp_len_m exceeds the available vertical drop the NEC2 deck adds
+            # a horizontal extension, making the CP L-shaped rather than purely
+            # vertical.  Report this accurately so users aren't surprised when
+            # they look at the .nec file or try to build the antenna.
+            def _cp_actual_label(cpt: str, w_h: float, c_h: float, c_len: float) -> str:
+                if cpt != "vertical":
+                    return cpt
+                avail_drop = w_h - c_h
+                return "vertical" if c_len <= avail_drop + 0.01 else "L-shaped"
+
             if len(cp_types) == 1:
                 # Only one orientation simulated — no ambiguity.
+                actual_label = _cp_actual_label(cp_types[0], wire_height_m, cp_height_m, c)
                 cand = score_candidate(
                     wire_len_m=w,
                     cp_len_m=c,
@@ -760,7 +973,7 @@ def nec2_sweep(
                     unun_ratio=unun_ratio,
                     run_h=run_h,
                     run_v=run_v,
-                    cp_type_hint=cp_types[0],
+                    cp_type_hint=actual_label,
                     nec2_strict=True,
                 )
                 results.append(cand)
@@ -774,9 +987,18 @@ def nec2_sweep(
                     ("vertical",   None,  run_v),
                 ]:
                     if runs_by_type.get(cpt) is None:
-                        # NEC2 failed for this orientation — skip it so we don't
-                        # pollute results with VSWR=999 from a transient failure.
+                        # NEC2 failed for this orientation.  Warn when the sibling
+                        # orientation succeeded so the user knows the comparison is
+                        # one-sided rather than assuming both ran cleanly.
+                        sibling = "vertical" if cpt == "horizontal" else "horizontal"
+                        if runs_by_type.get(sibling) is not None:
+                            print(f"\n  ⚠  NEC2 failed for {cpt} CP at"
+                                  f" wire={w:.3f} m / cp={c:.3f} m —"
+                                  f" only {sibling} orientation scored.",
+                                  flush=True)
                         continue
+                    actual_label_dual = _cp_actual_label(cpt, wire_height_m,
+                                                           cp_height_m, c)
                     c_cand = score_candidate(
                         wire_len_m=w,
                         cp_len_m=c,
@@ -784,20 +1006,22 @@ def nec2_sweep(
                         unun_ratio=unun_ratio,
                         run_h=r_h,
                         run_v=r_v,
-                        cp_type_hint=cpt,
+                        cp_type_hint=actual_label_dual,
                         nec2_strict=True,
                     )
                     candidates_this.append(c_cand)
 
                 if not candidates_this:
-                    # Both NEC2 runs failed — fall back to a single empirical candidate.
-                    cand = score_candidate(
-                        wire_len_m=w,
-                        cp_len_m=c,
-                        calc_rows=calc_rows,
-                        unun_ratio=unun_ratio,
-                        cp_type_hint="both",
-                        nec2_strict=False,
+                    # Both NEC2 runs failed.  In strict mode we do NOT substitute
+                    # empirical scores — that would silently mix two different models
+                    # and could let a failed-NEC2 pair outrank a valid NEC2 candidate.
+                    # Instead, record a sentinel candidate with score=999 so the pair
+                    # appears in the output (marked nec2_ok=False) but always ranks last.
+                    cand = CandidateResult(
+                        wire_len_m=w, cp_len_m=c, cp_type="both",
+                        score_combined=999.0, score_vswr_raw=999.0,
+                        score_vswr=999.0, score_avoidance=0.0,
+                        nec2_ok=False, note="NEC2 failed (both orientations)",
                     )
                     results.append(cand)
                 else:
@@ -822,18 +1046,40 @@ def rank_results(results: List[CandidateResult]) -> List[CandidateResult]:
 def pareto_front(results: List[CandidateResult]) -> List[CandidateResult]:
     """
     Return Pareto-optimal candidates: those not dominated on
-    (score_vswr, score_avoidance).  Lower vswr_score AND higher avoidance
-    = better.  A candidate is dominated if another beats it on BOTH axes.
+    (score_vswr_raw, score_avoidance_active).  Lower score_vswr_raw AND
+    higher active-band avoidance = better.  A candidate is dominated if
+    another beats it on BOTH axes.
+
+    We use score_vswr_raw = mean_vswr_penalty + 1.5*worst_vswr_penalty
+    (the pure VSWR objective, without avoidance bonuses) rather than
+    score_combined as the first axis.  This is critical because
+    score_combined already subtracts 0.5*avoidance, so using it alongside
+    score_avoidance as a second axis would double-count avoidance.
+
+    We use score_avoidance_active (active bands only) as the second Pareto
+    axis rather than score_avoidance (all bands).  The all-band mean can be
+    inflated by inactive bands that happen to avoid resonances well, masking
+    the fact that the operating bands themselves are near-resonant.  Using
+    only active-band avoidance on the Pareto axis ensures the trade-off
+    surface reflects the actual operating situation.  score_avoidance (all
+    bands) is still used in score_combined to penalise wire positions that
+    are resonant anywhere in the spectrum.
+
+    The correct Pareto trade-off is:
+      Axis 1: how well the wire matches the transmitter (VSWR quality — lower = better)
+      Axis 2: how far the wire is from resonance on ACTIVE bands (higher = better)
     """
     dominated = set()
     for i, a in enumerate(results):
         for j, b in enumerate(results):
             if i == j:
                 continue
-            # b dominates a if b is at least as good on every axis AND strictly better on one
-            if (b.score_vswr <= a.score_vswr and
-                    b.score_avoidance >= a.score_avoidance and
-                    (b.score_vswr < a.score_vswr or b.score_avoidance > a.score_avoidance)):
+            # b dominates a if b is at least as good on every axis AND strictly better on one.
+            # Lower score_vswr_raw is better; higher score_avoidance_active is better.
+            if (b.score_vswr_raw          <= a.score_vswr_raw and
+                    b.score_avoidance_active >= a.score_avoidance_active and
+                    (b.score_vswr_raw         < a.score_vswr_raw or
+                     b.score_avoidance_active > a.score_avoidance_active)):
                 dominated.add(i)
                 break
     return [r for i, r in enumerate(results) if i not in dominated]
@@ -844,9 +1090,10 @@ def pareto_front(results: List[CandidateResult]) -> List[CandidateResult]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Standard commercially available UnUn impedance ratios.
+# 27:1 is included because it is widely sold for end-fed long-wire antennas.
 # 36:1, 49:1 and 64:1 are widely used for end-fed long-wire and EFHW antennas
 # whose high antenna-side impedance (often 1000–5000 Ω) demands a large step-down.
-STANDARD_UNUN_RATIOS: List[float] = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0, 16.0, 25.0, 36.0, 49.0, 64.0]
+STANDARD_UNUN_RATIOS: List[float] = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0, 16.0, 25.0, 27.0, 36.0, 49.0, 64.0]
 
 @dataclass
 class UnUnResult:
@@ -881,8 +1128,13 @@ def _vswr_for_ratio(R_ant: float, X_ant: float, n: float,
     Then VSWR referenced to Z0:
         Γ = (Z_in − Z0) / (Z_in + Z0)
         VSWR = (1 + |Γ|) / (1 − |Γ|)
+
+    A math.nan R_ant or X_ant is the NEC2-MISS sentinel set by score_candidate
+    in nec2_strict mode.  Return 999.0 explicitly so callers never propagate nan.
     """
     if n <= 0:
+        return 999.0
+    if math.isnan(R_ant) or math.isnan(X_ant):
         return 999.0
     R_in = R_ant / n
     X_in = X_ant / n
@@ -898,8 +1150,16 @@ def _vswr_for_ratio(R_ant: float, X_ant: float, n: float,
 def _aggregate_vswr_penalty(band_impedances: List[Tuple[str, float, float]],
                              n: float) -> float:
     """
-    Compute mean VSWR penalty across all bands for a given UnUn ratio n.
+    Compute the aggregate VSWR penalty for a given UnUn ratio n.
     band_impedances: list of (band_name, R_ant, X_ant).
+
+    Uses the same objective as score_candidate: mean + 1.5 * worst.
+    This ensures the UnUn optimiser is consistent with the antenna sweep
+    and recommends the ratio that truly minimises the combined score.
+
+    (The previous implementation used mean-only, which diverges from
+    score_candidate's minimax term and systematically over-favours ratios
+    that improve the better band at the expense of the worse one.)
     """
     if not band_impedances:
         return 999.0
@@ -907,7 +1167,9 @@ def _aggregate_vswr_penalty(band_impedances: List[Tuple[str, float, float]],
     for _band, R, X in band_impedances:
         v = _vswr_for_ratio(R, X, n)
         penalties.append(_vswr_score_single(v))
-    return sum(penalties) / len(penalties)
+    mean_pen  = sum(penalties) / len(penalties)
+    worst_pen = max(penalties)
+    return mean_pen + 1.5 * worst_pen
 
 
 def _golden_section_min(f, lo: float, hi: float,
@@ -1009,6 +1271,12 @@ def find_best_unun(
         if cr.band in best.band_R_ant and cr.band in best.band_X_ant:
             R_ant = best.band_R_ant[cr.band]
             X_ant = best.band_X_ant[cr.band]
+            # NaN sentinel: score_candidate stores math.nan for a NEC2-MISS band
+            # in nec2_strict mode.  Treat this as "no data" so we don't carry a
+            # nan-impedance into _vswr_for_ratio, which would silently return nan.
+            if math.isnan(R_ant) or math.isnan(X_ant):
+                R_ant = None
+                X_ant = None
 
         # 2. Fresh NEC2 run (fallback if band not in stored data)
         if R_ant is None and (run_h is not None or run_v is not None):
@@ -1043,7 +1311,15 @@ def find_best_unun(
 
         if R_ant is None:
             if nec2_strict:
-                # Skip this band — no NEC2 data and empirical is forbidden
+                # No NEC2 data for this band — use VSWR=999 penalty, consistent
+                # with score_candidate's nec2_strict behaviour.  Silently skipping
+                # the band (old behaviour) would optimise the UnUn ratio over a
+                # different band subset than the antenna sweep used, making the
+                # recommended ratio inconsistent with the sweep ranking.
+                # Use math.nan as sentinel (same as score_candidate) so that
+                # _aggregate_vswr_penalty can detect and handle it as VSWR=999
+                # without confusing it with a genuine R≈0 short-circuit impedance.
+                band_impedances.append((cr.band, math.nan, math.nan))
                 continue
             # Empirical fallback (only in non-strict mode)
             lhalf = C_MHZ / (2.0 * freq) if freq else 1.0
@@ -1062,14 +1338,25 @@ def find_best_unun(
     result.band_impedances = band_impedances
 
     # ── Sweep standard ratios ─────────────────────────────────────────────
-    for n in STANDARD_UNUN_RATIOS:
+    # Build the set of ratios to evaluate: always include the user-supplied
+    # current_unun even when it is not in STANDARD_UNUN_RATIOS (e.g. a custom
+    # homebrew ratio like 18:1).  Without this, ratio_score.get(current_unun)
+    # returns None, breaking the improvement comparison in write_report and the
+    # export logic in main().
+    ratios_to_sweep: List[float] = list(STANDARD_UNUN_RATIOS)
+    if current_unun not in ratios_to_sweep:
+        ratios_to_sweep = sorted(ratios_to_sweep + [current_unun])
+
+    for n in ratios_to_sweep:
         bv: Dict[str, float] = {}
         for band, R, X in band_impedances:
             bv[band] = round(_vswr_for_ratio(R, X, n, z0), 3)
         result.ratio_band_vswr[n] = bv
         result.ratio_score[n] = _aggregate_vswr_penalty(band_impedances, n)
 
-    best_std = min(result.ratio_score, key=result.ratio_score.get)
+    # best_standard_ratio must only consider STANDARD_UNUN_RATIOS so that a
+    # non-standard current_unun cannot be returned as the "best standard" choice.
+    best_std = min(STANDARD_UNUN_RATIOS, key=lambda n: result.ratio_score[n])
     result.best_standard_ratio = best_std
     result.best_standard_score = result.ratio_score[best_std]
 
@@ -1163,8 +1450,16 @@ def write_report(
     # ── TOP 20 RANKING ───────────────────────────────────────────────────
     top_n = len(ranked)
     h1(f"TOP {top_n} CANDIDATES  (lower combined score = better)")
+    # Column layout:  Score = mVSWRpen + 1.5xWPen - 0.5xAvoid(act) - 0.1xCPbon
+    # All four score components are shown as explicit columns.
+    #   mVSWRpen      = mean VSWR penalty across active bands (from rounded band_vswr)
+    #   1.5xWPen      = 1.5 × worst-band VSWR penalty (from rounded band_vswr)
+    #   0.5xAvoid(act)= 0.5 × mean avoidance score across ACTIVE bands only
+    #   0.1xCPbon     = 0.1 × mean CP λ/4 bonus (back-derived; absorbs any float residual)
+    # Score is computed internally from unrounded VSWRs; columns from rounded values
+    # so Score == mVSWRpen + 1.5xWPen - 0.5xAvoid(act) - 0.1xCPbon holds exactly.
     header = (f"  {'#':>3}  {'Wire(m)':>8}  {'CP(m)':>7}  {'CP type':>10}  "
-              f"{'Score':>7}  {'mVSWRpen':>9}  {'Avoid':>7}  "
+              f"{'Score':>7}  {'mVSWRpen':>9}  {'1.5xWPen':>9}  {'0.5xAv(a)':>9}  {'0.1xCPbon':>10}  "
               + "  ".join(f"{b:>7}" for b in bands)
               + "  NEC2")
     lines.append(header)
@@ -1175,9 +1470,24 @@ def write_report(
             f"{r.band_vswr.get(b, 999):7.2f}" for b in bands
         )
         nec_flag = "✓" if r.nec2_ok else "emp"
+        # Recompute penalties from the ROUNDED band_vswr values stored in the result.
+        # score_combined was produced from UNrounded VSWRs inside score_candidate;
+        # to make the table columns self-consistent (Score = mVSWRpen + 1.5xWPen
+        # - 0.5xAvoid - 0.1xCPbon) we must derive ALL visible columns from the same
+        # source (rounded band_vswr).  The residual is absorbed by _cp_bonus_deduction.
+        _pens = [_vswr_score_single(r.band_vswr.get(b, 999.0)) for b in bands]
+        _mean_vswr_pen      = sum(_pens) / len(_pens) if _pens else 0.0
+        worst_pen_weighted  = 1.5 * max(_pens) if _pens else 0.0
+        # CP λ/4 bonus deduction (0.1 × cp_avoid_mean) — back-derived so that
+        # Score == mVSWRpen + 1.5xWPen - 0.5xAvoid(active) - 0.1xCPbon exactly.
+        # Note: 0.5xAvoid column now shows active-band avoidance (score_avoidance_active)
+        # to match the updated score_combined formula.
+        _cp_bonus_deduction = (_mean_vswr_pen + worst_pen_weighted
+                               - 0.5 * r.score_avoidance_active - r.score_combined)
         lines.append(
             f"  {rank:3d}  {r.wire_len_m:8.3f}  {r.cp_len_m:7.3f}  {r.cp_type:>10}  "
-            f"{r.score_combined:7.3f}  {r.score_vswr:9.3f}  {r.score_avoidance:7.4f}  "
+            f"{r.score_combined:7.3f}  {_mean_vswr_pen:9.3f}  {worst_pen_weighted:9.3f}  "
+            f"{0.5*r.score_avoidance_active:9.4f}  {_cp_bonus_deduction:10.4f}  "
             f"{band_cols}  {nec_flag}"
         )
 
@@ -1193,7 +1503,9 @@ def write_report(
         lines.append(
             f"  {rank:3d}  wire={r.wire_len_m:.3f} m  cp={r.cp_len_m:.3f} m"
             f"  ({r.cp_type})  score={r.score_combined:.3f}"
-            f"  VSWR=[{band_cols}]  avoid={r.score_avoidance:.4f}"
+            f"  VSWR=[{band_cols}]"
+            f"  avoid_active={r.score_avoidance_active:.4f}"
+            f"  avoid_all={r.score_avoidance:.4f}"
         )
 
     # ── BEST CANDIDATE DETAIL ────────────────────────────────────────────
@@ -1203,9 +1515,41 @@ def write_report(
         ln(f"Wire length   : {best.wire_len_m:.3f} m")
         ln(f"CP length     : {best.cp_len_m:.3f} m   ({best.cp_type} orientation)")
         ln(f"Combined score: {best.score_combined:.4f}")
-        ln(f"VSWR penalty  : {best.score_vswr:.4f}  (mean across active bands; combined uses mean+1.5×worst)")
-        ln(f"Avoidance     : {best.score_avoidance:.4f}  (mean across ALL bands in CSV)")
+        ln(f"VSWR penalty  : {best.score_vswr:.4f}  (mean VSWR penalty across active bands; score_combined = mean + 1.5×worst − bonuses)")
+        ln(f"Avoidance(act): {best.score_avoidance_active:.4f}  (mean across ACTIVE bands — used in score_combined)")
+        ln(f"Avoidance(all): {best.score_avoidance:.4f}  (mean across ALL bands in CSV — shown for reference)")
         ln(f"NEC2 data used: {'YES' if best.nec2_ok else 'NO — empirical model only'}")
+
+        # ── Boundary warnings ──────────────────────────────────────────
+        # Warn when the best candidate lands exactly on a search boundary,
+        # which means the true optimum may lie beyond the current range.
+        _tol_r = 1e-6
+        _wmin, _wmax, _ = wire_range
+        _cmin, _cmax, _ = cp_range
+        _hits_wire = sum(
+            1 for r in ranked[:5]
+            if abs(r.wire_len_m - _wmin) < _tol_r or abs(r.wire_len_m - _wmax) < _tol_r
+        )
+        _hits_cp = sum(
+            1 for r in ranked[:5]
+            if abs(r.cp_len_m - _cmin) < _tol_r or abs(r.cp_len_m - _cmax) < _tol_r
+        )
+        if abs(best.wire_len_m - _wmax) < _tol_r:
+            ln(f"⚠  WIRE at search maximum ({_wmax:.3f} m) — {_hits_wire}/5 top candidates"
+               f" hit this boundary.  True optimum may be longer."
+               f"  Re-run with larger --wire-max or increase --margin.")
+        elif abs(best.wire_len_m - _wmin) < _tol_r:
+            ln(f"⚠  WIRE at search minimum ({_wmin:.3f} m) — {_hits_wire}/5 top candidates"
+               f" hit this boundary.  True optimum may be shorter."
+               f"  Re-run with smaller --wire-min or increase --margin.")
+        if abs(best.cp_len_m - _cmax) < _tol_r:
+            ln(f"⚠  CP at search maximum ({_cmax:.3f} m) — {_hits_cp}/5 top candidates"
+               f" hit this boundary.  True optimum may be longer."
+               f"  Re-run with larger --cp-max or increase --margin.")
+        elif abs(best.cp_len_m - _cmin) < _tol_r:
+            ln(f"⚠  CP at search minimum ({_cmin:.3f} m) — {_hits_cp}/5 top candidates"
+               f" hit this boundary.  True optimum may be shorter."
+               f"  Re-run with smaller --cp-min or increase --margin.")
         lines.append("")
 
         ln("Per-band results:")
@@ -1269,22 +1613,28 @@ def write_report(
         elif cont_n <= 1.5:
             boundary_note = "  ⚠ HIT LOWER BOUND — try no transformer"
         ln(f"Continuous optimum         : {cont_n:.2f}:1"
-           f"  (mean VSWR penalty {unun_result.best_continuous_score:.4f}){boundary_note}")
+           f"  (aggregate VSWR penalty {unun_result.best_continuous_score:.4f}){boundary_note}")
 
         # Nearest standard ratio
         std_n = unun_result.best_standard_ratio
         std_score = unun_result.best_standard_score
         ln(f"Best standard ratio        : {std_n:.0f}:1"
-           f"  (mean VSWR penalty {std_score:.4f})")
+           f"  (aggregate VSWR penalty {std_score:.4f})")
 
-        # Improvement vs current ratio
-        cur_score = unun_result.ratio_score.get(unun_ratio)
-        if cur_score is not None and cur_score > 0:
+        # Improvement vs current ratio.
+        # ratio_score always contains unun_ratio (injected by find_best_unun
+        # even for non-standard values like 27:1), so a direct lookup is safe.
+        cur_score = unun_result.ratio_score[unun_ratio]
+        if cur_score > 0:
             delta = cur_score - std_score
-            pct = 100.0 * delta / cur_score if cur_score else 0.0
+            pct = 100.0 * delta / cur_score
             if delta > 0.001:
-                ln(f"  → Switching to {std_n:.0f}:1 improves mean VSWR penalty"
+                ln(f"  → Switching to {std_n:.0f}:1 improves aggregate VSWR penalty"
                    f" by {delta:.4f}  ({pct:.1f} %)")
+                if abs(std_n - unun_ratio) > 0.5:
+                    ln(f"  ⚠  Rankings in this report were computed with {unun_ratio:.0f}:1.")
+                    ln(f"     Re-run with --unun {std_n:.0f} to rank candidates under"
+                       f" the recommended ratio.")
             else:
                 ln(f"  → Current ratio {unun_ratio:.0f}:1 is already optimal"
                    f" among standard values.")
@@ -1293,13 +1643,15 @@ def write_report(
 
         # Standard ratio sweep table
         ln("Standard ratio sweep:")
-        hdr_bands = "  ".join(f"{b:>7}" for b in bands)
+        # Label each band column as "VSWR@<band>" so the reader knows the values
+        # are Tx-side VSWR (post-UnUn, referenced to 50 Ω), not impedance or score.
+        hdr_bands = "  ".join(f"{'VSWR@'+b:>9}" for b in bands)
         ln(f"  {'Ratio':>6}  {'Score':>7}  {hdr_bands}")
-        ln("  " + "─" * (6 + 2 + 7 + 2 + max(0, 9 * len(bands))))
+        ln("  " + "─" * (6 + 2 + 7 + 2 + max(0, 11 * len(bands))))
         for n in sorted(unun_result.ratio_score.keys()):
             score = unun_result.ratio_score[n]
             bv_cols = "  ".join(
-                f"{unun_result.ratio_band_vswr[n].get(b, 999):7.2f}" for b in bands
+                f"{unun_result.ratio_band_vswr[n].get(b, 999):9.2f}" for b in bands
             )
             marker = " ◄ BEST" if n == std_n else (
                      " ← CURRENT" if n == unun_ratio else "")
@@ -1340,10 +1692,13 @@ def write_report(
     h1("PHYSICAL INTERPRETATION")
     notes = [
         ("Wire length selection",
-         "The optimal wire avoids being a multiple of λ/2 (voltage maximum: very high Z)"
-         " and λ/4 (current maximum: very low Z) on ALL bands in the CSV simultaneously —"
-         " including those marked inactive for VSWR scoring.  The avoidance score"
-         " quantifies this across all bands: ≥0.20 = ★★★ EXCELLENT."),
+         "The optimal wire avoids landing on ANY multiple of λ/4 on ALL bands in the CSV"
+         " simultaneously — including those marked inactive for VSWR scoring.  Resonances"
+         " occur at every λ/4 step: λ/4 (low Z / current max), λ/2 (high Z / voltage max),"
+         " 3λ/4 (low Z again), λ (high Z), etc.  The avoidance score is the fractional"
+         " distance to the NEAREST λ/4 multiple across all bands;"
+         " maximum achievable = 0.125 (midway between resonances) = ★★★ EXCELLENT."
+         " Values below 0.03 flag RESONANCE RISK."),
 
         ("Counterpoise length selection",
          "The counterpoise acts as the missing half of the antenna system.  A length near"
@@ -1397,6 +1752,34 @@ def write_report(
 # CSV EXPORT  (nec2_vs_calc_analyzer format)
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _recompute_vswr(R_ant: float, X_ant: float, unun_ratio: float,
+                    z0: float = 50.0) -> float:
+    """
+    Recompute Tx-side VSWR for given antenna impedance and UnUn ratio.
+    Used by export_best_csv to ensure exported VSWR values are always
+    consistent with the unun_ratio column (the sweep may have used a
+    different ratio).
+
+    Returns 999.0 when R_ant or X_ant is math.nan — the NEC2-MISS sentinel
+    set by score_candidate in nec2_strict mode.  Without this guard, nan/ratio
+    propagates silently through all arithmetic and writes 'nan' to the CSV.
+    """
+    if math.isnan(R_ant) or math.isnan(X_ant):
+        return 999.0
+    if unun_ratio > 1.0:
+        R_in = R_ant / unun_ratio
+        X_in = X_ant / unun_ratio
+    else:
+        R_in, X_in = R_ant, X_ant
+    denom = math.hypot(R_in + z0, X_in)
+    if denom < 1e-12:
+        return 999.0
+    gamma = math.hypot(R_in - z0, X_in) / denom
+    if gamma >= 1.0:
+        return 999.0
+    return round((1.0 + gamma) / (1.0 - gamma), 3)
+
+
 def export_best_csv(
     best: CandidateResult,
     calc_rows: List[CalcRow],
@@ -1406,6 +1789,12 @@ def export_best_csv(
     """
     Write a CSV in nec2_vs_calc_analyzer format pre-filled with the best
     wire/CP lengths so the user can feed it straight back into the analyser.
+
+    NOTE: vswr_with_cp is recomputed here using the supplied unun_ratio so
+    that the exported VSWR values are always consistent with the unun_ratio
+    column.  The sweep may have used a different (e.g. original) ratio; we
+    must not copy band_vswr[] verbatim when export_unun differs from the
+    sweep ratio.
     """
     fieldnames = [
         "band", "freq_mhz", "active", "lambda_half_m", "lambda_qtr_m",
@@ -1423,11 +1812,16 @@ def export_best_csv(
             lhalf = C_MHZ / (2.0 * freq) if freq else 0.0
             w = best.wire_len_m
 
-            if (cr.band in best.band_R_ant and
-                    cr.band in best.band_X_ant and
-                    best.nec2_ok):
-                R = best.band_R_ant[cr.band]
-                X = best.band_X_ant[cr.band]
+            # Use stored antenna-side impedances when available for this specific
+            # band, regardless of the global nec2_ok flag.  nec2_ok=False means
+            # *at least one* band fell back to empirical; other bands may still
+            # have valid NEC2 data stored in band_R_ant / band_X_ant.
+            _stored_R = best.band_R_ant.get(cr.band)
+            _stored_X = best.band_X_ant.get(cr.band)
+            if (_stored_R is not None and _stored_X is not None
+                    and not math.isnan(_stored_R) and not math.isnan(_stored_X)):
+                R = _stored_R
+                X = _stored_X
             else:
                 ratio_emp = w / lhalf if lhalf else 0.0
                 arg = math.pi * ratio_emp
@@ -1435,30 +1829,28 @@ def export_best_csv(
                 R = max(1.0, 50 * (80 ** cos2))   # clamp R ≥ 1 Ω
                 X = 1500 * math.sin(2 * arg)
 
-            # vswr_no_cp: VSWR seen at the ANTENNA FEED POINT (50 Ω reference,
-            # no UnUn transformation) — i.e. how well a 50 Ω coax would match
-            # the raw antenna impedance without any transformer.
-            # This is the conventional definition used by nec2_vs_calc_analyzer
-            # for this column and matches what a VNA would read at the antenna
-            # terminal before any matching network.
-            g = math.hypot(R - 50, X) / math.hypot(R + 50, X)
-            vswr_no = (1 + g) / (1 - g) if g < 1 else 999.0
+            # vswr_no_cp: Tx-side VSWR through the UnUn computed WITHOUT the
+            # counterpoise — i.e. using the empirical single-wire impedance.
+            # This matches the convention used by nec2_vs_calc_analyzer where
+            # vswr_no_cp and vswr_with_cp are different columns (e.g. antenna.csv
+            # shows 21.89 vs 14.46 for 40 m).  The NEC2-derived R,X stored in
+            # best.band_R_ant already includes CP interaction, so we must use the
+            # empirical formula here to recover the no-CP reference value.
+            lhalf_emp = C_MHZ / (2.0 * freq) if freq else 1.0
+            ratio_emp = w / lhalf_emp if lhalf_emp else 0.0
+            arg_emp = math.pi * ratio_emp
+            cos2_emp = math.cos(arg_emp) ** 2
+            R_no_cp = max(1.0, 50.0 * (80.0 ** cos2_emp))
+            X_no_cp = 1500.0 * math.sin(2.0 * arg_emp)
+            vswr_no = _recompute_vswr(R_no_cp, X_no_cp, unun_ratio)
 
             ratio = w / lhalf if lhalf else 0.0
             frac = ratio % 1.0
-            # Use the same corrected avoidance formula as score_candidate
-            d_half    = min(frac, 1.0 - frac)
-            d_quarter = abs(frac - 0.5)
-            avoid = min(d_half, d_quarter)
-
-            if avoid >= 0.20:
-                rating = "★★★ EXCELLENT"
-            elif avoid >= 0.12:
-                rating = "★★  GOOD"
-            elif avoid >= 0.06:
-                rating = "★   MARGINAL"
-            else:
-                rating = "✗   RESONANCE RISK"
+            # Use the same corrected avoidance formula as score_candidate:
+            # distance to nearest multiple of 0.25 (every λ/4 resonance).
+            d = frac % 0.25
+            avoid = min(d, 0.25 - d)
+            rating = _avoidance_rating(avoid)
 
             writer.writerow({
                 "band":           cr.band,
@@ -1471,15 +1863,26 @@ def export_best_csv(
                 "R_wire_ohm":     round(R, 2),
                 "X_wire_ohm":     round(X, 2),
                 "vswr_no_cp":     round(vswr_no, 3),
-                "vswr_with_cp":   "",
-                "Z_eff_ohm":      "",
+                # vswr_with_cp: Tx-side VSWR after the UnUn, recomputed here using
+                # the *export* unun_ratio (which may differ from the sweep ratio).
+                # We must NOT copy best.band_vswr[] verbatim: those values were
+                # computed during the sweep at a potentially different ratio and
+                # would be inconsistent with the unun_ratio column in the CSV.
+                "vswr_with_cp":   _recompute_vswr(R, X, unun_ratio)
+                                  if cr.active else "",
+                # Z_eff_ohm: magnitude of the antenna-side impedance |Z_ant|.
+                # Populated whenever R/X data is available (NEC2 or empirical).
+                "Z_eff_ohm":      round(math.hypot(R, X), 2),
+                # Zcp_ohm: counterpoise impedance is not separately simulated
+                # in this optimizer run; left blank for nec2_vs_calc_analyzer
+                # to fill in if desired.
                 "Zcp_ohm":        "",
                 "unun_ratio":     unun_ratio,
                 "avoidance_score":round(avoid, 4),
                 "quality_rating": rating,
                 "cp_len_m":       best.cp_len_m,
-                "cp_height_m":    cr.cp_height_m if cr.cp_height_m else 0.5,
-                "num_radials":    cr.num_radials if cr.num_radials else 1,
+                "cp_height_m":    cr.cp_height_m if cr.cp_height_m is not None else 0.5,
+                "num_radials":    cr.num_radials if cr.num_radials is not None else 1,
             })
 
 
@@ -1536,18 +1939,18 @@ def plot_results(
 
     # ── Panel 2: VSWR penalty vs avoidance (Pareto space) ──────────────
     ax2 = fig.add_subplot(gs[0, 2])
-    ax2.scatter([r.score_vswr for r in results],
-                [r.score_avoidance for r in results],
+    ax2.scatter([r.score_vswr_raw for r in results],
+                [r.score_avoidance_active for r in results],
                 s=10, alpha=0.4, color="gray", label="All")
-    ax2.scatter([r.score_vswr for r in pareto],
-                [r.score_avoidance for r in pareto],
+    ax2.scatter([r.score_vswr_raw for r in pareto],
+                [r.score_avoidance_active for r in pareto],
                 s=60, marker="*", color="blue", label="Pareto")
     if ranked:
-        ax2.scatter(ranked[0].score_vswr, ranked[0].score_avoidance,
+        ax2.scatter(ranked[0].score_vswr_raw, ranked[0].score_avoidance_active,
                     s=100, marker="D", color="black", label="Best")
-    ax2.set_xlabel("VSWR penalty (lower=better)")
-    ax2.set_ylabel("Avoidance score (higher=better)")
-    ax2.set_title("Pareto Space")
+    ax2.set_xlabel("VSWR penalty mean+1.5×worst (lower=better)")
+    ax2.set_ylabel("Active-band avoidance (higher=better)")
+    ax2.set_title("Pareto Space (active bands)")
     ax2.legend(fontsize=7)
     ax2.grid(True, alpha=0.3)
 
@@ -1590,18 +1993,27 @@ def _build_parser() -> argparse.ArgumentParser:
             NEC2 Antenna Length Optimizer
             ─────────────────────────────
             Searches (wire_len, cp_len) combinations and ranks them by aggregate
-            VSWR across all active bands defined in a nec2_vs_calc_analyzer CSV.
+            VSWR across all active bands.
 
-            By default the search window is ±2 m around the wire and CP lengths
-            in the CSV.  Use --margin to widen it, or --wire-min/max and
-            --cp-min/max to set explicit bounds.
+            BAND SOURCE (choose one):
+              With CSV  :  --csv my_bands.csv
+              Without CSV:  --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
+                            (--freqs optional for known amateur bands; auto centre freq used)
+                            --bands custom1,custom2 --freqs 7.1,14.2 --wire-len 21.0 --cp-len 5.0
+                            (--freqs required for unrecognised band names)
+
+            ACTIVE BANDS:
+              --active-bands 40m,20m   Override CSV 'active' column, or restrict
+                                       which bands are scored for VSWR when using
+                                       --bands/--freqs directly.
+
+            By default the search window is ±2 m around the wire and CP lengths.
+            Use --margin to widen it, or --wire-min/max and --cp-min/max for
+            explicit bounds.
 
             Two evaluation modes:
               empirical  — fast, uses the same R/X formulas as the spreadsheet
               nec2       — accurate, runs nec2c for each candidate geometry
-
-            The optimizer calls nec2_vs_calc_analyzer.py's core routines directly,
-            so the CSV format is identical to that tool.
 
             NEC2C BINARY DISCOVERY (automatic, in order):
               1. --nec2c /path/to/nec2c
@@ -1616,8 +2028,31 @@ def _build_parser() -> argparse.ArgumentParser:
               optimizer_best.csv    — best candidate in nec2_vs_calc_analyzer format
         """),
     )
-    p.add_argument("--csv", metavar="FILE", required=True,
-                   help="Band CSV in nec2_vs_calc_analyzer format (required).")
+    p.add_argument("--csv", metavar="FILE", default=None,
+                   help="Band CSV in nec2_vs_calc_analyzer format (optional). "
+                        "If omitted, supply --bands, --freqs, --wire-len, and --cp-len.")
+    # No-CSV mode: manual band definition
+    p.add_argument("--bands", metavar="NAMES", default=None,
+                   help="Comma-separated band names, e.g. '40m,20m,15m'. "
+                        "Required when --csv is not supplied.")
+    p.add_argument("--freqs", metavar="MHZ", default=None,
+                   help="Comma-separated centre frequencies in MHz, one per band, "
+                        "e.g. '7.1,14.2,21.2'. Optional when all --bands names are "
+                        "recognised amateur-radio bands (40m, 20m, 15m, …) — the "
+                        "standard ITU centre frequency is used automatically. "
+                        "Required only for unrecognised band names.")
+    p.add_argument("--wire-len", metavar="M", type=float, default=None,
+                   help="Starting wire length in metres for the search window centre. "
+                        "Required when --csv is not supplied.")
+    p.add_argument("--cp-len", metavar="M", type=float, default=None,
+                   help="Starting counterpoise length in metres for the search window centre. "
+                        "Required when --csv is not supplied.")
+    p.add_argument("--active-bands", metavar="BANDS", default=None,
+                   help="Comma-separated list of band names to mark as active for VSWR scoring, "
+                        "e.g. '40m,20m'. Overrides the 'active' column in the CSV. "
+                        "All other bands are treated as inactive (avoidance-only). "
+                        "When --csv is not used, all --bands are active by default "
+                        "unless this flag restricts them.")
     p.add_argument("--unun", metavar="RATIO", type=float, default=None,
                    help="UnUn ratio (e.g. 9 for 9:1).  Default: read from CSV.")
     p.add_argument("--mode", choices=["empirical", "nec2", "auto"],
@@ -1692,58 +2127,191 @@ def main() -> None:
     args, _unknown = parser.parse_known_args()
     verbose = not args.quiet
 
-    # ── Load CSV ──────────────────────────────────────────────────────────
-    if not os.path.isfile(args.csv):
-        print(f"{Fore.RED}  CSV not found: {args.csv}{Style.RESET_ALL}")
-        sys.exit(1)
+    # ── Load bands — CSV or manual ───────────────────────────────────────
+    calc_rows: List[CalcRow]
 
-    # Normalise European-locale CSVs (semicolon separator, comma decimal)
-    # to standard CSV (comma separator, dot decimal) before passing to load_csv.
-    _csv_to_load = args.csv
-    try:
-        with open(args.csv, "r", encoding="utf-8-sig") as _fh:
-            _raw = _fh.read()
-        _first_line = _raw.split("\n")[0]
-        if ";" in _first_line and "," not in _first_line.split(";")[1:]:
-            # Semicolon-separated file (European locale)
-            import re as _re
-            # Step 1: replace decimal commas inside numeric tokens
-            #   e.g. "13,3" → "13.3"  but NOT "YES,NO" → keep as is
-            def _fix_decimal(m):
-                s = m.group(0)
-                # Only replace if it looks like a number: digits on both sides of comma
-                return _re.sub(r'(\d),(\d)', r'\1.\2', s)
-            _norm = _re.sub(r'[^;\n]+', _fix_decimal, _raw)
-            # Step 2: replace semicolon separators with commas
-            _norm = _norm.replace(";", ",")
-            _tmp_fd, _tmp_path = tempfile.mkstemp(suffix=".csv", prefix="nec2opt_norm_")
-            with os.fdopen(_tmp_fd, "w", encoding="utf-8") as _fh:
-                _fh.write(_norm)
-            _csv_to_load = _tmp_path
-            print(f"  CSV format    : European locale (';' sep, ',' decimal) — normalised")
-        else:
-            print(f"  CSV format    : standard (',' sep, '.' decimal)")
-    except Exception as _e:
-        print(f"{Fore.YELLOW}  CSV locale detection failed ({_e}); trying direct load.{Style.RESET_ALL}")
+    if args.csv is not None:
+        # ── CSV path ──────────────────────────────────────────────────────
+        if not os.path.isfile(args.csv):
+            print(f"{Fore.RED}  CSV not found: {args.csv}{Style.RESET_ALL}")
+            sys.exit(1)
 
-    print(f"  Loading CSV: {args.csv}")
-    try:
-        calc_rows = load_csv(_csv_to_load)
-    except Exception as e:
-        print(f"{Fore.RED}  Failed to load CSV: {e}{Style.RESET_ALL}")
-        sys.exit(1)
-    finally:
-        # Clean up temp file if we created one
-        if _csv_to_load != args.csv and os.path.isfile(_csv_to_load):
+        # Normalise European-locale CSVs (semicolon separator, comma decimal)
+        # to standard CSV (comma separator, dot decimal) before passing to load_csv.
+        _csv_to_load = args.csv
+        try:
+            with open(args.csv, "r", encoding="utf-8-sig") as _fh:
+                _raw = _fh.read()
+            _first_line = _raw.split("\n")[0]
+            if ";" in _first_line and "," not in _first_line.split(";", 1)[1]:
+                # Semicolon-separated file (European locale)
+                import re as _re
+                # Step 1: replace decimal commas inside numeric tokens
+                #   e.g. "13,3" → "13.3"  but NOT "YES,NO" → keep as is
+                def _fix_decimal(m):
+                    s = m.group(0)
+                    # Only replace if it looks like a number: digits on both sides of comma
+                    return _re.sub(r'(\d),(\d)', r'\1.\2', s)
+                _norm = _re.sub(r'[^;\n]+', _fix_decimal, _raw)
+                # Step 2: replace semicolon separators with commas
+                _norm = _norm.replace(";", ",")
+                _tmp_fd, _tmp_path = tempfile.mkstemp(suffix=".csv", prefix="nec2opt_norm_")
+                with os.fdopen(_tmp_fd, "w", encoding="utf-8") as _fh:
+                    _fh.write(_norm)
+                _csv_to_load = _tmp_path
+                print(f"  CSV format    : European locale (';' sep, ',' decimal) — normalised")
+            else:
+                print(f"  CSV format    : standard (',' sep, '.' decimal)")
+        except Exception as _e:
+            print(f"{Fore.YELLOW}  CSV locale detection failed ({_e}); trying direct load.{Style.RESET_ALL}")
+
+        print(f"  Loading CSV: {args.csv}")
+        try:
+            calc_rows = load_csv(_csv_to_load)
+        except Exception as e:
+            print(f"{Fore.RED}  Failed to load CSV: {e}{Style.RESET_ALL}")
+            sys.exit(1)
+        finally:
+            # Clean up temp file if we created one
+            if _csv_to_load != args.csv and os.path.isfile(_csv_to_load):
+                try:
+                    os.unlink(_csv_to_load)
+                except OSError:
+                    pass
+
+    else:
+        # ── No-CSV path: build CalcRow list from CLI arguments ────────────
+        # Validate that all required parameters are present; exit with a clear
+        # error message for each missing one rather than crashing with an obscure
+        # AttributeError later.
+        _missing = []
+        if not args.bands:
+            _missing.append("--bands  (e.g. --bands 40m,20m,15m)")
+        if args.wire_len is None:
+            _missing.append("--wire-len  (starting wire length in metres)")
+        if args.cp_len is None:
+            _missing.append("--cp-len  (starting counterpoise length in metres)")
+        if _missing:
+            print(f"{Fore.RED}  ERROR: --csv was not provided."
+                  f"  The following arguments are required:{Style.RESET_ALL}")
+            for m in _missing:
+                print(f"{Fore.RED}    {m}{Style.RESET_ALL}")
+            print(f"{Fore.RED}  Supply --csv OR all of the arguments above.{Style.RESET_ALL}")
+            sys.exit(1)
+
+        _band_names = [b.strip() for b in args.bands.split(",") if b.strip()]
+
+        # ── Resolve frequencies ───────────────────────────────────────────
+        # If --freqs is given, parse it directly (must match band count).
+        # If --freqs is omitted, look up each band name in BAND_CENTRE_FREQ_MHZ.
+        # Any unrecognised name that has no --freqs entry is a hard error.
+        if args.freqs:
             try:
-                os.unlink(_csv_to_load)
-            except OSError:
-                pass
+                _freqs_explicit = [float(f.strip()) for f in args.freqs.split(",") if f.strip()]
+            except ValueError as _ve:
+                print(f"{Fore.RED}  ERROR: --freqs contains a non-numeric value: {_ve}{Style.RESET_ALL}")
+                sys.exit(1)
+            if len(_band_names) != len(_freqs_explicit):
+                print(f"{Fore.RED}  ERROR: --bands has {len(_band_names)} entries"
+                      f" but --freqs has {len(_freqs_explicit)} entries."
+                      f"  They must match one-to-one.{Style.RESET_ALL}")
+                sys.exit(1)
+            _freqs_mhz = _freqs_explicit
+            print(f"  Frequencies   : explicit via --freqs")
+        else:
+            # Auto-resolve from band name table; collect any failures first
+            # so we can print them all at once rather than one at a time.
+            _freqs_mhz = []
+            _unknown_bands = []
+            for _bn in _band_names:
+                _f = _lookup_band_freq(_bn)
+                if _f is None:
+                    _unknown_bands.append(_bn)
+                else:
+                    _freqs_mhz.append(_f)
+            if _unknown_bands:
+                print(f"{Fore.RED}  ERROR: --freqs was not supplied and the following band"
+                      f" name(s) are not in the built-in frequency table:{Style.RESET_ALL}")
+                for _ub in _unknown_bands:
+                    print(f"{Fore.RED}    '{_ub}'{Style.RESET_ALL}")
+                _known = sorted(BAND_CENTRE_FREQ_MHZ.keys())
+                print(f"{Fore.RED}  Known bands: {', '.join(_known)}{Style.RESET_ALL}")
+                print(f"{Fore.RED}  Supply --freqs with one frequency per band to use"
+                      f" custom names.{Style.RESET_ALL}")
+                sys.exit(1)
+            print(f"  Frequencies   : auto-resolved from band names (use --freqs to override)")
+            for _bn, _f in zip(_band_names, _freqs_mhz):
+                print(f"    {_bn:>8} → {_f} MHz")
+
+
+        # Determine active set (all bands by default; restricted by --active-bands)
+        if args.active_bands:
+            _active_set = {b.strip() for b in args.active_bands.split(",") if b.strip()}
+            _unknown_active = _active_set - set(_band_names)
+            if _unknown_active:
+                print(f"{Fore.YELLOW}  ⚠  --active-bands contains names not in --bands: "
+                      f"{sorted(_unknown_active)}.  They will be ignored.{Style.RESET_ALL}")
+        else:
+            _active_set = set(_band_names)   # all active when no filter given
+
+        # Resolve UnUn ratio early so we can embed it in CalcRow
+        # (need it before building rows; CSV path resolves it below)
+        _nocsv_unun = args.unun if args.unun is not None else None
+
+        # Build synthetic CalcRow objects.
+        # CalcRow is a dataclass from nec2_vs_calc_analyzer; we set only the
+        # fields the optimizer actually reads.  Defaults mirror what load_csv
+        # would produce for a standard row.
+        _wire_len_init = args.wire_len
+        _cp_len_init   = args.cp_len
+        _cp_height_val = args.cp_height if args.cp_height is not None else 0.5
+        _wire_h_val    = args.wire_height if args.wire_height is not None else DEFAULT_HEIGHT_M
+
+        calc_rows = []
+        for _bn, _fmhz in zip(_band_names, _freqs_mhz):
+            _row = CalcRow.__new__(CalcRow)
+            # Mandatory fields
+            _row.band       = _bn
+            _row.freq_mhz   = _fmhz
+            _row.active     = (_bn in _active_set)
+            # Geometry — used for search-window defaults and CSV export
+            _row.wire_len_m = _wire_len_init
+            _row.cp_len_m   = _cp_len_init
+            _row.cp_height_m   = _cp_height_val
+            _row.wire_height_m = _wire_h_val
+            # Fields that may be read by export_best_csv or the CSV mean helper
+            _row.num_radials   = 1
+            _row.unun_ratio    = _nocsv_unun if _nocsv_unun is not None else 9.0
+            # Fields expected by CalcRow but not relevant in no-CSV mode
+            for _attr in ("lambda_half_m", "lambda_qtr_m", "L_over_lhalf",
+                          "R_wire_ohm", "X_wire_ohm", "vswr_no_cp", "vswr_with_cp",
+                          "Z_eff_ohm", "Zcp_ohm", "avoidance_score", "quality_rating"):
+                if hasattr(CalcRow, _attr) and not hasattr(_row, _attr):
+                    setattr(_row, _attr, None)
+            calc_rows.append(_row)
+
+        print(f"  Band source   : command-line (no CSV)")
+        print(f"  Bands defined : {len(calc_rows)}  ({', '.join(_band_names)})")
+
+    # ── Apply --active-bands override (CSV path) ──────────────────────────
+    # When --csv was used, --active-bands overrides the CSV 'active' column.
+    if args.csv is not None and args.active_bands is not None:
+        _active_set = {b.strip() for b in args.active_bands.split(",") if b.strip()}
+        _all_names  = {r.band for r in calc_rows}
+        _unknown_ab = _active_set - _all_names
+        if _unknown_ab:
+            print(f"{Fore.YELLOW}  ⚠  --active-bands contains names not in CSV: "
+                  f"{sorted(_unknown_ab)}.  They will be ignored.{Style.RESET_ALL}")
+        for _row in calc_rows:
+            _row.active = (_row.band in _active_set)
+        print(f"  Active bands  : overridden by --active-bands → "
+              f"{sorted(_active_set & _all_names)}")
 
     active = [r for r in calc_rows if r.active]
     if not active:
-        print(f"{Fore.RED}  No active bands found in CSV."
-              f"  Set the 'active' column to YES for at least one band.{Style.RESET_ALL}")
+        print(f"{Fore.RED}  No active bands found."
+              f"  Set the 'active' column to YES in the CSV, or use --active-bands,"
+              f"  or omit --active-bands to activate all --bands.{Style.RESET_ALL}")
         sys.exit(1)
 
     print(f"  Active bands  : {len(active)}  ({', '.join(r.band for r in active)})")
@@ -1752,6 +2320,14 @@ def main() -> None:
     # ── UnUn ratio ────────────────────────────────────────────────────────
     if args.unun is not None:
         unun_ratio = args.unun
+    elif args.csv is None:
+        # No-CSV mode without explicit --unun
+        if args.no_interactive:
+            print(f"{Fore.RED}  No --unun supplied and no CSV to read it from."
+                  f"  Use --unun RATIO (e.g. --unun 9).{Style.RESET_ALL}")
+            sys.exit(1)
+        val = input(f"{Fore.CYAN}  UnUn ratio (e.g. 9 for 9:1) [9]: {Style.RESET_ALL}").strip()
+        unun_ratio = float(val) if val else 9.0
     else:
         csv_ununs = {r.unun_ratio for r in calc_rows if r.unun_ratio > 0}
         if len(csv_ununs) == 1:
@@ -1772,10 +2348,11 @@ def main() -> None:
                         f"  Which to use? [{list(csv_ununs)[0]}]: {Style.RESET_ALL}").strip()
             unun_ratio = float(val) if val else list(csv_ununs)[0]
 
+
     print(f"  UnUn ratio    : {unun_ratio:.1f}:1")
 
-    # ── Resolve range / height defaults from CSV ─────────────────────────
-    # Default margin: search ±args.margin metres around the CSV lengths.
+    # ── Resolve range / height defaults ──────────────────────────────────
+    # Default margin: search ±args.margin metres around the reference lengths.
     # This keeps the optimizer close to the physically intended design.
     # Use --margin to widen deliberately when you want to explore further.
     _MARGIN = args.margin
@@ -1783,33 +2360,43 @@ def main() -> None:
     # Helper: extract a mean value for an attribute across rows that have it.
     def _csv_mean(attr: str, rows, fallback: float) -> float:
         vals = [getattr(r, attr) for r in rows
-                if hasattr(r, attr) and getattr(r, attr) not in (None, 0)]
+                if hasattr(r, attr) and getattr(r, attr) is not None]
         return (sum(vals) / len(vals)) if vals else fallback
 
-    # Wire length range
+    # Wire length range — when no CSV, args.wire_len is the explicit centre.
     if args.wire_min is None or args.wire_max is None:
-        csv_wire = _csv_mean("wire_len_m", active,
-                             fallback=_csv_mean("wire_len_m", calc_rows, 10.0))
-        print(f"  Search margin : ±{_MARGIN} m around CSV wire {csv_wire:.3f} m  "
+        if args.wire_len is not None:
+            ref_wire = args.wire_len
+            src_wire = "--wire-len"
+        else:
+            ref_wire = _csv_mean("wire_len_m", active,
+                                 fallback=_csv_mean("wire_len_m", calc_rows, 10.0))
+            src_wire = "CSV"
+        print(f"  Search margin : ±{_MARGIN} m around {src_wire} wire {ref_wire:.3f} m  "
               f"(use --margin to change)")
         if args.wire_min is None:
-            args.wire_min = max(1.0, round(csv_wire - _MARGIN, 3))
+            args.wire_min = max(1.0, round(ref_wire - _MARGIN, 3))
             print(f"  --wire-min    : {args.wire_min} m")
         if args.wire_max is None:
-            args.wire_max = round(csv_wire + _MARGIN, 3)
+            args.wire_max = round(ref_wire + _MARGIN, 3)
             print(f"  --wire-max    : {args.wire_max} m")
 
     # Counterpoise length range
     if args.cp_min is None or args.cp_max is None:
-        csv_cp = _csv_mean("cp_len_m", active,
-                           fallback=_csv_mean("cp_len_m", calc_rows, 4.0))
-        print(f"  CP margin     : ±{_MARGIN} m around CSV CP {csv_cp:.3f} m  "
+        if args.cp_len is not None:
+            ref_cp = args.cp_len
+            src_cp = "--cp-len"
+        else:
+            ref_cp = _csv_mean("cp_len_m", active,
+                               fallback=_csv_mean("cp_len_m", calc_rows, 4.0))
+            src_cp = "CSV"
+        print(f"  CP margin     : ±{_MARGIN} m around {src_cp} CP {ref_cp:.3f} m  "
               f"(use --margin to change)")
         if args.cp_min is None:
-            args.cp_min = max(1.0, round(csv_cp - _MARGIN, 3))
+            args.cp_min = max(1.0, round(ref_cp - _MARGIN, 3))
             print(f"  --cp-min      : {args.cp_min} m")
         if args.cp_max is None:
-            args.cp_max = round(csv_cp + _MARGIN, 3)
+            args.cp_max = round(ref_cp + _MARGIN, 3)
             print(f"  --cp-max      : {args.cp_max} m")
 
     # Heights
@@ -1817,14 +2404,19 @@ def main() -> None:
         csv_wh = _csv_mean("wire_height_m", active,
                            fallback=_csv_mean("wire_height_m", calc_rows,
                                               DEFAULT_HEIGHT_M))
-        args.wire_height = csv_wh if csv_wh else DEFAULT_HEIGHT_M
-        print(f"  --wire-height : {args.wire_height} m  (from CSV)")
+        # Use is-not-None so that a legitimate height of 0.0 m is kept
+        # (rather than being falsely overridden to DEFAULT_HEIGHT_M).
+        args.wire_height = csv_wh if csv_wh is not None else DEFAULT_HEIGHT_M
+        src_note = ("(from CSV)" if args.csv is not None
+                    else f"(default; use --wire-height to override)")
+        print(f"  --wire-height : {args.wire_height} m  {src_note}")
 
     if args.cp_height is None:
         csv_cph = _csv_mean("cp_height_m", active,
                             fallback=_csv_mean("cp_height_m", calc_rows, 0.5))
-        args.cp_height = csv_cph if csv_cph else 0.5
-        print(f"  --cp-height   : {args.cp_height} m  (from CSV)")
+        args.cp_height = csv_cph if csv_cph is not None else 0.5
+        src_note = "(from CSV)" if args.csv is not None else "(default; use --cp-height to override)"
+        print(f"  --cp-height   : {args.cp_height} m  {src_note}")
 
     # ── Build search grid ────────────────────────────────────────────────
     wire_range = (args.wire_min, args.wire_max, args.wire_step)
@@ -1904,6 +2496,44 @@ def main() -> None:
         print(f"    Combined score  = {best.score_combined:.4f}")
         print(f"    VSWR penalty    = {best.score_vswr:.4f}")
         print(f"    Avoidance mean  = {best.score_avoidance:.4f}")
+
+        # ── Boundary warnings ─────────────────────────────────────────
+        # Count how many of the top-5 candidates sit at a search boundary.
+        # When the best (or several top candidates) land exactly at wire_min,
+        # wire_max, cp_min, or cp_max it is a strong signal that the search
+        # space is truncating the true optimum.  Warn the user so they can
+        # re-run with a wider margin or explicit --wire-min/max flags.
+        _tol = 1e-6
+        _boundary_hits_wire = sum(
+            1 for r in ranked[:5]
+            if abs(r.wire_len_m - args.wire_min) < _tol
+            or abs(r.wire_len_m - args.wire_max) < _tol
+        )
+        _boundary_hits_cp = sum(
+            1 for r in ranked[:5]
+            if abs(r.cp_len_m - args.cp_min) < _tol
+            or abs(r.cp_len_m - args.cp_max) < _tol
+        )
+        if abs(best.wire_len_m - args.wire_max) < _tol:
+            print(f"\n  {Fore.YELLOW}⚠  WIRE LENGTH at search maximum ({args.wire_max:.3f} m)."
+                  f"  {_boundary_hits_wire}/5 top candidates hit this boundary."
+                  f"\n     The true optimum may be longer. Re-run with a larger"
+                  f" --wire-max or increase --margin.{Style.RESET_ALL}")
+        elif abs(best.wire_len_m - args.wire_min) < _tol:
+            print(f"\n  {Fore.YELLOW}⚠  WIRE LENGTH at search minimum ({args.wire_min:.3f} m)."
+                  f"  {_boundary_hits_wire}/5 top candidates hit this boundary."
+                  f"\n     The true optimum may be shorter. Re-run with a smaller"
+                  f" --wire-min or increase --margin.{Style.RESET_ALL}")
+        if abs(best.cp_len_m - args.cp_max) < _tol:
+            print(f"\n  {Fore.YELLOW}⚠  CP LENGTH at search maximum ({args.cp_max:.3f} m)."
+                  f"  {_boundary_hits_cp}/5 top candidates hit this boundary."
+                  f"\n     The true optimum may be longer. Re-run with a larger"
+                  f" --cp-max or increase --margin.{Style.RESET_ALL}")
+        elif abs(best.cp_len_m - args.cp_min) < _tol:
+            print(f"\n  {Fore.YELLOW}⚠  CP LENGTH at search minimum ({args.cp_min:.3f} m)."
+                  f"  {_boundary_hits_cp}/5 top candidates hit this boundary."
+                  f"\n     The true optimum may be shorter. Re-run with a smaller"
+                  f" --cp-min or increase --margin.{Style.RESET_ALL}")
         print()
 
         # ── Impedance table ───────────────────────────────────────────
@@ -1945,7 +2575,10 @@ def main() -> None:
 
         # For NEC2 mode: re-run the best geometry to get fresh impedance data
         if mode == "nec2" and nec2c_bin:
-            active_freqs = [cr.freq_mhz for cr in calc_rows if cr.active]
+            # Re-run the best geometry for ALL band frequencies — including inactive
+            # bands — so that the UnUn analysis has NEC2 impedances for the full
+            # spectrum.  This is consistent with the nec2_sweep fix above.
+            all_freqs = [cr.freq_mhz for cr in calc_rows]  # ALL bands, not just active
             with tempfile.TemporaryDirectory(prefix="nec2opt_unun_") as _td:
                 for cpt, _attr in [("horizontal", "best_run_h"),
                                     ("vertical",   "best_run_v")]:
@@ -1956,7 +2589,7 @@ def main() -> None:
                         wire_len_m=best.wire_len_m,
                         cp_len_m=best.cp_len_m,
                         cp_type=cpt,
-                        freqs_mhz=active_freqs,
+                        freqs_mhz=all_freqs,
                         wire_height_m=args.wire_height,
                         cp_height_m=args.cp_height,
                         ground_cond=args.ground_cond,
@@ -1988,17 +2621,19 @@ def main() -> None:
 
         std_n   = unun_result.best_standard_ratio
         cont_n  = unun_result.best_continuous_ratio
-        cur_score = unun_result.ratio_score.get(unun_ratio, 999.0)
+        # ratio_score always contains unun_ratio (injected by find_best_unun
+        # even for non-standard values), so direct lookup is safe here.
+        cur_score = unun_result.ratio_score[unun_ratio]
         std_score = unun_result.best_standard_score
 
         print(f"\n  {Fore.CYAN}UnUn Analysis (best geometry: "
               f"{best.wire_len_m:.3f} m / {best.cp_len_m:.3f} m):{Style.RESET_ALL}")
         print(f"    Current ratio    : {unun_ratio:.0f}:1"
-              f"  (VSWR penalty {cur_score:.4f})")
+              f"  (aggregate VSWR penalty {cur_score:.4f})")
         print(f"    Best standard    : {std_n:.0f}:1"
-              f"  (VSWR penalty {std_score:.4f})")
+              f"  (aggregate VSWR penalty {std_score:.4f})")
         print(f"    Continuous opt.  : {cont_n:.2f}:1"
-              f"  (VSWR penalty {unun_result.best_continuous_score:.4f})")
+              f"  (aggregate VSWR penalty {unun_result.best_continuous_score:.4f})")
 
         if abs(std_n - unun_ratio) > 0.5 and (cur_score - std_score) > 0.001:
             print(f"    {Fore.YELLOW}→ Consider switching to {std_n:.0f}:1 UnUn for better match.{Style.RESET_ALL}")
@@ -2026,15 +2661,24 @@ def main() -> None:
     # during the sweep and shown in the per-band impedance tables) so the report
     # and the CSV both document their respective ratio clearly.  If the recommended
     # ratio differs, a note is printed here and the CSV header carries export_unun.
+    #
+    # IMPORTANT: the ranking in the report was produced at unun_ratio, not at
+    # export_unun.  The best wire/CP pair at one ratio is not necessarily best at
+    # another — impedance matching shifts non-linearly across the grid.  Re-run
+    # the optimizer with --unun <export_unun> to obtain rankings that are truly
+    # optimal for the recommended transformer.
     export_unun = unun_ratio
     if unun_result is not None:
         std_n = unun_result.best_standard_ratio
-        cur_score = unun_result.ratio_score.get(unun_ratio, 999.0)
+        cur_score = unun_result.ratio_score[unun_ratio]
         if (unun_result.best_standard_score < cur_score - 0.001
                 and abs(std_n - unun_ratio) > 0.5):
             export_unun = std_n
             print(f"  ℹ  CSV export uses recommended UnUn {export_unun:.0f}:1"
                   f" (instead of {unun_ratio:.0f}:1)")
+            print(f"  ⚠  Rankings above were computed with {unun_ratio:.0f}:1 UnUn.")
+            print(f"     Re-run with --unun {export_unun:.0f} to rank candidates"
+                  f" under the recommended ratio.")
 
     report = write_report(
         ranked=ranked[:args.top_n],
