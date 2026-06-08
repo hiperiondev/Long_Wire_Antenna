@@ -1,168 +1,164 @@
 
 ════════════════════════════════════════════════════════════════════════════════
-  NEC2 ANTENNA LENGTH OPTIMIZER REPORT
+  INFORME DEL OPTIMIZADOR DE LONGITUD DE ANTENA NEC2
 ════════════════════════════════════════════════════════════════════════════════
-  Evaluation mode : NEC2
-  UnUn ratio      : 4.0:1
-  Wire range      : 37.00 m … 39.00 m  step 0.250 m
-  CP range        : 7.00 m … 11.00 m  step 0.250 m
-  Active bands    : 4 of 4  (30(*), 17(*), 15(*), 12(*))  (* = scored for VSWR)
-  Total candidates: 153
+  Modo de evaluación: NEC2
+  Relación UnUn   : 4.0:1
+  Rango de hilo   : 33.00 m … 37.00 m  paso 0.250 m
+  Rango de CP     : 5.00 m … 7.00 m  paso 0.250 m
+  Active bands    : 3 of 3  (40(*), 20(*), 10(*))  (* = scored for VSWR)
+  Total candidatos: 153
 
 
 ════════════════════════════════════════════════════════════════════════════════
-  TOP 20 CANDIDATES  (lower combined score = better)
+  TOP 20 CANDIDATOS  (menor puntuación combinada = mejor)
 ════════════════════════════════════════════════════════════════════════════════
-    #   Wire(m)    CP(m)     CP type    Score   meanVpen   1.5xWrst  -0.5xAv(a)   -0.1xCPbon       30       17       15       12  NEC2
-  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    1    37.750   10.250    vertical    6.920      1.800      5.228      0.0907       0.0172     7.50     4.52     3.84     1.71  ✓
-    2    37.500   10.250    vertical    6.941      2.070      4.967      0.0789       0.0172     6.92     5.20     4.58     2.17  ✓
-    3    37.500   10.500    vertical    6.950      1.825      5.221      0.0789       0.0168     7.49     4.18     3.75     2.29  ✓
-    4    38.000   10.250    vertical    6.958      1.605      5.471      0.1010       0.0172     8.09     3.88     3.18     1.59  ✓
-    5    37.750   10.000    vertical    6.964      2.098      4.974      0.0907       0.0174     6.94     5.63     4.71     1.77  ✓
-    6    38.000   10.000    vertical    6.971      1.855      5.234      0.1010       0.0174     7.52     4.93     3.97     1.35  ✓
-    7    37.750   10.500    vertical    6.974      1.618      5.464      0.0907       0.0168     8.07     3.58     3.09     2.08  ✓
-    8    37.500   10.000    vertical    6.985      2.386      4.695      0.0789       0.0174     6.37     6.37     5.50     2.43  ✓
-    9    37.250   10.500    vertical    6.993      2.115      4.962      0.0671       0.0168     6.91     4.84     4.50     2.89  ✓
-   10    37.250   10.250    vertical    7.009      2.406      4.687      0.0671       0.0172     6.35     5.92     5.38     2.96  ✓
-   11    38.250   10.000    vertical    7.027      1.673      5.476      0.1040       0.0174     8.10     4.27     3.29     1.30  ✓
-   12    38.000    9.750    vertical    7.030      2.170      4.978      0.1010       0.0174     6.95     6.18     4.86     1.58  ✓
-   13    37.500   10.750    L-shaped    7.051      1.709      5.437      0.0789       0.0163     8.00     3.41     3.10     2.81  ✓
-   14    38.000   10.500    vertical    7.058      1.486      5.690      0.1010       0.0168     8.65     3.02     2.51     2.20  ✓
-   15    38.250   10.250    vertical    7.061      1.484      5.698      0.1040       0.0172     8.67     3.29     2.60     1.81  ✓
-   16    37.250   10.750    L-shaped    7.063      1.950      5.196      0.0671       0.0163     7.43     3.99     3.80     3.21  ✓
-   17    38.250    9.750    vertical    7.080      1.967      5.235      0.1040       0.0174     7.52     5.46     4.11     1.17  ✓
-   18    37.000   10.500    vertical    7.092      2.494      4.684      0.0696       0.0168     6.35     5.53     5.33     3.92  ✓
-   19    38.250    9.500    vertical    7.106      2.252      4.975      0.1040       0.0171     6.94     6.89     5.04     1.54  ✓
-   20    37.750   10.750    L-shaped    7.109      1.554      5.662      0.0907       0.0163     8.57     2.87     2.50     2.79  ✓
+    #   Wire(m)    CP(m)     CP type    Score   meanVpen   1.5xWrst  -0.5xAv(a)   -0.1xCPbon       40       20       10  NEC2
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    1    35.500    6.500    vertical    0.067      0.074      0.135      0.1250       0.0167     1.61     1.64     1.58  ✓
+    2    35.500    6.750    vertical    0.085      0.041      0.187      0.1250       0.0178     1.69     1.42     1.41  ✓
+    3    35.250    6.750    vertical    0.116      0.049      0.210      0.1250       0.0178     1.71     1.51     1.28  ✓
+    4    35.250    7.000    vertical    0.189      0.060      0.272      0.1250       0.0188     1.77     1.27     1.23  ✓
+    5    35.000    7.000    vertical    0.228      0.068      0.304      0.1250       0.0188     1.80     1.41     1.18  ✓
+    6    35.750    6.500    vertical    0.290      0.109      0.320      0.1231       0.0167     1.60     1.57     1.82  ✓
+    7    35.500    7.000    vertical    0.322      0.137      0.329      0.1250       0.0188     1.83     1.45     1.79  ✓
+    8    35.000    6.750    vertical    0.375      0.188      0.330      0.1250       0.0178     1.83     1.79     1.72  ✓
+    9    34.750    7.000    vertical    0.473      0.188      0.423      0.1190       0.0188     1.92     1.74     1.68  ✓
+   10    35.250    6.500    vertical    0.503      0.229      0.416      0.1250       0.0167     1.73     1.88     1.92  ✓
+   11    35.750    6.750    vertical    0.606      0.196      0.551      0.1231       0.0178     1.76     1.57     2.05  ✓
+   12    35.750    6.250    vertical    0.726      0.208      0.656      0.1231       0.0156     1.52     1.76     2.16  ✓
+   13    35.500    6.250    vertical    1.045      0.329      0.857      0.1250       0.0156     1.64     1.99     2.36  ✓
+   14    34.500    7.000    vertical    1.168      0.477      0.814      0.1032       0.0188     2.12     2.21     2.31  ✓
+   15    34.750    6.750    vertical    1.213      0.471      0.878      0.1190       0.0178     2.04     2.21     2.38  ✓
+   16    36.000    6.250    vertical    1.217      0.285      1.063      0.1152       0.0156     1.52     1.70     2.56  ✓
+   17    36.000    6.500    vertical    1.310      0.333      1.109      0.1152       0.0167     1.69     1.70     2.61  ✓
+   18    35.750    7.000    vertical    1.349      0.408      1.083      0.1231       0.0188     1.96     1.79     2.58  ✓
+   19    35.000    6.500    vertical    1.415      0.501      1.055      0.1250       0.0167     1.95     2.26     2.56  ✓
+   20    35.250    6.250    vertical    1.905      0.588      1.457      0.1250       0.0156     1.85     2.34     2.96  ✓
 
 ════════════════════════════════════════════════════════════════════════════════
-  PARETO-OPTIMAL FRONT  (3 candidates)
+  FRENTE PARETO-ÓPTIMO  (1 candidatos)
 ════════════════════════════════════════════════════════════════════════════════
-  Candidates not dominated on both VSWR-penalty and avoidance score.
+  Candidatos no dominados en penalización ROS y puntuación de evitación.
 
-    1  wire=37.750 m  cp=10.250 m  (vertical)  score=6.920  VSWR=[   7.50     4.52     3.84     1.71]  avoid_active=0.1814  avoid_all=0.1814
-    2  wire=38.000 m  cp=10.250 m  (vertical)  score=6.958  VSWR=[   8.09     3.88     3.18     1.59]  avoid_active=0.2021  avoid_all=0.2021
-    3  wire=38.250 m  cp=10.000 m  (vertical)  score=7.027  VSWR=[   8.10     4.27     3.29     1.30]  avoid_active=0.2079  avoid_all=0.2079
+    1  wire=35.500 m  cp=6.500 m  (vertical)  score=0.067  VSWR=[   1.61     1.64     1.58]  avoid_active=0.2500  avoid_all=0.2500
 
 ════════════════════════════════════════════════════════════════════════════════
-  BEST CANDIDATE — DETAILED BREAKDOWN
+  MEJOR CANDIDATO — DESGLOSE DETALLADO
 ════════════════════════════════════════════════════════════════════════════════
-  Wire length   : 37.750 m
-  CP length     : 10.250 m   (vertical orientation)
-  Combined score: 6.9201
-  VSWR penalty  : 1.7997  (mean VSWR penalty across active bands; score_combined = mean + 1.5×worst − bonuses)
-  Avoidance(act): 0.1814  (mean across ACTIVE bands — used in score_combined)
-  Avoidance(all): 0.1814  (mean across ALL bands in CSV — shown for reference)
-  NEC2 data used: YES
+  Longitud hilo : 35.500 m
+  Longitud CP   : 6.500 m   (orientación vertical)
+  Puntuación comb: 0.0672
+  Penaliz. ROS  : 0.0742  (media de penalización ROS en bandas activas; score_combined = media + 1.5×peor − bonos)
+  Evitación(act): 0.2500  (media en bandas ACTIVAS — usada en score_combined)
+  Evitación(all): 0.2500  (media en TODAS las bandas del CSV — referencia)
+  Datos NEC2 usados: SÍ
 
-  Per-band results:
+  Resultados por banda:
         Band  Active   VSWR(Tx)     Avoid                  Rating  VSWR
     ────────────────────────────────────────────────────────────────────────────────
-          30     YES       7.50    0.0998            ★   MARGINAL  POOR
-          17     YES       4.52    0.1257                ★★  GOOD  MARGINAL
-          15     YES       3.84    0.2500           ★★★ EXCELLENT  MARGINAL
-          12     YES       1.71    0.2500           ★★★ EXCELLENT  GOOD
+          40     YES       1.61    0.2500           ★★★ EXCELENTE  BUENO
+          20     YES       1.64    0.2500           ★★★ EXCELENTE  BUENO
+          10     YES       1.58    0.2500           ★★★ EXCELENTE  BUENO
 
-  Per-band impedance (antenna side and transmitter side):
+  Impedancia por banda (lado antena y lado transmisor):
         Band   freq MHz    R_ant Ω    X_ant Ω    |Z_ant|Ω    R_tx Ω    X_tx Ω    |Z_tx|Ω    VSWR      Source
     ────────────────────────────────────────────────────────────────────────────────────────────────────
-          30    10.1250      197.5     +471.9       511.6     49.38   +117.97     127.89    7.50      NEC2-V
-          17    18.1180      216.4     -344.1       406.5     54.11    -86.02     101.62    4.52      NEC2-V
-          15    21.2250      186.2     -279.6       335.9     46.55    -69.90      83.98    3.84      NEC2-V
-          12    24.9400      335.1      -36.4       337.1     83.77     -9.11      84.27    1.71      NEC2-V
-    (UnUn 4:1 — antenna-side Z divided by 4 to give Tx-side Z)
+          40     7.1000      124.8      +13.7       125.5     31.20     +3.42      31.38    1.61      NEC2-V
+          20    14.1750      132.8      -45.1       140.3     33.21    -11.28      35.07    1.64      NEC2-V
+          10    28.5000      291.2      -65.1       298.4     72.79    -16.27      74.59    1.58      NEC2-V
+    (UnUn 4:1 — Z lado antena dividida por 4 para obtener Z lado Tx)
 
 ════════════════════════════════════════════════════════════════════════════════
-  UnUn RATIO ANALYSIS  (for best antenna geometry)
+  ANÁLISIS DE RELACIÓN UnUn  (para la mejor geometría de antena)
 ════════════════════════════════════════════════════════════════════════════════
-  Used UnUn ratio (this run) : 4.0:1
-  Continuous optimum         : 9.66:1  (aggregate VSWR penalty 4.7516)
-  Best standard ratio        : 9:1  (aggregate VSWR penalty 4.7710)
-    → Switching to 9:1 improves aggregate VSWR penalty by 2.2570  (32.1 %)
-    ⚠  Rankings in this report were computed with 4:1.
-       Re-run with --unun 9 to rank candidates under the recommended ratio.
+  Relación UnUn usada (esta ejecución): 4.0:1
+  Óptimo continuo            : 3.92:1  (penalización ROS agregada 0.1801)
+  Mejor relación estándar    : 4:1  (penalización ROS agregada 0.2090)
+    → La relación actual 4:1 ya es óptima entre los valores estándar.
 
-  Standard ratio sweep:
-     Ratio    Score    VSWR@30    VSWR@17    VSWR@15    VSWR@12
-    ─────────────────────────────────────────────────────────────
-        1:1  14.1445      26.71      15.44      12.31       6.78
-      1.5:1  11.9068      17.99      10.43       8.36       4.52
-        2:1  10.3909      13.68       7.97       6.44       3.39
-        3:1   8.3242       9.49       5.60       4.63       2.27
-        4:1   7.0280       7.50       4.52       3.84       1.71 ← CURRENT
-        6:1   5.6362       5.76       3.66       3.33       1.17
-        9:1   4.7710       5.02       3.49       3.48       1.36 ◄ BEST
-       12:1   4.9821       5.05       3.78       3.98       1.80
-       16:1   5.8899       5.53       4.42       4.85       2.39
-       25:1   7.9493       7.25       6.22       7.06       3.73
-       27:1   8.2947       7.68       6.65       7.57       4.03
-       36:1   9.7600       9.74       8.62       9.90       5.37
-       49:1  11.4103      12.87      11.54      13.33       7.31
-       64:1  12.8270      16.55      14.96      17.32       9.55
+  Barrido de relaciones estándar:
+     Ratio    Score    VSWR@40    VSWR@20    VSWR@10
+    ──────────────────────────────────────────────────
+        1:1   6.1446       2.53       3.01       6.12
+      1.5:1   3.3307       1.70       2.05       4.09
+        2:1   1.9511       1.29       1.61       3.08
+        3:1   0.6969       1.23       1.41       2.07
+        4:1   0.2090       1.61       1.64       1.58 ◄ BEST
+        6:1   1.2952       2.41       2.32       1.25
+        9:1   3.0288       3.61       3.42       1.60
+       12:1   4.8549       4.81       4.54       2.09
+       16:1   7.0521       6.41       6.04       2.77
+       25:1   9.4912      10.02       9.42       4.30
+       27:1   9.9292      10.82      10.18       4.65
+       36:1  11.6053      14.43      13.56       6.19
+       49:1  13.2782      19.64      18.45       8.42
+       64:1  14.7276      25.65      24.10      10.99
 
-  Antenna-side impedance (independent of UnUn ratio):
+  Impedancia lado antena (independiente de la relación UnUn):
         Band    R_ant Ω    X_ant Ω   |Z_ant| Ω      θ °
     ────────────────────────────────────────────────────
-          30      197.5     +471.9       511.6    +67.3
-          17      216.4     -344.1       406.5    -57.8
-          15      186.2     -279.6       335.9    -56.3
-          12      335.1      -36.4       337.1     -6.2
+          40      124.8      +13.7       125.5     +6.3
+          20      132.8      -45.1       140.3    -18.8
+          10      291.2      -65.1       298.4    -12.6
 
-  Per-band optimal ratio (independent, continuous):
+  Relación óptima por banda (independiente, continua):
         Band    Best ratio     VSWR
     ──────────────────────────────────
-          30       10.23:1    4.979
-          17        8.13:1    3.468
-          15        6.72:1    3.306
-          12        6.74:1    1.115
+          40        2.51:1    1.116
+          20        2.81:1    1.396
+          10        5.97:1    1.248
 
-  Note: per-band ratios optimise each band independently and may
-        conflict with each other.  The aggregate score above is the
-        correct metric for a single multi-band UnUn.
-
-════════════════════════════════════════════════════════════════════════════════
-  PHYSICAL INTERPRETATION
-════════════════════════════════════════════════════════════════════════════════
-  1. Wire length selection
-     The optimal wire avoids landing on ANY multiple of λ/4 on ALL bands in the
-     CSV simultaneously — including those marked inactive for VSWR scoring.
-     Resonances occur at every λ/4 step: λ/4 (low Z / current max), λ/2 (high Z
-     / voltage max), 3λ/4 (low Z again), λ (high Z), etc.  The avoidance score
-     is the fractional distance to the NEAREST λ/4 multiple across all bands;
-     maximum achievable = 0.25 (midway between resonances) = ★★★ EXCELLENT.
-     Values below 0.06 flag RESONANCE RISK.
-
-  2. Counterpoise length selection
-     The counterpoise acts as the missing half of the antenna system.  A length
-     near λ/4 at the operating frequency (or an odd multiple thereof: 3λ/4,
-     5λ/4 …) provides a low-impedance return path and is actively rewarded by
-     the optimizer. Lengths near an even multiple of λ/4 (i.e. λ/2, λ, 3λ/2 …)
-     produce a high-impedance return path and receive no reward.  This bonus is
-     intentionally small relative to the VSWR term so that CP resonance can
-     nudge a close pair of candidates but cannot override a poor VSWR match.
-
-  3. VSWR after UnUn
-     All VSWR values shown are referred to the TRANSMITTER side (50 Ω coaxial)
-     AFTER the 4:1 UnUn.  The antenna-side impedance is divided by 4 before
-     computing VSWR.  A well-chosen UnUn ratio can improve or worsen match: if
-     VSWR is poor on every band consider trying 4:1 or 16:1 instead of 4:1.
-
-  4. NEC2 vs empirical
-     When nec2c is available, the optimizer runs a full Sommerfeld-Norton
-     ground simulation for each candidate.  Without NEC2, the empirical
-     formulas R = 50·80^cos²(π·L/λ½) and X = 1500·sin(2π·L/λ½) are used.  The
-     empirical model overestimates impedance accuracy near resonances; NEC2
-     results are always preferred.  Cross-validate with a VNA on the bench.
-
-  5. Next steps
-     1. Validate with a VNA before cutting the final wire.  2. If VSWR > 3 on
-     any priority band, try a different UnUn ratio or add   a second CP radial
-     cut to λ/4 for that specific band.  3. Re-run with a finer --wire-step /
-     --cp-step around the best candidate   to refine the optimum within a
-     narrower window.
-
+  Nota: las relaciones por banda optimizan cada banda de forma independiente y pueden
+        entrar en conflicto entre sí.  La puntuación agregada anterior es la
+        métrica correcta para un UnUn multibanda único.
 
 ════════════════════════════════════════════════════════════════════════════════
-  END OF OPTIMIZER REPORT
+  INTERPRETACIÓN FÍSICA
+════════════════════════════════════════════════════════════════════════════════
+  1. Selección de longitud del hilo
+     El hilo óptimo evita caer en CUALQUIER múltiplo de λ/4 en TODAS las bandas
+     del CSV simultáneamente — incluyendo las marcadas como inactivas para ROS.
+     Las resonancias ocurren en cada paso λ/4: λ/4 (Z baja / máx. corriente),
+     λ/2 (Z alta / máx. voltaje), 3λ/4 (Z baja de nuevo), λ (Z alta), etc.  La
+     puntuación de evitación es la distancia fraccional al múltiplo λ/4 MÁS
+     CERCANO en todas las bandas; máximo alcanzable = 0.25 (punto medio entre
+     resonancias) = ★★★ EXCELENTE. Valores inferiores a 0.06 indican RIESGO DE
+     RESONANCIA.
+
+  2. Selección de longitud del contrapeso
+     El contrapeso actúa como la mitad faltante del sistema de antena.  Una
+     longitud cercana a λ/4 en la frecuencia de operación (o un múltiplo impar:
+     3λ/4, 5λ/4 …) proporciona un camino de retorno de baja impedancia y es
+     recompensado por el optimizador. Longitudes cercanas a un múltiplo par de
+     λ/4 (λ/2, λ, 3λ/2 …) producen un camino de retorno de alta impedancia y no
+     reciben recompensa.  Este bono es intencionalmente pequeño respecto al
+     término ROS para que la resonancia del CP pueda influir entre candidatos
+     cercanos pero no anule una mala adaptación de ROS.
+
+  3. ROS después del UnUn
+     Todos los valores de ROS mostrados corresponden al lado del TRANSMISOR
+     (coaxial 50 Ω) DESPUÉS del UnUn 4:1.  La impedancia del lado antena se
+     divide por 4 antes de calcular el ROS.  Una relación UnUn bien elegida
+     puede mejorar o empeorar la adaptación: si el ROS es pobre en todas las
+     bandas, considere probar 4:1 o 16:1 en lugar de 4:1.
+
+  4. NEC2 vs. empírico
+     Cuando nec2c está disponible, el optimizador ejecuta una simulación
+     completa de tierra Sommerfeld-Norton para cada candidato.  Sin NEC2 se
+     usan las fórmulas empíricas R = 50·80^cos²(π·L/λ½) y X =
+     1500·sin(2π·L/λ½).  El modelo empírico sobreestima la precisión de
+     impedancia cerca de resonancias; los resultados NEC2 siempre son
+     preferidos.  Valide con un VNA en el banco.
+
+  5. Próximos pasos
+     1. Valide con un VNA antes de cortar el hilo final.  2. Si ROS > 3 en
+     alguna banda prioritaria, pruebe una relación UnUn diferente   o agregue
+     un segundo radial de CP cortado a λ/4 para esa banda específica.  3. Re-
+     ejecute con --wire-step / --cp-step más finos alrededor del mejor
+     candidato   para refinar el óptimo en una ventana más estrecha.
+
+
+════════════════════════════════════════════════════════════════════════════════
+  FIN DEL INFORME DEL OPTIMIZADOR
 ════════════════════════════════════════════════════════════════════════════════

@@ -948,6 +948,235 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "POOR",
         "es": "POBRE",
     },
+    # ── argparse description ─────────────────────────────────────────────
+    "ap_description": {
+        "en": textwrap.dedent("""\
+            NEC2 Antenna Length Optimizer
+            ─────────────────────────────
+            Searches (wire_len, cp_len) combinations and ranks them by aggregate
+            VSWR across all active bands.
+
+            BAND SOURCE (choose one):
+              With CSV  :  --csv my_bands.csv
+              Without CSV:  --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
+                            (--freqs optional for known amateur bands; auto centre freq used)
+                            --bands custom1,custom2 --freqs 7.1,14.2 --wire-len 21.0 --cp-len 5.0
+                            (--freqs required for unrecognised band names)
+
+            ACTIVE BANDS:
+              --active-bands 40m,20m   Override CSV 'active' column, or restrict
+                                       which bands are scored for VSWR when using
+                                       --bands/--freqs directly.
+
+            By default the search window is ±2 m around the wire and CP lengths.
+            Use --margin to widen it, or --wire-min/max and --cp-min/max for
+            explicit bounds.
+
+            Two evaluation modes:
+              empirical  — fast, uses the same R/X formulas as the spreadsheet
+              nec2       — accurate, runs nec2c for each candidate geometry
+
+            NEC2C BINARY DISCOVERY (automatic, in order):
+              1. --nec2c /path/to/nec2c
+              2. $NEC2C environment variable
+              3. PATH  (nec2c, nec2c-mpich)
+              4. Hard-coded paths (/usr/bin, /usr/local/bin, /opt/nec2c/bin …)
+              5. Interactive prompt
+
+            OUTPUT FILES:
+              optimizer_report.txt  — ranked table + Pareto front + interpretation
+              optimizer_plot.png    — score heat map + per-band VSWR bar charts
+              optimizer_best.csv    — best candidate in band-analysis CSV format
+        """),
+        "es": textwrap.dedent("""\
+            Optimizador de Longitud de Antena NEC2
+            ──────────────────────────────────────
+            Busca combinaciones (longitud_hilo, longitud_CP) y las clasifica por
+            ROS agregado en todas las bandas activas.
+
+            FUENTE DE BANDAS (elegir una):
+              Con CSV     :  --csv mis_bandas.csv
+              Sin CSV     :  --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
+                             (--freqs opcional para bandas amateur conocidas; usa freq. central auto)
+                             --bands custom1,custom2 --freqs 7.1,14.2 --wire-len 21.0 --cp-len 5.0
+                             (--freqs requerido para nombres de banda no reconocidos)
+
+            BANDAS ACTIVAS:
+              --active-bands 40m,20m   Reemplaza la columna 'active' del CSV, o
+                                       restringe qué bandas se evalúan para ROS al
+                                       usar --bands/--freqs directamente.
+
+            Por defecto la ventana de búsqueda es ±2 m alrededor de las longitudes
+            de hilo y CP.  Use --margin para ampliarla, o --wire-min/max y
+            --cp-min/max para límites explícitos.
+
+            Dos modos de evaluación:
+              empirical  — rápido, usa las mismas fórmulas R/X que la planilla
+              nec2       — preciso, ejecuta nec2c para cada geometría candidata
+
+            DESCUBRIMIENTO DEL BINARIO NEC2C (automático, en orden):
+              1. --nec2c /ruta/a/nec2c
+              2. Variable de entorno $NEC2C
+              3. PATH  (nec2c, nec2c-mpich)
+              4. Rutas fijas (/usr/bin, /usr/local/bin, /opt/nec2c/bin …)
+              5. Solicitud interactiva
+
+            ARCHIVOS DE SALIDA:
+              optimizer_report.txt  — tabla clasificada + frente de Pareto + interpretación
+              optimizer_plot.png    — mapa de calor + gráficos de barras ROS por banda
+              optimizer_best.csv    — mejor candidato en formato CSV de análisis de banda
+        """),
+    },
+    # ── argparse argument help strings ───────────────────────────────────
+    "ap_csv": {
+        "en": "Band CSV (optional). If omitted, supply --bands, --freqs, --wire-len, and --cp-len.",
+        "es": "CSV de bandas (opcional). Si se omite, proporcione --bands, --freqs, --wire-len y --cp-len.",
+    },
+    "ap_bands": {
+        "en": "Comma-separated band names, e.g. '40m,20m,15m'. Required when --csv is not supplied.",
+        "es": "Nombres de banda separados por coma, ej. '40m,20m,15m'. Requerido si no se usa --csv.",
+    },
+    "ap_freqs": {
+        "en": ("Comma-separated centre frequencies in MHz, one per band. "
+               "Optional when all --bands names are recognised amateur-radio bands. "
+               "Required only for unrecognised band names."),
+        "es": ("Frecuencias centrales en MHz separadas por coma, una por banda. "
+               "Opcional cuando todos los nombres en --bands son bandas amateur reconocidas. "
+               "Requerido sólo para nombres de banda no reconocidos."),
+    },
+    "ap_wire_len": {
+        "en": "Starting wire length in metres for the search window centre. Required when --csv is not supplied.",
+        "es": "Longitud inicial del hilo en metros para el centro de la ventana de búsqueda. Requerido si no se usa --csv.",
+    },
+    "ap_cp_len": {
+        "en": "Starting counterpoise length in metres for the search window centre. Required when --csv is not supplied.",
+        "es": "Longitud inicial del contrapeso en metros para el centro de la ventana de búsqueda. Requerido si no se usa --csv.",
+    },
+    "ap_active_bands": {
+        "en": ("Comma-separated list of band names to mark as active for VSWR scoring. "
+               "Overrides the 'active' column in the CSV."),
+        "es": ("Lista de nombres de banda separados por coma para marcar como activas en la evaluación de ROS. "
+               "Reemplaza la columna 'active' del CSV."),
+    },
+    "ap_unun": {
+        "en": "UnUn ratio (e.g. 9 for 9:1).  Default: read from CSV.",
+        "es": "Relación UnUn (ej. 9 para 9:1).  Por defecto: leída del CSV.",
+    },
+    "ap_mode": {
+        "en": "Evaluation mode (default: auto = nec2 if binary found, else empirical).",
+        "es": "Modo de evaluación (por defecto: auto = nec2 si se encuentra el binario, si no empírico).",
+    },
+    "ap_nec2c": {
+        "en": "Explicit path to nec2c binary.  Overrides auto-discovery.",
+        "es": "Ruta explícita al binario nec2c.  Reemplaza el descubrimiento automático.",
+    },
+    "ap_margin": {
+        "en": ("Search radius in metres around the CSV wire and CP lengths "
+               "(default 2.0 m).  Overridden by explicit --wire-min/max or --cp-min/max."),
+        "es": ("Radio de búsqueda en metros alrededor de las longitudes de hilo y CP del CSV "
+               "(por defecto 2.0 m).  Es reemplazado por --wire-min/max o --cp-min/max explícitos."),
+    },
+    "ap_wire_min": {
+        "en": "Minimum wire length to search (metres).",
+        "es": "Longitud mínima de hilo a buscar (metros).",
+    },
+    "ap_wire_max": {
+        "en": "Maximum wire length to search (metres).",
+        "es": "Longitud máxima de hilo a buscar (metros).",
+    },
+    "ap_wire_step": {
+        "en": "Wire length step size (metres, default 0.25).",
+        "es": "Tamaño de paso de longitud de hilo (metros, por defecto 0.25).",
+    },
+    "ap_cp_min": {
+        "en": "Minimum counterpoise length (metres).",
+        "es": "Longitud mínima del contrapeso (metros).",
+    },
+    "ap_cp_max": {
+        "en": "Maximum counterpoise length (metres).",
+        "es": "Longitud máxima del contrapeso (metros).",
+    },
+    "ap_cp_step": {
+        "en": "Counterpoise length step size (metres, default 0.25).",
+        "es": "Tamaño de paso de longitud del contrapeso (metros, por defecto 0.25).",
+    },
+    "ap_wire_height": {
+        "en": "Antenna wire height above ground (metres). Default: height from CSV, or {0} m if not in CSV.",
+        "es": "Altura del hilo de antena sobre el suelo (metros). Por defecto: altura del CSV, o {0} m si no está en el CSV.",
+    },
+    "ap_cp_height": {
+        "en": "Counterpoise height above ground (metres). Default: CP height from CSV, or 0.5 m if not in CSV.",
+        "es": "Altura del contrapeso sobre el suelo (metros). Por defecto: altura CP del CSV, o 0.5 m si no está en el CSV.",
+    },
+    "ap_cp_type": {
+        "en": "Counterpoise orientation(s) to simulate (default: both).",
+        "es": "Orientación(es) del contrapeso a simular (por defecto: ambas).",
+    },
+    "ap_ground_cond": {
+        "en": "Ground conductivity S/m (default {0}).",
+        "es": "Conductividad del suelo en S/m (por defecto {0}).",
+    },
+    "ap_ground_diel": {
+        "en": "Ground relative permittivity (default {0}).",
+        "es": "Permitividad relativa del suelo (por defecto {0}).",
+    },
+    "ap_top_n": {
+        "en": "Number of top candidates to show in report (default 20).",
+        "es": "Número de mejores candidatos a mostrar en el informe (por defecto 20).",
+    },
+    "ap_out_txt": {
+        "en": "Output report filename (default: optimizer_report.txt).",
+        "es": "Nombre del archivo de informe de salida (por defecto: optimizer_report.txt).",
+    },
+    "ap_out_png": {
+        "en": "Output plot filename (default: optimizer_plot.png).",
+        "es": "Nombre del archivo de gráfico de salida (por defecto: optimizer_plot.png).",
+    },
+    "ap_out_csv": {
+        "en": "Best-candidate CSV output (default: optimizer_best.csv).",
+        "es": "Salida CSV del mejor candidato (por defecto: optimizer_best.csv).",
+    },
+    "ap_out_nec": {
+        "en": ("NEC2 deck for the best antenna geometry (default: best_antenna.nec). "
+               "Includes full RP radiation-pattern cards per active band."),
+        "es": ("Deck NEC2 para la mejor geometría de antena (por defecto: best_antenna.nec). "
+               "Incluye tarjetas RP de patrón de radiación completo por banda activa."),
+    },
+    "ap_out_radiation": {
+        "en": "Radiation diagram PNG for all active bands (default: radiation_diagrams.png).",
+        "es": "PNG de diagramas de radiación para todas las bandas activas (por defecto: radiation_diagrams.png).",
+    },
+    "ap_retry": {
+        "en": ("If the best candidate hits a search boundary (wire or CP at min/max), "
+               "automatically re-run the sweep up to N times, shifting the window "
+               "in the direction suggested by the warning (best+margin for 'may be "
+               "longer', best-margin for 'may be shorter').  Default: 0 (disabled)."),
+        "es": ("Si el mejor candidato alcanza un límite de búsqueda (hilo o CP en min/max), "
+               "re-ejecuta el barrido automáticamente hasta N veces, desplazando la ventana "
+               "en la dirección sugerida por la advertencia (mejor+margen para 'puede ser "
+               "mayor', mejor-margen para 'puede ser menor').  Por defecto: 0 (desactivado)."),
+    },
+    "ap_no_interactive": {
+        "en": "Do not prompt interactively for missing inputs; exit with error instead.",
+        "es": "No solicitar entradas faltantes de forma interactiva; salir con error en su lugar.",
+    },
+    "ap_quiet": {
+        "en": "Suppress progress output.",
+        "es": "Suprimir la salida de progreso.",
+    },
+    "ap_lang": {
+        "en": "Interface language: en (English) or es (Español). Default: auto-detect from system locale.",
+        "es": "Idioma de la interfaz: en (English) o es (Español). Por defecto: detección automática del locale del sistema.",
+    },
+    # ── hardcoded strings in main() ──────────────────────────────────────
+    "radiation_nec2_only_inline": {
+        "en": "  ℹ  Radiation diagrams require NEC2 mode (current mode: {0}) — skipped.",
+        "es": "  ℹ  Los diagramas de radiación requieren modo NEC2 (modo actual: {0}) — omitido.",
+    },
+    "err_no_unun_nocsv_inline": {
+        "en": "  No --unun supplied and no CSV to read it from.  Use --unun RATIO (e.g. --unun 9).",
+        "es": "  No se proporcionó --unun y no hay CSV de donde leerlo.  Use --unun RELACION (ej: --unun 9).",
+    },
 }
 
 
@@ -1075,7 +1304,7 @@ _RE_CP_VERT = re.compile(r'counterpoise\s*\(vertical\)',                re.IGNOR
 
 _RE_RP_SECTION = re.compile(r'[-]{4,}\s*RADIATION PATTERNS\s*[-]{4,}', re.IGNORECASE)
 _RE_RP_ROW = re.compile(
-    r'^\s*((?:90(?:\.0+)?|[0-8]?\d(?:\.\d+)?))  \s+(\d{1,3}(?:\.\d+)?)\s+'
+    r'^\s*((?:90(?:\.0+)?|[0-8]?\d(?:\.\d+)?))\s+(\d{1,3}(?:\.\d+)?)\s+'
     r'([\-\d.]+)\s+[\-\d.]+\s+([\-\d.]+)',
     re.MULTILINE)
 
@@ -1853,8 +2082,8 @@ def score_candidate(
                 res.nec2_ok = False
                 imp_src = "empirical"
 
-        res.band_R_ant[cr.band]   = round(best_R, 2)
-        res.band_X_ant[cr.band]   = round(best_X, 2)
+        res.band_R_ant[cr.band]   = round(best_R, 2) if not math.isnan(best_R) else math.nan
+        res.band_X_ant[cr.band]   = round(best_X, 2) if not math.isnan(best_X) else math.nan
         res.band_imp_src[cr.band] = imp_src
         if imp_src == "NEC2-H":
             res.band_cp_src[cr.band] = "H"
@@ -3311,128 +3540,75 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nec2_length_optimizer.py",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent("""\
-            NEC2 Antenna Length Optimizer
-            ─────────────────────────────
-            Searches (wire_len, cp_len) combinations and ranks them by aggregate
-            VSWR across all active bands.
-
-            BAND SOURCE (choose one):
-              With CSV  :  --csv my_bands.csv
-              Without CSV:  --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
-                            (--freqs optional for known amateur bands; auto centre freq used)
-                            --bands custom1,custom2 --freqs 7.1,14.2 --wire-len 21.0 --cp-len 5.0
-                            (--freqs required for unrecognised band names)
-
-            ACTIVE BANDS:
-              --active-bands 40m,20m   Override CSV 'active' column, or restrict
-                                       which bands are scored for VSWR when using
-                                       --bands/--freqs directly.
-
-            By default the search window is ±2 m around the wire and CP lengths.
-            Use --margin to widen it, or --wire-min/max and --cp-min/max for
-            explicit bounds.
-
-            Two evaluation modes:
-              empirical  — fast, uses the same R/X formulas as the spreadsheet
-              nec2       — accurate, runs nec2c for each candidate geometry
-
-            NEC2C BINARY DISCOVERY (automatic, in order):
-              1. --nec2c /path/to/nec2c
-              2. $NEC2C environment variable
-              3. PATH  (nec2c, nec2c-mpich)
-              4. Hard-coded paths (/usr/bin, /usr/local/bin, /opt/nec2c/bin …)
-              5. Interactive prompt
-
-            OUTPUT FILES:
-              optimizer_report.txt  — ranked table + Pareto front + interpretation
-              optimizer_plot.png    — score heat map + per-band VSWR bar charts
-              optimizer_best.csv    — best candidate in band-analysis CSV format
-        """),
+        description=T("ap_description"),
     )
     p.add_argument("--csv", metavar="FILE", default=None,
-                   help="Band CSV (optional). "
-                        "If omitted, supply --bands, --freqs, --wire-len, and --cp-len.")
+                   help=T("ap_csv"))
     p.add_argument("--bands", metavar="NAMES", default=None,
-                   help="Comma-separated band names, e.g. '40m,20m,15m'. "
-                        "Required when --csv is not supplied.")
+                   help=T("ap_bands"))
     p.add_argument("--freqs", metavar="MHZ", default=None,
-                   help="Comma-separated centre frequencies in MHz, one per band. "
-                        "Optional when all --bands names are recognised amateur-radio bands. "
-                        "Required only for unrecognised band names.")
+                   help=T("ap_freqs"))
     p.add_argument("--wire-len", metavar="M", type=float, default=None,
-                   help="Starting wire length in metres for the search window centre. "
-                        "Required when --csv is not supplied.")
+                   help=T("ap_wire_len"))
     p.add_argument("--cp-len", metavar="M", type=float, default=None,
-                   help="Starting counterpoise length in metres for the search window centre. "
-                        "Required when --csv is not supplied.")
+                   help=T("ap_cp_len"))
     p.add_argument("--active-bands", metavar="BANDS", default=None,
-                   help="Comma-separated list of band names to mark as active for VSWR scoring. "
-                        "Overrides the 'active' column in the CSV.")
+                   help=T("ap_active_bands"))
     p.add_argument("--unun", metavar="RATIO", type=float, default=None,
-                   help="UnUn ratio (e.g. 9 for 9:1).  Default: read from CSV.")
+                   help=T("ap_unun"))
     p.add_argument("--mode", choices=["empirical", "nec2", "auto"],
                    default="auto",
-                   help="Evaluation mode (default: auto = nec2 if binary found, else empirical).")
+                   help=T("ap_mode"))
     p.add_argument("--nec2c", metavar="PATH", default=None,
-                   help="Explicit path to nec2c binary.  Overrides auto-discovery.")
+                   help=T("ap_nec2c"))
     p.add_argument("--margin", metavar="M", type=float, default=2.0,
-                   help="Search radius in metres around the CSV wire and CP lengths "
-                        "(default 2.0 m).  Overridden by explicit --wire-min/max or "
-                        "--cp-min/max.")
+                   help=T("ap_margin"))
     p.add_argument("--wire-min", metavar="M", type=float, default=None,
-                   help="Minimum wire length to search (metres).")
+                   help=T("ap_wire_min"))
     p.add_argument("--wire-max", metavar="M", type=float, default=None,
-                   help="Maximum wire length to search (metres).")
+                   help=T("ap_wire_max"))
     p.add_argument("--wire-step", metavar="M", type=float, default=0.25,
-                   help="Wire length step size (metres, default 0.25).")
+                   help=T("ap_wire_step"))
     p.add_argument("--cp-min", metavar="M", type=float, default=None,
-                   help="Minimum counterpoise length (metres).")
+                   help=T("ap_cp_min"))
     p.add_argument("--cp-max", metavar="M", type=float, default=None,
-                   help="Maximum counterpoise length (metres).")
+                   help=T("ap_cp_max"))
     p.add_argument("--cp-step", metavar="M", type=float, default=0.25,
-                   help="Counterpoise length step size (metres, default 0.25).")
+                   help=T("ap_cp_step"))
     p.add_argument("--wire-height", metavar="M", type=float, default=None,
-                   help="Antenna wire height above ground (metres). "
-                        f"Default: height from CSV, or {DEFAULT_HEIGHT_M} m if not in CSV.")
+                   help=T("ap_wire_height").format(DEFAULT_HEIGHT_M))
     p.add_argument("--cp-height", metavar="M", type=float, default=None,
-                   help="Counterpoise height above ground (metres). "
-                        "Default: CP height from CSV, or 0.5 m if not in CSV.")
+                   help=T("ap_cp_height"))
     p.add_argument("--cp-type", choices=["horizontal", "vertical", "both"],
                    default="both",
-                   help="Counterpoise orientation(s) to simulate (default: both).")
+                   help=T("ap_cp_type"))
     p.add_argument("--ground-cond", metavar="S/M", type=float,
                    default=DEFAULT_GROUND_COND,
-                   help=f"Ground conductivity S/m (default {DEFAULT_GROUND_COND}).")
+                   help=T("ap_ground_cond").format(DEFAULT_GROUND_COND))
     p.add_argument("--ground-diel", metavar="EPS", type=float,
                    default=DEFAULT_GROUND_DIEL,
-                   help=f"Ground relative permittivity (default {DEFAULT_GROUND_DIEL}).")
+                   help=T("ap_ground_diel").format(DEFAULT_GROUND_DIEL))
     p.add_argument("--top-n", metavar="N", type=int, default=20,
-                   help="Number of top candidates to show in report (default 20).")
+                   help=T("ap_top_n"))
     p.add_argument("--out-txt", metavar="FILE", default="optimizer_report.txt",
-                   help="Output report filename (default: optimizer_report.txt).")
+                   help=T("ap_out_txt"))
     p.add_argument("--out-png", metavar="FILE", default="optimizer_plot.png",
-                   help="Output plot filename (default: optimizer_plot.png).")
+                   help=T("ap_out_png"))
     p.add_argument("--out-csv", metavar="FILE", default="optimizer_best.csv",
-                   help="Best-candidate CSV output (default: optimizer_best.csv).")
+                   help=T("ap_out_csv"))
     p.add_argument("--out-nec", metavar="FILE", default="best_antenna.nec",
-                   help="NEC2 deck for the best antenna geometry (default: best_antenna.nec). "
-                        "Includes full RP radiation-pattern cards per active band.")
+                   help=T("ap_out_nec"))
     p.add_argument("--out-radiation", metavar="FILE", default="radiation_diagrams.png",
-                   help="Radiation diagram PNG for all active bands (default: radiation_diagrams.png).")
+                   help=T("ap_out_radiation"))
     p.add_argument("--retry", metavar="N", type=int, default=0,
-                   help="If the best candidate hits a search boundary (wire or CP at min/max), "
-                        "automatically re-run the sweep up to N times, shifting the window "
-                        "in the direction suggested by the warning (best+margin for 'may be "
-                        "longer', best-margin for 'may be shorter').  Default: 0 (disabled).")
+                   help=T("ap_retry"))
     p.add_argument("--no-interactive", action="store_true",
-                   help="Do not prompt interactively for missing inputs; exit with error instead.")
+                   help=T("ap_no_interactive"))
     p.add_argument("--quiet", "-q", action="store_true",
-                   help="Suppress progress output.")
+                   help=T("ap_quiet"))
     p.add_argument("--lang", metavar="LANG", default="",
                    choices=["", "en", "es"],
-                   help="Interface language: en (English) or es (Español). "
-                        "Default: auto-detect from system locale.")
+                   help=T("ap_lang"))
     return p
 
 
@@ -3443,12 +3619,21 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     print()
     print(f"{Fore.CYAN}{'═'*70}")
+
+    # ── Detect language early so --help is already translated ────────────
+    # Pre-parse only --lang / -q before building the full parser.
+    _pre = argparse.ArgumentParser(add_help=False)
+    _pre.add_argument("--lang", default="")
+    _pre_args, _ = _pre.parse_known_args()
+    _init_lang(getattr(_pre_args, "lang", ""))
+
     print("  " + T("banner_title"))
     print(f"{'═'*70}{Style.RESET_ALL}")
     print()
 
     parser = _build_parser()
     args, _unknown = parser.parse_known_args()
+    # Language already initialised above; honour an explicit flag in the full parse too.
     _init_lang(getattr(args, "lang", ""))
     verbose = not args.quiet
 
@@ -3465,7 +3650,7 @@ def main() -> None:
             with open(args.csv, "r", encoding="utf-8-sig") as _fh:
                 _raw = _fh.read()
             _first_line = _raw.split("\n")[0]
-            if ";" in _first_line and "," not in _first_line.split(";", 1)[1]:
+            if ";" in _first_line and _first_line.count(";") >= _first_line.count(","):
                 import re as _re
                 def _fix_decimal(m):
                     s = m.group(0)
@@ -3600,8 +3785,7 @@ def main() -> None:
         unun_ratio = args.unun
     elif args.csv is None:
         if args.no_interactive:
-            print(f"{Fore.RED}  No --unun supplied and no CSV to read it from."
-                  f"  Use --unun RATIO (e.g. --unun 9).{Style.RESET_ALL}")
+            print(f"{Fore.RED}" + T("err_no_unun_nocsv_inline") + f"{Style.RESET_ALL}")
             sys.exit(1)
         val = input(f"{Fore.CYAN}" + T("unun_prompt") + f"{Style.RESET_ALL}").strip()
         unun_ratio = float(val) if val else 9.0
@@ -4048,8 +4232,7 @@ def main() -> None:
             ground_diel=args.ground_diel,
         )
     elif ranked and mode != "nec2":
-        print(f"  ℹ  Radiation diagrams require NEC2 mode"
-              f" (current mode: {mode}) — skipped.")
+        print(T("radiation_nec2_only_inline").format(mode))
 
     print()
     if verbose:
