@@ -458,6 +458,35 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "⚠  CP LENGTH at search minimum ({0:.3f} m).  {1}/5 top candidates hit this boundary.\n     The true optimum may be shorter. Re-run with a smaller --cp-min or increase --margin.",
         "es": "⚠  LONGITUD CP en el mínimo de búsqueda ({0:.3f} m).  {1}/5 mejores candidatos tocaron este límite.\n     El óptimo real puede ser menor. Re-ejecute con --cp-min menor o aumente --margin.",
     },
+    # ── retry messages ──────────────────────────────────────────────────
+    "retry_wire_expanding_max": {
+        "en": "  🔁  --retry: wire boundary at maximum — expanding upper bound to {0:.3f} m (retry {1}/{2})",
+        "es": "  🔁  --retry: límite de hilo en máximo — expandiendo límite superior a {0:.3f} m (reintento {1}/{2})",
+    },
+    "retry_wire_expanding_min": {
+        "en": "  🔁  --retry: wire boundary at minimum — expanding lower bound to {0:.3f} m (retry {1}/{2})",
+        "es": "  🔁  --retry: límite de hilo en mínimo — expandiendo límite inferior a {0:.3f} m (reintento {1}/{2})",
+    },
+    "retry_cp_expanding_max": {
+        "en": "  🔁  --retry: CP boundary at maximum — expanding upper bound to {0:.3f} m (retry {1}/{2})",
+        "es": "  🔁  --retry: límite CP en máximo — expandiendo límite superior a {0:.3f} m (reintento {1}/{2})",
+    },
+    "retry_cp_expanding_min": {
+        "en": "  🔁  --retry: CP boundary at minimum — expanding lower bound to {0:.3f} m (retry {1}/{2})",
+        "es": "  🔁  --retry: límite CP en mínimo — expandiendo límite inferior a {0:.3f} m (reintento {1}/{2})",
+    },
+    "retry_new_best": {
+        "en": "  ✔  --retry: new best after retry — wire = {0:.3f} m   cp = {1:.3f} m   score = {2:.4f}",
+        "es": "  ✔  --retry: nuevo mejor tras reintento — hilo = {0:.3f} m   cp = {1:.3f} m   puntuación = {2:.4f}",
+    },
+    "retry_no_improvement": {
+        "en": "  ℹ  --retry: no improvement found — keeping previous best (wire = {0:.3f} m, cp = {1:.3f} m).",
+        "es": "  ℹ  --retry: sin mejora encontrada — manteniendo mejor previo (hilo = {0:.3f} m, cp = {1:.3f} m).",
+    },
+    "retry_converged": {
+        "en": "  ✔  --retry: boundary no longer hit — converged after {0} retry(s).",
+        "es": "  ✔  --retry: límite ya no alcanzado — convergido tras {0} reintento(s).",
+    },
     # ── impedance table header ───────────────────────────────────────────
     "impedance_header": {
         "en": "  Impedance — antenna side & transmitter side (UnUn {0:.0f}:1):",
@@ -3391,6 +3420,11 @@ def _build_parser() -> argparse.ArgumentParser:
                         "Includes full RP radiation-pattern cards per active band.")
     p.add_argument("--out-radiation", metavar="FILE", default="radiation_diagrams.png",
                    help="Radiation diagram PNG for all active bands (default: radiation_diagrams.png).")
+    p.add_argument("--retry", metavar="N", type=int, default=0,
+                   help="If the best candidate hits a search boundary (wire or CP at min/max), "
+                        "automatically re-run the sweep up to N times, shifting the window "
+                        "in the direction suggested by the warning (best+margin for 'may be "
+                        "longer', best-margin for 'may be shorter').  Default: 0 (disabled).")
     p.add_argument("--no-interactive", action="store_true",
                    help="Do not prompt interactively for missing inputs; exit with error instead.")
     p.add_argument("--quiet", "-q", action="store_true",
@@ -3676,45 +3710,157 @@ def main() -> None:
         else:
             mode = "nec2"
 
-    # ── Run sweep ────────────────────────────────────────────────────────
-    print()
-    print(T("sweep_starting").format(mode.upper()))
-    print()
+    # ── Helper: run one sweep and return (results, ranked, pareto_ranked) ─
+    def _run_sweep(w_min: float, w_max: float, cp_min: float, cp_max: float):
+        _grid = build_search_grid(w_min, w_max, args.wire_step,
+                                  cp_min, cp_max, args.cp_step)
+        print()
+        print(T("sweep_starting").format(mode.upper()))
+        print()
+        if mode == "nec2":
+            _res = nec2_sweep(
+                grid=_grid,
+                calc_rows=calc_rows,
+                unun_ratio=unun_ratio,
+                nec2c_bin=nec2c_bin,
+                wire_height_m=args.wire_height,
+                cp_height_m=args.cp_height,
+                ground_cond=args.ground_cond,
+                ground_diel=args.ground_diel,
+                cp_types=cp_types,
+                verbose=verbose,
+            )
+        else:
+            _emp_cp = args.cp_type if args.cp_type != "both" else "horizontal"
+            if args.cp_type == "both":
+                print(f"  {Fore.YELLOW}" + T("warn_empirical_cp_forced") + f"{Style.RESET_ALL}")
+            _res = empirical_sweep(
+                grid=_grid,
+                calc_rows=calc_rows,
+                unun_ratio=unun_ratio,
+                cp_type=_emp_cp,
+                verbose=verbose,
+            )
+        print("\n" + T("sweep_complete").format(len(_res)))
+        _rnk  = rank_results(_res)
+        _par  = pareto_front(_res)
+        _prnk = sorted(_par, key=lambda r: r.score_combined)
+        return _res, _rnk, _prnk
 
-    if mode == "nec2":
-        results = nec2_sweep(
-            grid=grid,
-            calc_rows=calc_rows,
-            unun_ratio=unun_ratio,
-            nec2c_bin=nec2c_bin,
-            wire_height_m=args.wire_height,
-            cp_height_m=args.cp_height,
-            ground_cond=args.ground_cond,
-            ground_diel=args.ground_diel,
-            cp_types=cp_types,
-            verbose=verbose,
+    # ── Helper: detect boundary hits, return flags and hit counts ────────
+    _TOL = 1e-6
+
+    def _check_boundaries(ranked_list, w_min, w_max, cp_min, cp_max):
+        """Return (wire_at_max, wire_at_min, cp_at_max, cp_at_min,
+                   hits_wire, hits_cp) for the top-5 of ranked_list."""
+        if not ranked_list:
+            return False, False, False, False, 0, 0
+        _best = ranked_list[0]
+        _hits_wire = sum(
+            1 for r in ranked_list[:5]
+            if abs(r.wire_len_m - w_min) < _TOL
+            or abs(r.wire_len_m - w_max) < _TOL
         )
-    else:
-        _emp_cp = args.cp_type if args.cp_type != "both" else "horizontal"
-        if args.cp_type == "both":
-            print(f"  {Fore.YELLOW}" + T("warn_empirical_cp_forced") + f"{Style.RESET_ALL}")
-        results = empirical_sweep(
-            grid=grid,
-            calc_rows=calc_rows,
-            unun_ratio=unun_ratio,
-            cp_type=_emp_cp,
-            verbose=verbose,
+        _hits_cp = sum(
+            1 for r in ranked_list[:5]
+            if abs(r.cp_len_m - cp_min) < _TOL
+            or abs(r.cp_len_m - cp_max) < _TOL
         )
+        _w_at_max = abs(_best.wire_len_m - w_max) < _TOL
+        _w_at_min = abs(_best.wire_len_m - w_min) < _TOL
+        _c_at_max = abs(_best.cp_len_m  - cp_max) < _TOL
+        _c_at_min = abs(_best.cp_len_m  - cp_min) < _TOL
+        return _w_at_max, _w_at_min, _c_at_max, _c_at_min, _hits_wire, _hits_cp
 
-    print("\n" + T("sweep_complete").format(len(results)))
-
-    # ── Rank & Pareto ────────────────────────────────────────────────────
-    ranked = rank_results(results)
+    # ── Initial sweep ─────────────────────────────────────────────────────
+    results, ranked, pareto_ranked = _run_sweep(
+        args.wire_min, args.wire_max, args.cp_min, args.cp_max
+    )
     pareto = pareto_front(results)
-    pareto_ranked = sorted(pareto, key=lambda r: r.score_combined)
 
-    print(T("pareto_count").format(len(pareto)))
+    print(T("pareto_count").format(len(pareto_ranked)))
 
+    # ── --retry loop ──────────────────────────────────────────────────────
+    _retry_max   = max(0, int(args.retry))
+    _cur_w_min   = args.wire_min
+    _cur_w_max   = args.wire_max
+    _cur_cp_min  = args.cp_min
+    _cur_cp_max  = args.cp_max
+
+    for _retry_n in range(1, _retry_max + 1):
+        (w_at_max, w_at_min,
+         c_at_max, c_at_min,
+         _hw, _hc) = _check_boundaries(ranked,
+                                        _cur_w_min, _cur_w_max,
+                                        _cur_cp_min, _cur_cp_max)
+
+        _need_retry = w_at_max or w_at_min or c_at_max or c_at_min
+        if not _need_retry:
+            print(f"\n  {Fore.GREEN}" + T("retry_converged").format(_retry_n - 1)
+                  + f"{Style.RESET_ALL}")
+            break
+
+        _prev_best = ranked[0]
+        _new_w_min, _new_w_max     = _cur_w_min, _cur_w_max
+        _new_cp_min, _new_cp_max   = _cur_cp_min, _cur_cp_max
+
+        if w_at_max:
+            _new_w_min = _prev_best.wire_len_m
+            _new_w_max = round(_prev_best.wire_len_m + args.margin, 3)
+            print(f"\n  {Fore.YELLOW}"
+                  + T("retry_wire_expanding_max").format(_new_w_max, _retry_n, _retry_max)
+                  + f"{Style.RESET_ALL}")
+        elif w_at_min:
+            _new_w_max = _prev_best.wire_len_m
+            _new_w_min = max(1.0, round(_prev_best.wire_len_m - args.margin, 3))
+            print(f"\n  {Fore.YELLOW}"
+                  + T("retry_wire_expanding_min").format(_new_w_min, _retry_n, _retry_max)
+                  + f"{Style.RESET_ALL}")
+
+        if c_at_max:
+            _new_cp_min = _prev_best.cp_len_m
+            _new_cp_max = round(_prev_best.cp_len_m + args.margin, 3)
+            print(f"\n  {Fore.YELLOW}"
+                  + T("retry_cp_expanding_max").format(_new_cp_max, _retry_n, _retry_max)
+                  + f"{Style.RESET_ALL}")
+        elif c_at_min:
+            _new_cp_max = _prev_best.cp_len_m
+            _new_cp_min = max(1.0, round(_prev_best.cp_len_m - args.margin, 3))
+            print(f"\n  {Fore.YELLOW}"
+                  + T("retry_cp_expanding_min").format(_new_cp_min, _retry_n, _retry_max)
+                  + f"{Style.RESET_ALL}")
+
+        _new_results, _new_ranked, _new_pareto_ranked = _run_sweep(
+            _new_w_min, _new_w_max, _new_cp_min, _new_cp_max
+        )
+
+        if (_new_ranked
+                and _new_ranked[0].score_combined < ranked[0].score_combined):
+            results        = _new_results
+            ranked         = _new_ranked
+            pareto_ranked  = _new_pareto_ranked
+            pareto         = pareto_front(results)
+            _cur_w_min, _cur_w_max   = _new_w_min, _new_w_max
+            _cur_cp_min, _cur_cp_max = _new_cp_min, _new_cp_max
+            print(f"  {Fore.GREEN}"
+                  + T("retry_new_best").format(
+                      ranked[0].wire_len_m, ranked[0].cp_len_m,
+                      ranked[0].score_combined)
+                  + f"{Style.RESET_ALL}")
+        else:
+            print(f"  {Fore.CYAN}"
+                  + T("retry_no_improvement").format(
+                      ranked[0].wire_len_m, ranked[0].cp_len_m)
+                  + f"{Style.RESET_ALL}")
+            break   # no point continuing if the new window is worse
+
+    # Use the (possibly updated) bounds for the final boundary warnings
+    args.wire_min = _cur_w_min
+    args.wire_max = _cur_w_max
+    args.cp_min   = _cur_cp_min
+    args.cp_max   = _cur_cp_max
+
+    # ── Display best candidate ─────────────────────────────────────────────
     if ranked:
         best = ranked[0]
         print(f"\n  {Fore.GREEN}" + T("best_candidate") + f"{Style.RESET_ALL}"
@@ -3724,24 +3870,20 @@ def main() -> None:
         print(T("vswr_penalty").format(best.score_vswr))
         print(T("avoidance_mean").format(best.score_avoidance))
 
-        _tol = 1e-6
-        _boundary_hits_wire = sum(
-            1 for r in ranked[:5]
-            if abs(r.wire_len_m - args.wire_min) < _tol
-            or abs(r.wire_len_m - args.wire_max) < _tol
-        )
-        _boundary_hits_cp = sum(
-            1 for r in ranked[:5]
-            if abs(r.cp_len_m - args.cp_min) < _tol
-            or abs(r.cp_len_m - args.cp_max) < _tol
-        )
-        if abs(best.wire_len_m - args.wire_max) < _tol:
+        (w_at_max, w_at_min,
+         c_at_max, c_at_min,
+         _boundary_hits_wire,
+         _boundary_hits_cp) = _check_boundaries(ranked,
+                                                  args.wire_min, args.wire_max,
+                                                  args.cp_min,   args.cp_max)
+
+        if w_at_max:
             print(f"\n  {Fore.YELLOW}" + T("warn_wire_at_max").format(args.wire_max, _boundary_hits_wire) + f"{Style.RESET_ALL}")
-        elif abs(best.wire_len_m - args.wire_min) < _tol:
+        elif w_at_min:
             print(f"\n  {Fore.YELLOW}" + T("warn_wire_at_min").format(args.wire_min, _boundary_hits_wire) + f"{Style.RESET_ALL}")
-        if abs(best.cp_len_m - args.cp_max) < _tol:
+        if c_at_max:
             print(f"\n  {Fore.YELLOW}" + T("warn_cp_at_max").format(args.cp_max, _boundary_hits_cp) + f"{Style.RESET_ALL}")
-        elif abs(best.cp_len_m - args.cp_min) < _tol:
+        elif c_at_min:
             print(f"\n  {Fore.YELLOW}" + T("warn_cp_at_min").format(args.cp_min, _boundary_hits_cp) + f"{Style.RESET_ALL}")
         print()
 
@@ -3867,8 +4009,8 @@ def main() -> None:
         pareto=pareto_ranked,
         calc_rows=calc_rows,
         unun_ratio=unun_ratio,
-        wire_range=wire_range,
-        cp_range=cp_range,
+        wire_range=(args.wire_min, args.wire_max, args.wire_step),
+        cp_range=(args.cp_min, args.cp_max, args.cp_step),
         mode=mode,
         out_path=args.out_txt,
         unun_result=unun_result,
