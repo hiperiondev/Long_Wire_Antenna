@@ -1580,8 +1580,7 @@ def _flt(row: dict, name: str, default: float = 0.0) -> float:
     if v is None or str(v).strip() in ("", "—", "-", "N/A", "n/a"):
         return default
     s = str(v).strip()
-    import re as _re
-    if _re.fullmatch(r'-?[\d,\.]+', s):
+    if re.fullmatch(r'-?[\d,\.]+', s):
         s = s.replace(',', '.')
     try:
         return float(s)
@@ -1661,16 +1660,11 @@ def load_csv(filepath: str) -> List[CalcRow]:
 
             rows.append(cr)
 
-    all_csv_scores = [r.avoidance_score for r in rows if r.avoidance_score > 0]
-    use_computed = (len(set(all_csv_scores)) <= 1)
-
-    for r in rows:
-        if use_computed:
-            pass
-        else:
-            if r.avoidance_score > 0:
-                r._computed_avoidance = r.avoidance_score
-
+    # Note: _computed_avoidance is a diagnostic attribute set above for each row.
+    # score_candidate() recomputes avoidance from wire geometry at runtime, so
+    # this pre-computed value is not used in the optimisation loop.  It remains
+    # available for callers that want a quick CSV-level estimate without running
+    # a full sweep (e.g. pre-flight sanity checks).
     return rows
 
 
@@ -2907,8 +2901,7 @@ def write_report(
 
     report_text = "\n".join(lines)
 
-    import re as _re
-    clean = _re.sub(r'\x1b\[[0-9;]*m', '', report_text)
+    clean = re.sub(r'\x1b\[[0-9;]*m', '', report_text)
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write(clean)
 
@@ -3682,11 +3675,10 @@ def main() -> None:
                 _raw = _fh.read()
             _first_line = _raw.split("\n")[0]
             if ";" in _first_line and _first_line.count(";") >= _first_line.count(","):
-                import re as _re
                 def _fix_decimal(m):
                     s = m.group(0)
-                    return _re.sub(r'(\d),(\d)', r'\1.\2', s)
-                _norm = _re.sub(r'[^;\n]+', _fix_decimal, _raw)
+                    return re.sub(r'(\d),(\d)', r'\1.\2', s)
+                _norm = re.sub(r'[^;\n]+', _fix_decimal, _raw)
                 _norm = _norm.replace(";", ",")
                 _tmp_fd, _tmp_path = tempfile.mkstemp(suffix=".csv", prefix="nec2opt_norm_")
                 with os.fdopen(_tmp_fd, "w", encoding="utf-8") as _fh:
@@ -4267,8 +4259,7 @@ def main() -> None:
 
     print()
     if verbose:
-        import re as _re
-        clean = _re.sub(r'\x1b\[[0-9;]*m', '', report)
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', report)
         print(clean)
 
     print(f"\n{Fore.CYAN}" + T("done") + f"{Style.RESET_ALL}\n")
@@ -5525,13 +5516,12 @@ def _launch_gui() -> None:
             self._thread.start()
 
         def _run_in_thread(self, cmd: list, cwd):
-            import re as _re2
             try:
                 self._process = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, encoding="utf-8", errors="replace", cwd=cwd, bufsize=1)
                 for line in self._process.stdout:
-                    clean = _re2.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', line)
+                    clean = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', line)
                     self.after(0, self._log, clean)
                 self._process.wait()
                 rc = self._process.returncode
