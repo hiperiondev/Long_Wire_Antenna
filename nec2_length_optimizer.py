@@ -661,6 +661,22 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "CP range        : {0:.2f} m … {1:.2f} m  step {2:.3f} m",
         "es": "Rango de CP     : {0:.2f} m … {1:.2f} m  paso {2:.3f} m",
     },
+    "report_wire_geom_sloped_summary": {
+        "en": "Wire geometry   : SLOPED  (far-end height = {0:.4f} m)",
+        "es": "Geometría hilo  : INCLINADO  (altura extremo lejano = {0:.4f} m)",
+    },
+    "report_wire_geom_horizontal": {
+        "en": "Wire geometry   : horizontal (flat)",
+        "es": "Geometría hilo  : horizontal (plano)",
+    },
+    "report_wire_geom_sloped_detail": {
+        "en": "Wire geometry   : SLOPED  (feedpoint z={0:.3f} m → far end z={1:.4f} m)",
+        "es": "Geometría hilo  : INCLINADO  (punto alimentación z={0:.3f} m → extremo lejano z={1:.4f} m)",
+    },
+    "report_wire_geom_horizontal_const": {
+        "en": "Wire geometry   : horizontal (flat, z = constant)",
+        "es": "Geometría hilo  : horizontal (plano, z = constante)",
+    },
     "report_active_bands": {
         "en": "Active bands    : {0} of {1}  ({2})  (* = scored for VSWR)",
         "es": "Bandas activas  : {0} de {1}  ({2})  (* = evaluadas para ROS)",
@@ -1338,9 +1354,19 @@ def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run,
         return
 
     wires = []
+    slope_end_z: Optional[float] = None
     try:
         with open(nec_path, 'r', errors='replace') as fh:
             for line in fh:
+                # Detect slope comment written by write_nec_deck / write_best_nec_deck
+                cm_slope = re.match(
+                    r'CM\s+Wire\s+slope\s+end\s+z:\s*([\d.Ee+\-]+)\s*m',
+                    line, re.IGNORECASE)
+                if cm_slope:
+                    try:
+                        slope_end_z = float(cm_slope.group(1))
+                    except ValueError:
+                        pass
                 m = re.match(
                     r'GW\s+(\d+)\s+\d+\s+'
                     r'([\d.\-Ee+]+)\s+([\d.\-Ee+]+)\s+([\d.\-Ee+]+)\s+'
@@ -1373,6 +1399,10 @@ def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run,
         run.cp_type = 'vertical'
     else:
         run.cp_type = 'horizontal'
+
+    # Store slope metadata so callers can record it in CandidateResult
+    if slope_end_z is not None:
+        run._wire_slope_end_m = slope_end_z
 
     run._cp_from_deck = True
 
@@ -1836,36 +1866,60 @@ def write_nec_deck(
     cp_type: str,           # "horizontal" | "vertical"
     freqs_mhz: List[float],
     wire_height_m: float = DEFAULT_HEIGHT_M,
+    wire_slope_end_m: Optional[float] = None,  # None → horizontal (z_far = wire_height_m)
     cp_height_m: float = 0.5,
     ground_cond: float = DEFAULT_GROUND_COND,
     ground_diel: float = DEFAULT_GROUND_DIEL,
     wire_radius_m: float = WIRE_RADIUS_M,
 ) -> None:
     """
-    Write a minimal NEC2 input deck for a horizontal end-fed long wire
-    with one counterpoise wire.
+    Write a minimal NEC2 input deck for an end-fed long wire with one
+    counterpoise wire.
 
-    Wire geometry:
-      Wire 1  (antenna)  : horizontal, z = wire_height_m, x = 0..wire_len_m
-      Wire 2  (CP, horiz): horizontal, z = cp_height_m,   x = 0..-cp_len_m
-      Wire 2  (CP, vert) : vertical,   x = 0, z = wire_height_m..cp_height_m
+    Wire geometry (antenna, Wire 1):
+      Horizontal (wire_slope_end_m is None):
+        z = wire_height_m throughout; x = 0 .. wire_len_m
+      Sloping (wire_slope_end_m is not None):
+        Near end (feedpoint): x=0, z=wire_height_m
+        Far end             : x=h_proj, z=wire_slope_end_m
+        where h_proj = sqrt(wire_len_m² − rise²) and rise = wire_height_m − z_far.
 
-    Source (EX): first segment of Wire 1 (x=0, the near end — the feedpoint
-    junction where Wire 1 meets the counterpoise).
+    Source (EX): first segment of Wire 1 (the near/feedpoint end).
     """
     highest_f = max(freqs_mhz)
     segs_ant = _segs(wire_len_m, highest_f)
     segs_cp  = max(5, _segs(cp_len_m, highest_f))
 
+    # ── Resolve Wire-1 far-end coordinates ───────────────────────────────
+    z_near = wire_height_m
+    if wire_slope_end_m is not None:
+        z_far = max(float(wire_slope_end_m), wire_radius_m)   # NEC2 floor: ≥ wire radius
+        rise  = z_near - z_far
+        if rise > wire_len_m:
+            raise ValueError(
+                f"wire_height_m ({wire_height_m:.3f} m) − slope_end ({z_far:.4f} m) "
+                f"= {rise:.3f} m exceeds wire_len_m ({wire_len_m:.3f} m); "
+                "wire cannot reach the specified far-end height."
+            )
+        x_far = math.sqrt(max(0.0, wire_len_m**2 - rise**2))
+    else:
+        z_far = z_near
+        x_far = wire_len_m
+
+    # GE flag: activate wire-to-ground connection when far end is very close
+    ge_flag = 1 if (wire_slope_end_m is not None and z_far < 0.01) else 0
+
     with open(nec_path, "w") as fh:
         fh.write(f"CM NEC2 Long Wire Optimizer Deck\n")
         fh.write(f"CM Wire length: {wire_len_m:.3f} m\n")
         fh.write(f"CM Counterpoise ({cp_type}): {cp_len_m:.3f} m  height: {cp_height_m:.2f} m\n")
+        if wire_slope_end_m is not None:
+            fh.write(f"CM Wire slope end z: {z_far:.4f} m\n")
         fh.write("CE\n")
 
         fh.write(f"GW 1 {segs_ant} "
-                 f"0.0 0.0 {wire_height_m:.3f} "
-                 f"{wire_len_m:.3f} 0.0 {wire_height_m:.3f} "
+                 f"0.0 0.0 {z_near:.3f} "
+                 f"{x_far:.3f} 0.0 {z_far:.4f} "
                  f"{wire_radius_m:.5f}\n")
 
         if cp_type == "horizontal":
@@ -1905,7 +1959,7 @@ def write_nec_deck(
                          f"{-horiz_rem:.3f} 0.0 {cp_bottom_z:.3f} "
                          f"{wire_radius_m:.5f}\n")
 
-        fh.write("GE 0\n")
+        fh.write(f"GE {ge_flag}\n")
         fh.write(f"GN 2 0 0 0 {ground_diel:.1f} {ground_cond:.4f}\n")
         fh.write("EX 0 1 1 0 1.0 0.0\n")
 
@@ -1973,6 +2027,9 @@ class CandidateResult:
 
     nec2_ok:    bool = True
     note:       str  = ""
+
+    # Sloping wire: z of the far (non-feedpoint) end; None = horizontal wire
+    wire_slope_end_m: Optional[float] = None
 
 
 def _vswr_score_single(vswr: float) -> float:
@@ -2231,8 +2288,14 @@ def empirical_sweep(
     calc_rows: List[CalcRow],
     unun_ratio: float,
     cp_type: str,
+    wire_slope_end_m: Optional[float] = None,  # None → horizontal
     verbose: bool = False,
 ) -> List[CandidateResult]:
+    if wire_slope_end_m is not None:
+        print(f"\n  {Fore.YELLOW}WARNING: --wire-slope-end-height is set but mode is empirical. "
+              f"Empirical impedance formulas assume a horizontal wire and will give "
+              f"inaccurate results for a sloped geometry. "
+              f"Re-run with --mode nec2 for accurate results.{Style.RESET_ALL}\n")
     results = []
     total = len(grid)
     for i, (w, c) in enumerate(grid):
@@ -2240,6 +2303,7 @@ def empirical_sweep(
             pct = i * 100 // total
             print(T("sweep_empirical_pct").format(pct, i, total, w, c), end="\r")
         r = score_candidate(w, c, calc_rows, unun_ratio, cp_type_hint=cp_type)
+        r.wire_slope_end_m = wire_slope_end_m
         results.append(r)
     if verbose:
         print(T("sweep_empirical_done").format(total))
@@ -2260,6 +2324,7 @@ def nec2_sweep(
     ground_cond: float,
     ground_diel: float,
     cp_types: List[str],
+    wire_slope_end_m: Optional[float] = None,  # None → horizontal wire
     verbose: bool = True,
 ) -> List[CandidateResult]:
     """
@@ -2295,6 +2360,7 @@ def nec2_sweep(
                     cp_type=cpt,
                     freqs_mhz=freqs,
                     wire_height_m=wire_height_m,
+                    wire_slope_end_m=wire_slope_end_m,
                     cp_height_m=cp_height_m,
                     ground_cond=ground_cond,
                     ground_diel=ground_diel,
@@ -2334,6 +2400,7 @@ def nec2_sweep(
                     cp_type_hint=actual_label,
                     nec2_strict=True,
                 )
+                cand.wire_slope_end_m = wire_slope_end_m
                 results.append(cand)
             else:
                 candidates_this = []
@@ -2358,6 +2425,7 @@ def nec2_sweep(
                         cp_type_hint=actual_label_dual,
                         nec2_strict=True,
                     )
+                    c_cand.wire_slope_end_m = wire_slope_end_m
                     candidates_this.append(c_cand)
 
                 if not candidates_this:
@@ -2366,6 +2434,7 @@ def nec2_sweep(
                         score_combined=999.0, score_vswr_raw=999.0,
                         score_vswr=999.0, score_avoidance=0.0,
                         nec2_ok=False, note="NEC2 failed (both orientations)",
+                        wire_slope_end_m=wire_slope_end_m,
                     )
                     results.append(cand)
                 else:
@@ -2643,6 +2712,7 @@ def write_report(
     out_path: str,
     unun_result: Optional[UnUnResult] = None,
     total_candidates: int = 0,
+    wire_height_m: float = DEFAULT_HEIGHT_M,
 ) -> str:
     active = [r for r in calc_rows if r.active]
     bands  = [cr.band for cr in active]
@@ -2665,11 +2735,17 @@ def write_report(
     ln(T("report_unun").format(unun_ratio))
     ln(T("report_wire_range").format(wire_range[0], wire_range[1], wire_range[2]))
     ln(T("report_cp_range").format(cp_range[0], cp_range[1], cp_range[2]))
+
+    # Show slope geometry if any ranked result carries it
+    _any_slope = next((r.wire_slope_end_m for r in ranked if r.wire_slope_end_m is not None), None)
+    if _any_slope is not None:
+        ln(T("report_wire_geom_sloped_summary").format(_any_slope))
+    else:
+        ln(T("report_wire_geom_horizontal"))
     all_bands_list  = [cr.band for cr in calc_rows]
     active_band_set = set(cr.band for cr in active)
     band_labels = [f"{b}(*)" if b in active_band_set else b for b in all_bands_list]
-    ln(f"Active bands    : {len(active)} of {len(calc_rows)}"
-       f"  ({', '.join(band_labels)})  (* = scored for VSWR)")
+    ln(T("report_active_bands").format(len(active), len(calc_rows), ', '.join(band_labels)))
 
     display_total = total_candidates if total_candidates > 0 else len(ranked)
     ln(T("report_total_candidates").format(display_total))
@@ -2728,6 +2804,10 @@ def write_report(
         h1(T("report_best_header"))
         ln(T("report_wire_len").format(best.wire_len_m))
         ln(T("report_cp_len").format(best.cp_len_m, best.cp_type))
+        if best.wire_slope_end_m is not None:
+            ln(T("report_wire_geom_sloped_detail").format(wire_height_m, best.wire_slope_end_m))
+        else:
+            ln(T("report_wire_geom_horizontal_const"))
         ln(T("report_combined_score").format(best.score_combined))
         ln(T("report_vswr_penalty").format(best.score_vswr))
         ln(T("report_avoidance_act").format(best.score_avoidance_active))
@@ -2746,21 +2826,13 @@ def write_report(
             if abs(r.cp_len_m - _cmin) < _tol_r or abs(r.cp_len_m - _cmax) < _tol_r
         )
         if abs(best.wire_len_m - _wmax) < _tol_r:
-            ln(f"⚠  WIRE at search maximum ({_wmax:.3f} m) — {_hits_wire}/5 top candidates"
-               f" hit this boundary.  True optimum may be longer."
-               f"  Re-run with larger --wire-max or increase --margin.")
+            ln(T("report_warn_wire_max").format(_wmax, _hits_wire))
         elif abs(best.wire_len_m - _wmin) < _tol_r:
-            ln(f"⚠  WIRE at search minimum ({_wmin:.3f} m) — {_hits_wire}/5 top candidates"
-               f" hit this boundary.  True optimum may be shorter."
-               f"  Re-run with smaller --wire-min or increase --margin.")
+            ln(T("report_warn_wire_min").format(_wmin, _hits_wire))
         if abs(best.cp_len_m - _cmax) < _tol_r:
-            ln(f"⚠  CP at search maximum ({_cmax:.3f} m) — {_hits_cp}/5 top candidates"
-               f" hit this boundary.  True optimum may be longer."
-               f"  Re-run with larger --cp-max or increase --margin.")
+            ln(T("report_warn_cp_max").format(_cmax, _hits_cp))
         elif abs(best.cp_len_m - _cmin) < _tol_r:
-            ln(f"⚠  CP at search minimum ({_cmin:.3f} m) — {_hits_cp}/5 top candidates"
-               f" hit this boundary.  True optimum may be shorter."
-               f"  Re-run with smaller --cp-min or increase --margin.")
+            ln(T("report_warn_cp_min").format(_cmin, _hits_cp))
         lines.append("")
 
         ln(T("report_per_band"))
@@ -3024,6 +3096,7 @@ def write_best_nec_deck(
     calc_rows: List[CalcRow],
     out_path: str,
     wire_height_m: float = DEFAULT_HEIGHT_M,
+    wire_slope_end_m: Optional[float] = None,
     cp_height_m: float = 0.5,
     ground_cond: float = DEFAULT_GROUND_COND,
     ground_diel: float = DEFAULT_GROUND_DIEL,
@@ -3058,9 +3131,23 @@ def write_best_nec_deck(
         segs_ant = _segs(best.wire_len_m, highest_f)
         segs_cp  = max(5, _segs(best.cp_len_m, highest_f))
 
+        # ── Wire-1 coordinates (slope-aware) ────────────────────────────
+        _slope_end = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
+        _z_near = wire_height_m
+        if _slope_end is not None:
+            _z_far = max(float(_slope_end), wire_radius_m)
+            _rise  = _z_near - _z_far
+            _x_far = math.sqrt(max(0.0, best.wire_len_m**2 - _rise**2))
+            _ge_flag = 1 if _z_far < 0.01 else 0
+            fh.write(f"CM  Wire slope end z: {_z_far:.4f} m\n")
+        else:
+            _z_far   = _z_near
+            _x_far   = best.wire_len_m
+            _ge_flag = 0
+
         fh.write(f"GW 1 {segs_ant} "
-                 f"0.0 0.0 {wire_height_m:.3f} "
-                 f"{best.wire_len_m:.3f} 0.0 {wire_height_m:.3f} "
+                 f"0.0 0.0 {_z_near:.3f} "
+                 f"{_x_far:.3f} 0.0 {_z_far:.4f} "
                  f"{wire_radius_m:.5f}\n")
 
         if cp_type == "horizontal":
@@ -3100,7 +3187,7 @@ def write_best_nec_deck(
                          f"{-horiz_rem:.3f} 0.0 {cp_bottom_z:.3f} "
                          f"{wire_radius_m:.5f}\n")
 
-        fh.write("GE 0\n")
+        fh.write(f"GE {_ge_flag}\n")
         fh.write(f"GN 2 0 0 0 {ground_diel:.1f} {ground_cond:.4f}\n")
         fh.write("EX 0 1 1 0 1.0 0.0\n")
 
@@ -3136,6 +3223,7 @@ def plot_radiation_diagrams(
     nec2c_bin: str,
     out_png: str,
     wire_height_m: float = DEFAULT_HEIGHT_M,
+    wire_slope_end_m: Optional[float] = None,
     cp_height_m: float = 0.5,
     ground_cond: float = DEFAULT_GROUND_COND,
     ground_diel: float = DEFAULT_GROUND_DIEL,
@@ -3176,10 +3264,25 @@ def plot_radiation_diagrams(
 
         with open(nec_path, "w") as fh:
             fh.write("CM RP sweep deck\n")
+
+            # ── Wire-1 coordinates (slope-aware) ────────────────────────
+            _rad_slope = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
+            _rad_z_near = wire_height_m
+            if _rad_slope is not None:
+                _rad_z_far = max(float(_rad_slope), WIRE_RADIUS_M)
+                _rad_rise  = _rad_z_near - _rad_z_far
+                _rad_x_far = math.sqrt(max(0.0, best.wire_len_m**2 - _rad_rise**2))
+                _rad_ge    = 1 if _rad_z_far < 0.01 else 0
+                fh.write(f"CM Wire slope end z: {_rad_z_far:.4f} m\n")
+            else:
+                _rad_z_far = _rad_z_near
+                _rad_x_far = best.wire_len_m
+                _rad_ge    = 0
+
             fh.write("CE\n")
             fh.write(f"GW 1 {segs_ant} "
-                     f"0.0 0.0 {wire_height_m:.3f} "
-                     f"{best.wire_len_m:.3f} 0.0 {wire_height_m:.3f} "
+                     f"0.0 0.0 {_rad_z_near:.3f} "
+                     f"{_rad_x_far:.3f} 0.0 {_rad_z_far:.4f} "
                      f"{WIRE_RADIUS_M:.5f}\n")
             if cp_type == "horizontal":
                 drop_len = wire_height_m - cp_height_m
@@ -3217,7 +3320,7 @@ def plot_radiation_diagrams(
                              f"0.0 0.0 {cp_bottom_z:.3f} "
                              f"{-horiz_rem:.3f} 0.0 {cp_bottom_z:.3f} "
                              f"{WIRE_RADIUS_M:.5f}\n")
-            fh.write("GE 0\n")
+            fh.write(f"GE {_rad_ge}\n")
             fh.write(f"GN 2 0 0 0 {ground_diel:.1f} {ground_cond:.4f}\n")
             fh.write("EX 0 1 1 0 1.0 0.0\n")
 
@@ -3592,6 +3695,13 @@ def _build_parser() -> argparse.ArgumentParser:
                    help=T("ap_cp_step"))
     p.add_argument("--wire-height", metavar="M", type=float, default=None,
                    help=T("ap_wire_height").format(DEFAULT_HEIGHT_M))
+    p.add_argument("--wire-slope-end-height", metavar="M", type=float, default=None,
+                   help=(
+                       "Height of the far (non-feedpoint) wire end above ground in metres. "
+                       "0.0 = wire end at ground level (sloping/diagonal wire). "
+                       "Omit to keep the default horizontal flat wire. "
+                       "When set, NEC2 mode is forced; empirical formulas do not apply."
+                   ))
     p.add_argument("--cp-height", metavar="M", type=float, default=None,
                    help=T("ap_cp_height"))
     p.add_argument("--cp-type", choices=["horizontal", "vertical", "both"],
@@ -3917,6 +4027,16 @@ def main() -> None:
         else:
             mode = "nec2"
 
+    # ── Force NEC2 mode when a slope is requested ─────────────────────────
+    _slope = getattr(args, "wire_slope_end_height", None)
+    if _slope is not None and mode == "empirical":
+        print(f"  {Fore.YELLOW}INFO: --wire-slope-end-height requires NEC2 mode; "
+              f"switching to --mode nec2.{Style.RESET_ALL}")
+        if nec2c_bin is None:
+            print(f"{Fore.RED}" + T("nec2c_required") + f"{Style.RESET_ALL}")
+            sys.exit(1)
+        mode = "nec2"
+
     # ── Helper: run one sweep and return (results, ranked, pareto_ranked) ─
     def _run_sweep(w_min: float, w_max: float, cp_min: float, cp_max: float):
         _grid = build_search_grid(w_min, w_max, args.wire_step,
@@ -3935,6 +4055,7 @@ def main() -> None:
                 ground_cond=args.ground_cond,
                 ground_diel=args.ground_diel,
                 cp_types=cp_types,
+                wire_slope_end_m=_slope,
                 verbose=verbose,
             )
         else:
@@ -3946,6 +4067,7 @@ def main() -> None:
                 calc_rows=calc_rows,
                 unun_ratio=unun_ratio,
                 cp_type=_emp_cp,
+                wire_slope_end_m=_slope,
                 verbose=verbose,
             )
         print("\n" + T("sweep_complete").format(len(_res)))
@@ -4143,6 +4265,7 @@ def main() -> None:
                         cp_type=cpt,
                         freqs_mhz=all_freqs,
                         wire_height_m=args.wire_height,
+                        wire_slope_end_m=_slope,
                         cp_height_m=args.cp_height,
                         ground_cond=args.ground_cond,
                         ground_diel=args.ground_diel,
@@ -4222,6 +4345,7 @@ def main() -> None:
         out_path=args.out_txt,
         unun_result=unun_result,
         total_candidates=len(results),
+        wire_height_m=args.wire_height,
     )
     print(T("report_saved").format(args.out_txt))
 
@@ -4237,6 +4361,7 @@ def main() -> None:
             calc_rows=calc_rows,
             out_path=args.out_nec,
             wire_height_m=args.wire_height,
+            wire_slope_end_m=_slope,
             cp_height_m=args.cp_height,
             ground_cond=args.ground_cond,
             ground_diel=args.ground_diel,
@@ -4250,6 +4375,7 @@ def main() -> None:
             nec2c_bin=nec2c_bin,
             out_png=args.out_radiation,
             wire_height_m=args.wire_height,
+            wire_slope_end_m=_slope,
             cp_height_m=args.cp_height,
             ground_cond=args.ground_cond,
             ground_diel=args.ground_diel,
@@ -4376,8 +4502,10 @@ def _launch_gui() -> None:
             "antenna_geom_lf":    "Antenna Geometry",
             "wire_height_lbl":    "wire-height:",
             "cp_height_lbl":      "cp-height:",
+            "wire_slope_end_lbl": "slope-end-height:",
             "wire_height_hint":   "Antenna wire height above ground  (default 8 m)",
             "cp_height_hint":     "Counterpoise height above ground  (default 0.5 m)",
+            "wire_slope_end_hint": "Far-end height for sloped wire  (0 = ground; leave blank for horizontal)",
             "cp_orient_lf":       "Counterpoise Orientation",
             "both_cp":            "Both (simulate horizontal & vertical)",
             "horizontal_cp":      "Horizontal only",
@@ -4508,8 +4636,10 @@ def _launch_gui() -> None:
             "antenna_geom_lf":    "Geometría de la Antena",
             "wire_height_lbl":    "wire-height:",
             "cp_height_lbl":      "cp-height:",
+            "wire_slope_end_lbl": "slope-end-height:",
             "wire_height_hint":   "Altura del hilo de antena sobre el suelo  (por defecto 8 m)",
             "cp_height_hint":     "Altura del contrapeso sobre el suelo  (por defecto 0,5 m)",
+            "wire_slope_end_hint": "Altura del extremo lejano para hilo inclinado  (0 = suelo; dejar vacío para hilo horizontal)",
             "cp_orient_lf":       "Orientación del Contrapeso",
             "both_cp":            "Ambos (simular horizontal y vertical)",
             "horizontal_cp":      "Sólo horizontal",
@@ -5127,11 +5257,13 @@ def _launch_gui() -> None:
             hgt_lf = ttk.LabelFrame(t, padding=8)
             hgt_lf.pack(fill="x", pady=(0, 8))
             self._reg(hgt_lf, "antenna_geom_lf")
-            self._wire_height_var = tk.StringVar(value="8.0")
-            self._cp_height_var   = tk.StringVar(value="0.5")
+            self._wire_height_var      = tk.StringVar(value="8.0")
+            self._cp_height_var        = tk.StringVar(value="0.5")
+            self._wire_slope_end_var   = tk.StringVar(value="")   # empty = horizontal
             for row_i, (key_lbl, var, key_hint) in enumerate([
-                ("wire_height_lbl", self._wire_height_var, "wire_height_hint"),
-                ("cp_height_lbl",   self._cp_height_var,   "cp_height_hint"),
+                ("wire_height_lbl",    self._wire_height_var,    "wire_height_hint"),
+                ("cp_height_lbl",      self._cp_height_var,      "cp_height_hint"),
+                ("wire_slope_end_lbl", self._wire_slope_end_var, "wire_slope_end_hint"),
             ]):
                 lbl = ttk.Label(hgt_lf)
                 lbl.grid(row=row_i, column=0, sticky="w", pady=3)
@@ -5407,6 +5539,9 @@ def _launch_gui() -> None:
             wh = self._wire_height_var.get().strip()
             if wh:
                 cmd += ["--wire-height", wh]
+            slope = self._wire_slope_end_var.get().strip()
+            if slope:
+                cmd += ["--wire-slope-end-height", slope]
             cph = self._cp_height_var.get().strip()
             if cph:
                 cmd += ["--cp-height", cph]
