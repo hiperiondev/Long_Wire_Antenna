@@ -2696,13 +2696,13 @@ def write_report(
         _mean_vswr_pen     = r.score_vswr           # stored mean penalty
         _worst_pen_weighted = r.score_vswr_raw - r.score_vswr  # 1.5 × worst
         # CP bonus contribution = score_vswr_raw − 0.5×avoid_active − score_combined
-        _cp_bonus_deduction = (r.score_vswr_raw
-                               - 0.5 * r.score_avoidance_active
-                               - r.score_combined)
+        _cp_bonus_deduction = -(r.score_vswr_raw
+                                - 0.5 * r.score_avoidance_active
+                                - r.score_combined)
         lines.append(
             f"  {rank:3d}  {r.wire_len_m:8.3f}  {r.cp_len_m:7.3f}  {r.cp_type:>10}  "
             f"{r.score_combined:7.3f}  {_mean_vswr_pen:9.3f}  {_worst_pen_weighted:9.3f}  "
-            f"{0.5*r.score_avoidance_active:10.4f}  {_cp_bonus_deduction:11.4f}  "
+            f"{-0.5*r.score_avoidance_active:10.4f}  {_cp_bonus_deduction:11.4f}  "
             f"{band_cols}  {nec_flag}"
         )
 
