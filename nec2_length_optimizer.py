@@ -663,7 +663,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     },
     "report_wire_geom_sloped_summary": {
         "en": "Wire geometry   : SLOPED  (far-end height = {0:.4f} m)",
-        "es": "Geometría hilo  : INCLINADO  (altura extremo lejano = {0:.4f} m)",
+        "es": "Geometría hilo  : SLOPED  (altura extremo lejano = {0:.4f} m)",
     },
     "report_wire_geom_horizontal": {
         "en": "Wire geometry   : horizontal (flat)",
@@ -671,7 +671,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     },
     "report_wire_geom_sloped_detail": {
         "en": "Wire geometry   : SLOPED  (feedpoint z={0:.3f} m → far end z={1:.4f} m)",
-        "es": "Geometría hilo  : INCLINADO  (punto alimentación z={0:.3f} m → extremo lejano z={1:.4f} m)",
+        "es": "Geometría hilo  : SLOPED  (punto alimentación z={0:.3f} m → extremo lejano z={1:.4f} m)",
     },
     "report_wire_geom_horizontal_const": {
         "en": "Wire geometry   : horizontal (flat, z = constant)",
@@ -1418,8 +1418,12 @@ def _parse_nec2_fallback(text: str, run: NEC2Run):
         use_z_table = False
 
     freq_matches = []
+    seen_positions = set()
     for pat in _ALL_FREQ_RES:
-        freq_matches.extend(pat.finditer(text))
+        for m in pat.finditer(text):
+            if m.start() not in seen_positions:
+                seen_positions.add(m.start())
+                freq_matches.append(m)
     freq_matches.sort(key=lambda x: x.start())
 
     for m in imp_matches:
@@ -1610,7 +1614,7 @@ def _flt(row: dict, name: str, default: float = 0.0) -> float:
     if v is None or str(v).strip() in ("", "—", "-", "N/A", "n/a"):
         return default
     s = str(v).strip()
-    if re.fullmatch(r'-?[\d,\.]+', s):
+    if re.fullmatch(r'-?[\d]+([,.]\d+)?', s):
         s = s.replace(',', '.')
     try:
         return float(s)
@@ -1906,13 +1910,21 @@ def write_nec_deck(
         z_far = z_near
         x_far = wire_len_m
 
-    # GE flag: activate wire-to-ground connection when far end is very close
-    ge_flag = 1 if (wire_slope_end_m is not None and z_far < 0.01) else 0
+    # GE flag: 1 = ground plane present (required for GN Sommerfeld-Norton ground to take effect).
+    # NEC2 ignores the GN card when GE=0 (free space).  We always write a GN card, so GE must
+    # always be 1.  The special case z_far < 0.01 (wire end essentially at ground level) does
+    # not change this — it only means no elevated wire-end stub is needed.
+    ge_flag = 1
 
     with open(nec_path, "w") as fh:
         fh.write(f"CM NEC2 Long Wire Optimizer Deck\n")
         fh.write(f"CM Wire length: {wire_len_m:.3f} m\n")
         fh.write(f"CM Counterpoise ({cp_type}): {cp_len_m:.3f} m  height: {cp_height_m:.2f} m\n")
+        if cp_height_m >= wire_height_m:
+            # CP height at or above antenna height: place CP at antenna height level.
+            # This avoids a zero-length or negative-length drop wire.
+            cp_height_m = wire_height_m
+            fh.write(f"CM WARNING: cp_height_m >= wire_height_m; CP placed at wire height.\n")
         if wire_slope_end_m is not None:
             fh.write(f"CM Wire slope end z: {z_far:.4f} m\n")
         fh.write("CE\n")
@@ -2216,7 +2228,7 @@ def score_candidate(
         lambda_qtr = C_MHZ / (4.0 * freq)          # λ/4 — resonances occur at every multiple
         ratio = wire_len_m / lambda_qtr             # how many λ/4 nodes does wire_len span?
         frac = ratio % 1.0
-        avoidance = min(frac, 1.0 - frac)           # 0 = at node; max = 0.5 mid-way, capped to 0.25 by threshold
+        avoidance = min(frac, 1.0 - frac)           # 0 = at node; max = 0.5 mid-way between λ/4 nodes (clamped to 0.25 below)
         # Clamp to the theoretical maximum of 0.25 (midway between two adjacent λ/4 resonances)
         avoidance = min(avoidance, 0.25)
         res.band_avoidance[cr.band] = round(avoidance, 4)
@@ -2741,7 +2753,6 @@ def write_report(
     bands  = [cr.band for cr in active]
 
     SEP  = "═" * 80
-    SEP2 = "─" * 80
     lines = []
 
     def h1(t):
@@ -2778,7 +2789,7 @@ def write_report(
     top_n = len(ranked)
     h1(T("report_top_n_header").format(top_n))
     header = (f"  {'#':>3}  {'Wire(m)':>8}  {'CP(m)':>7}  {'CP type':>10}  "
-              f"{'Score':>7}  {'meanVpen':>9}  {'1.5xWrst':>9}  {'-0.5xAv(a)':>10}  {'-0.1xCPbon':>11}  "
+              f"{'Score':>7}  {'meanPen':>9}  {'1.5xWpen':>9}  {'-0.5xAv(a)':>10}  {'-0.1xCPbon':>11}  "
               + "  ".join(f"{b:>7}" for b in bands)
               + "  NEC2")
     lines.append(header)
@@ -3096,7 +3107,7 @@ def export_best_csv(
                 "L_over_lhalf":   round(w / lhalf if lhalf else 0.0, 4),
                 "R_wire_ohm":     round(R, 2),
                 "X_wire_ohm":     round(X, 2),
-                "vswr_no_cp":     round(vswr_no, 3) if cr.active else "",
+                "vswr_no_cp":     round(vswr_no, 3),
                 "vswr_with_cp":   _recompute_vswr(R, X, unun_ratio)
                                   if cr.active else "",
                 "Z_eff_ohm":      round(math.hypot(R, X), 2),
@@ -3157,16 +3168,15 @@ def write_best_nec_deck(
         # ── Wire-1 coordinates (slope-aware) ────────────────────────────
         _slope_end = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
         _z_near = wire_height_m
+        # GE 1: ground plane present — required for GN Sommerfeld-Norton to take effect.
         if _slope_end is not None:
             _z_far = max(float(_slope_end), wire_radius_m)
             _rise  = _z_near - _z_far
             _x_far = math.sqrt(max(0.0, best.wire_len_m**2 - _rise**2))
-            _ge_flag = 1 if _z_far < 0.01 else 0
-            fh.write(f"CM  Wire slope end z: {_z_far:.4f} m\n")
         else:
             _z_far   = _z_near
             _x_far   = best.wire_len_m
-            _ge_flag = 0
+        _ge_flag = 1
 
         fh.write(f"GW 1 {segs_ant} "
                  f"0.0 0.0 {_z_near:.3f} "
@@ -3292,16 +3302,15 @@ def plot_radiation_diagrams(
             # ── Wire-1 coordinates (slope-aware) ────────────────────────
             _rad_slope = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
             _rad_z_near = wire_height_m
+            # GE 1: ground plane present — required for GN Sommerfeld-Norton to take effect.
             if _rad_slope is not None:
                 _rad_z_far = max(float(_rad_slope), WIRE_RADIUS_M)
                 _rad_rise  = _rad_z_near - _rad_z_far
                 _rad_x_far = math.sqrt(max(0.0, best.wire_len_m**2 - _rad_rise**2))
-                _rad_ge    = 1 if _rad_z_far < 0.01 else 0
-                fh.write(f"CM Wire slope end z: {_rad_z_far:.4f} m\n")
             else:
                 _rad_z_far = _rad_z_near
                 _rad_x_far = best.wire_len_m
-                _rad_ge    = 0
+            _rad_ge    = 1
 
             fh.write("CE\n")
             fh.write(f"GW 1 {segs_ant} "
@@ -3408,7 +3417,6 @@ def plot_radiation_diagrams(
         )
 
         in_rp = False
-        _rows_at_rp_start: int = 0
 
         for line in raw.splitlines():
             fm = _freq_re.search(line)
@@ -3438,9 +3446,6 @@ def plot_radiation_diagrams(
                     existing = parsed_patterns.get(_cur_freq_ord, [])
                     if len(existing) == 0:
                         parsed_patterns[_cur_freq_ord] = []
-                        _rows_at_rp_start = 0
-                    else:
-                        _rows_at_rp_start = len(existing)
                     in_rp = True
                 else:
                     in_rp = False   # Bug 2 fix: also reset here for out-of-range blocks
@@ -3636,7 +3641,7 @@ def plot_results(
     ax2 = fig.add_subplot(gs[0, 2])
     ax2.scatter([r.score_vswr_raw for r in results],
                 [r.score_avoidance_active for r in results],
-                s=10, alpha=0.4, color="gray", label=T("plot_best_label")[1:])
+                s=10, alpha=0.4, color="gray", label="All")
     ax2.scatter([r.score_vswr_raw for r in pareto],
                 [r.score_avoidance_active for r in pareto],
                 s=60, marker="*", color="blue", label="Pareto")
@@ -5597,7 +5602,8 @@ def _launch_gui() -> None:
             if self._no_interact_var.get():
                 cmd += ["--no-interactive"]
             opt_lang = self._optlang_var.get().strip()
-            cmd += ["--lang", opt_lang if opt_lang and opt_lang != "auto" else self._ui_lang]
+            if opt_lang and opt_lang != "auto":
+                cmd += ["--lang", opt_lang]
             return cmd
 
         def _refresh_cmd(self):
