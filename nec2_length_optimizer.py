@@ -294,8 +294,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "  No se encontraron bandas activas.  Establezca la columna 'active' en SÍ en el CSV, o use --active-bands, u omita --active-bands para activar todas las --bands.",
     },
     "active_bands": {
-        "en": "  Active bands  : {0}  ({1})",
-        "es": "  Bandas activas: {0}  ({1})",
+        "en": "  Active bands  : {0} of {1}  ({2})",
+        "es": "  Bandas activas: {0} de {1}  ({2})",
     },
     "frequencies": {
         "en": "  Frequencies   : {0}",
@@ -1941,15 +1941,16 @@ def write_nec_deck(
                          f"{wire_radius_m:.5f}\n")
         else:  # vertical
             cp_bottom_z = max(cp_height_m, wire_height_m - cp_len_m)
-            vert_len    = wire_height_m - cp_bottom_z
-            horiz_rem   = cp_len_m - vert_len
-            segs_cp_v = max(5, _segs(vert_len, highest_f))
-            if segs_cp_v % 2 == 0:
-                segs_cp_v += 1
-            fh.write(f"GW 2 {segs_cp_v} "
-                     f"0.0 0.0 {wire_height_m:.3f} "
-                     f"0.0 0.0 {cp_bottom_z:.3f} "
-                     f"{wire_radius_m:.5f}\n")
+            vert_len    = max(0.0, wire_height_m - cp_bottom_z)
+            horiz_rem   = max(0.0, cp_len_m - vert_len)
+            if vert_len > 0.01:
+                segs_cp_v = max(5, _segs(vert_len, highest_f))
+                if segs_cp_v % 2 == 0:
+                    segs_cp_v += 1
+                fh.write(f"GW 2 {segs_cp_v} "
+                         f"0.0 0.0 {wire_height_m:.3f} "
+                         f"0.0 0.0 {cp_bottom_z:.3f} "
+                         f"{wire_radius_m:.5f}\n")
             if horiz_rem > 0.01:
                 segs_cp_h = max(3, _segs(horiz_rem, highest_f))
                 if segs_cp_h % 2 == 0:
@@ -1965,7 +1966,9 @@ def write_nec_deck(
 
         for f in freqs_mhz:
             fh.write(f"FR 0 1 0 0 {f:.4f} 0\n")
-            fh.write("RP 0 1 1 0 90.0 0.0 0.0 0.0\n")
+            # XQ triggers execution and writes ANTENNA INPUT PARAMETERS (impedance).
+            # No RP card needed for impedance-only sweep runs — removing it
+            # eliminates redundant pattern computation and speeds up the sweep.
             fh.write("XQ\n")
         fh.write("EN\n")
 
@@ -2035,7 +2038,10 @@ class CandidateResult:
 def _vswr_score_single(vswr: float) -> float:
     """
     Map a VSWR value to a penalty score:
-      ≤1.5 → 0, ≤3.0 → linear 0-1, ≤6.0 → linear 1-3, >6 → 3 + log
+      ≤1.5 → 0, ≤3.0 → linear 0–1, ≤6.0 → linear 1–3, >6 → 3 + log
+
+    The segment ≤6.0 must reach exactly 3.0 at vswr=6.0:
+      (6.0 - 3.0) / 1.5 = 2.0  → total = 1.0 + 2.0 = 3.0 ✓
     """
     if vswr <= 1.5:
         return 0.0
@@ -2460,19 +2466,36 @@ def pareto_front(results: List[CandidateResult]) -> List[CandidateResult]:
     Return Pareto-optimal candidates: those not dominated on
     (score_vswr_raw, score_avoidance_active).  Lower score_vswr_raw AND
     higher active-band avoidance = better.
+
+    Algorithm (O(n log n)):
+      1. Sort by score_vswr_raw ascending (ties: avoidance descending).
+      2. Sweep left to right keeping track of the maximum avoidance seen so far.
+         A candidate is Pareto-optimal iff no earlier candidate (equal or lower
+         VSWR penalty) already has equal or higher avoidance.  Equivalently,
+         a new candidate joins the front whenever its avoidance exceeds ALL
+         avoidances seen so far — guaranteeing it cannot be dominated.
     """
-    dominated = set()
-    for i, a in enumerate(results):
-        for j, b in enumerate(results):
-            if i == j:
-                continue
-            if (b.score_vswr_raw          <= a.score_vswr_raw and
-                    b.score_avoidance_active >= a.score_avoidance_active and
-                    (b.score_vswr_raw         < a.score_vswr_raw or
-                     b.score_avoidance_active > a.score_avoidance_active)):
-                dominated.add(i)
-                break
-    return [r for i, r in enumerate(results) if i not in dominated]
+    if not results:
+        return []
+    # Sort ascending by VSWR penalty; ties broken by descending avoidance
+    sorted_r = sorted(results,
+                      key=lambda r: (r.score_vswr_raw, -r.score_avoidance_active))
+    pareto: List[CandidateResult] = []
+    max_avoid_so_far = -float("inf")
+    for r in sorted_r:
+        # r is dominated iff some earlier entry has vswr_raw ≤ r.vswr_raw
+        # (guaranteed by sort) AND avoidance ≥ r.avoidance.
+        # r escapes domination only if its avoidance exceeds every prior avoidance.
+        if r.score_avoidance_active > max_avoid_so_far:
+            pareto.append(r)
+            max_avoid_so_far = r.score_avoidance_active
+        elif r.score_avoidance_active == max_avoid_so_far and pareto:
+            # Equal avoidance: include r only if its vswr equals the previous
+            # front member's vswr (i.e., they are tied on both axes — neither
+            # dominates the other).
+            if abs(pareto[-1].score_vswr_raw - r.score_vswr_raw) < 1e-9:
+                pareto.append(r)
+    return pareto
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3169,15 +3192,16 @@ def write_best_nec_deck(
                          f"{wire_radius_m:.5f}\n")
         else:
             cp_bottom_z = max(cp_height_m, wire_height_m - best.cp_len_m)
-            vert_len    = wire_height_m - cp_bottom_z
-            horiz_rem   = best.cp_len_m - vert_len
-            segs_cp_v   = max(5, _segs(vert_len, highest_f))
-            if segs_cp_v % 2 == 0:
-                segs_cp_v += 1
-            fh.write(f"GW 2 {segs_cp_v} "
-                     f"0.0 0.0 {wire_height_m:.3f} "
-                     f"0.0 0.0 {cp_bottom_z:.3f} "
-                     f"{wire_radius_m:.5f}\n")
+            vert_len    = max(0.0, wire_height_m - cp_bottom_z)
+            horiz_rem   = max(0.0, best.cp_len_m - vert_len)
+            if vert_len > 0.01:
+                segs_cp_v   = max(5, _segs(vert_len, highest_f))
+                if segs_cp_v % 2 == 0:
+                    segs_cp_v += 1
+                fh.write(f"GW 2 {segs_cp_v} "
+                         f"0.0 0.0 {wire_height_m:.3f} "
+                         f"0.0 0.0 {cp_bottom_z:.3f} "
+                         f"{wire_radius_m:.5f}\n")
             if horiz_rem > 0.01:
                 segs_cp_h = max(3, _segs(horiz_rem, highest_f))
                 if segs_cp_h % 2 == 0:
@@ -3303,15 +3327,16 @@ def plot_radiation_diagrams(
                              f"{WIRE_RADIUS_M:.5f}\n")
             else:
                 cp_bottom_z = max(cp_height_m, wire_height_m - best.cp_len_m)
-                vert_len = wire_height_m - cp_bottom_z
-                horiz_rem = best.cp_len_m - vert_len
-                segs_cp_v = max(5, _segs(vert_len, highest_f))
-                if segs_cp_v % 2 == 0:
-                    segs_cp_v += 1
-                fh.write(f"GW 2 {segs_cp_v} "
-                         f"0.0 0.0 {wire_height_m:.3f} "
-                         f"0.0 0.0 {cp_bottom_z:.3f} "
-                         f"{WIRE_RADIUS_M:.5f}\n")
+                vert_len = max(0.0, wire_height_m - cp_bottom_z)
+                horiz_rem = max(0.0, best.cp_len_m - vert_len)
+                if vert_len > 0.01:
+                    segs_cp_v = max(5, _segs(vert_len, highest_f))
+                    if segs_cp_v % 2 == 0:
+                        segs_cp_v += 1
+                    fh.write(f"GW 2 {segs_cp_v} "
+                             f"0.0 0.0 {wire_height_m:.3f} "
+                             f"0.0 0.0 {cp_bottom_z:.3f} "
+                             f"{WIRE_RADIUS_M:.5f}\n")
                 if horiz_rem > 0.01:
                     segs_cp_h = max(3, _segs(horiz_rem, highest_f))
                     if segs_cp_h % 2 == 0:
@@ -3910,7 +3935,7 @@ def main() -> None:
         print(f"{Fore.RED}" + T("no_active_bands") + f"{Style.RESET_ALL}")
         sys.exit(1)
 
-    print(T("active_bands").format(len(active), ', '.join(r.band for r in active)))
+    print(T("active_bands").format(len(active), len(calc_rows), ', '.join(r.band for r in active)))
     print(T("frequencies").format([r.freq_mhz for r in active]))
 
     # ── UnUn ratio ────────────────────────────────────────────────────────
@@ -4253,6 +4278,8 @@ def main() -> None:
 
         if mode == "nec2" and nec2c_bin:
             all_freqs = [cr.freq_mhz for cr in calc_rows]
+            _wh  = args.wire_height  if args.wire_height  is not None else DEFAULT_HEIGHT_M
+            _cph = args.cp_height    if args.cp_height    is not None else 0.5
             with tempfile.TemporaryDirectory(prefix="nec2opt_unun_") as _td:
                 for cpt, _attr in [("horizontal", "best_run_h"),
                                     ("vertical",   "best_run_v")]:
@@ -4264,9 +4291,9 @@ def main() -> None:
                         cp_len_m=best.cp_len_m,
                         cp_type=cpt,
                         freqs_mhz=all_freqs,
-                        wire_height_m=args.wire_height,
+                        wire_height_m=_wh,
                         wire_slope_end_m=_slope,
-                        cp_height_m=args.cp_height,
+                        cp_height_m=_cph,
                         ground_cond=args.ground_cond,
                         ground_diel=args.ground_diel,
                     )
@@ -4345,7 +4372,7 @@ def main() -> None:
         out_path=args.out_txt,
         unun_result=unun_result,
         total_candidates=len(results),
-        wire_height_m=args.wire_height,
+        wire_height_m=args.wire_height if args.wire_height is not None else DEFAULT_HEIGHT_M,
     )
     print(T("report_saved").format(args.out_txt))
 
@@ -4355,14 +4382,17 @@ def main() -> None:
 
     plot_results(results, pareto, ranked, calc_rows, unun_ratio, args.out_png)
 
+    _wh_out  = args.wire_height if args.wire_height is not None else DEFAULT_HEIGHT_M
+    _cph_out = args.cp_height   if args.cp_height   is not None else 0.5
+
     if ranked:
         write_best_nec_deck(
             best=ranked[0],
             calc_rows=calc_rows,
             out_path=args.out_nec,
-            wire_height_m=args.wire_height,
+            wire_height_m=_wh_out,
             wire_slope_end_m=_slope,
-            cp_height_m=args.cp_height,
+            cp_height_m=_cph_out,
             ground_cond=args.ground_cond,
             ground_diel=args.ground_diel,
         )
@@ -4374,9 +4404,9 @@ def main() -> None:
             calc_rows=calc_rows,
             nec2c_bin=nec2c_bin,
             out_png=args.out_radiation,
-            wire_height_m=args.wire_height,
+            wire_height_m=_wh_out,
             wire_slope_end_m=_slope,
-            cp_height_m=args.cp_height,
+            cp_height_m=_cph_out,
             ground_cond=args.ground_cond,
             ground_diel=args.ground_diel,
         )
