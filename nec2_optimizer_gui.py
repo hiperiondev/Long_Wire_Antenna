@@ -36,14 +36,15 @@ BAND_CENTRE_FREQ_MHZ = {
     "6m":    50.200,  "4m":  70.200,   "2m":  144.200,  "70cm": 432.100,
     "23cm":  1296.200,
 }
-KNOWN_BANDS = sorted(BAND_CENTRE_FREQ_MHZ.keys())
+KNOWN_BANDS = BAND_CENTRE_FREQ_MHZ.keys()
 UNUN_RATIOS = [1, 1.5, 2, 3, 4, 6, 9, 12, 16, 25, 27, 36, 49, 64]
 
 
 def _detect_ui_lang() -> str:
     """Return 'es' if system locale is Spanish, else 'en'."""
     try:
-        lang = locale.getdefaultlocale()[0] or ""
+        # locale.getdefaultlocale() is deprecated in Python 3.11+; use getlocale()
+        lang = locale.getlocale()[0] or ""
     except Exception:
         lang = ""
     return "es" if lang.lower().startswith("es") else "en"
@@ -174,6 +175,8 @@ STRINGS = {
         "refresh_preview":    "Refresh preview",
         "run_btn":            "▶  Run Optimizer",
         "stop_btn":           "■  Stop",
+        "show_report_btn":    "📄  Show Report",
+        "show_radiation_btn": "📡  Show Radiation Pattern",
         "idle":               "Idle",
         "console_lf":         "Console Output",
         "clear_btn":          "Clear",
@@ -315,6 +318,8 @@ STRINGS = {
         "refresh_preview":    "Actualizar vista previa",
         "run_btn":            "▶  Ejecutar Optimizador",
         "stop_btn":           "■  Detener",
+        "show_report_btn":    "📄  Ver Informe",
+        "show_radiation_btn": "📡  Ver Patrón de Radiación",
         "idle":               "Inactivo",
         "console_lf":         "Salida de Consola",
         "clear_btn":          "Limpiar",
@@ -404,6 +409,7 @@ class App(tk.Tk):
         self._process: "subprocess.Popen | None" = None
         self._thread:  "threading.Thread | None" = None
         self._running  = False
+        self._stopped  = False   # True while a user-initiated stop is in progress
 
         self._script_path = _find_optimizer_script()
 
@@ -491,6 +497,7 @@ class App(tk.Tk):
         st.configure("Accent.TButton",    font=(_FF,  sz, "bold"))
         st.configure("Stop.TButton",      font=(_FF,  sz, "bold"))
         st.configure("Browse.TButton",    font=(_FF,  sz))
+        st.configure("InfoBtn.TButton",   font=(_FF,  sz))
         st.configure("Lang.TButton",      font=(_FF,  sz, "bold"))
         st.configure("FontCtrl.TButton",  font=(_FF,  sz, "bold"))
         st.configure("TEntry",            font=(_FF,  sz))
@@ -610,6 +617,19 @@ class App(tk.Tk):
         )
         st.map("Browse.TButton", background=[("active", BTN_HOV)])
 
+        # Info buttons (Show Report / Show Radiation) — centred text, wider padding.
+        # Use the clam default TButton layout (no custom layout); anchor="center"
+        # works correctly through clam's built-in layout just as it does for
+        # Accent.TButton and Stop.TButton.
+        st.configure("InfoBtn.TButton",
+            background=BTN_BG, foreground=FG,
+            relief="solid", padding=(14, 6), bordercolor=BORDER,
+            anchor="center", justify="center",
+        )
+        st.map("InfoBtn.TButton",
+               background=[("active", BTN_HOV), ("disabled", BG3)],
+               foreground=[("disabled", FG2)])
+
         # Language toggle button
         st.configure("Lang.TButton",
             background=BTN_BG, foreground=ACCENT,
@@ -720,6 +740,8 @@ class App(tk.Tk):
         src_lf.pack(fill="x", pady=(0, 8))
         self._reg(src_lf, "band_source_lf")
 
+        src_lf.columnconfigure(2, weight=1)   # spacer column keeps both radio-buttons together on the left
+
         self._src_mode = tk.StringVar(value="manual")
 
         self._rb_csv = ttk.Radiobutton(src_lf, variable=self._src_mode,
@@ -748,9 +770,9 @@ class App(tk.Tk):
         self._browse_csv_btn.pack(side="left")
         self._reg(self._browse_csv_btn, "browse")
 
-        # Manual frame
+        # Manual frame — same row as csv_frame; only one visible at a time via grid/grid_remove
         self._manual_frame = ttk.Frame(src_lf)
-        self._manual_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+        self._manual_frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(6, 0))
 
         self._bands_lbl = ttk.Label(self._manual_frame)
         self._bands_lbl.grid(row=0, column=0, sticky="w")
@@ -843,6 +865,27 @@ class App(tk.Tk):
         self._unun_hint_lbl.pack(side="left")
         self._reg(self._unun_hint_lbl, "unun_hint")
 
+        # Optimizer Language
+        optlang_lf = ttk.LabelFrame(t, padding=8)
+        optlang_lf.pack(fill="x", pady=(0, 8))
+        self._reg(optlang_lf, "optlang_lf")
+
+        olf = ttk.Frame(optlang_lf)
+        olf.pack(anchor="w")
+
+        self._optlang_lbl = ttk.Label(olf)
+        self._optlang_lbl.pack(side="left")
+        self._reg(self._optlang_lbl, "optlang_label")
+
+        self._optlang_var = tk.StringVar(value="auto")
+        ttk.Combobox(olf, textvariable=self._optlang_var, width=10,
+                     values=["auto", "en", "es"],
+                     state="readonly").pack(side="left", padx=6)
+
+        self._optlang_hint_lbl = ttk.Label(olf, style="Muted.TLabel")
+        self._optlang_hint_lbl.pack(side="left")
+        self._reg(self._optlang_hint_lbl, "optlang_hint")
+
         self._toggle_src()
 
     def _toggle_src(self):
@@ -857,15 +900,6 @@ class App(tk.Tk):
 
     def _build_tab_search(self):
         t = self._tab_search
-
-        def _entry_row(parent, lbl_key, var, row, unit="m", width=10):
-            lbl = ttk.Label(parent)
-            lbl.grid(row=row, column=0, sticky="w", pady=3)
-            self._reg(lbl, lbl_key)
-            ttk.Entry(parent, textvariable=var, width=width).grid(
-                row=row, column=1, padx=6, pady=3, sticky="w")
-            ttk.Label(parent, text=unit, style="Muted.TLabel").grid(
-                row=row, column=2, sticky="w")
 
         # Margin
         mg_lf = ttk.LabelFrame(t, padding=8)
@@ -899,7 +933,6 @@ class App(tk.Tk):
         self._wire_step_var = tk.StringVar(value="0.25")
 
         # Static labels for the fixed CLI flags
-        _wire_range_hints = ["hint_wire_min", "hint_wire_max", "hint_wire_step"]
         for row_i, (flag, var, hint_key) in enumerate([
             ("wire-min:",  self._wire_min_var,  "hint_wire_min"),
             ("wire-max:",  self._wire_max_var,  "hint_wire_max"),
@@ -1210,7 +1243,7 @@ class App(tk.Tk):
             hint_lbl = ttk.Label(of_lf, foreground=ACCENT)
             hint_lbl.grid(row=row_i, column=2, sticky="w", padx=(8, 0))
             self._reg(hint_lbl, hint_key)
-            of_lf.columnconfigure(1, weight=1)
+        of_lf.columnconfigure(1, weight=1)
 
     # ── Tab: Run ──────────────────────────────────────────────────────────
 
@@ -1219,14 +1252,14 @@ class App(tk.Tk):
 
         # Command preview
         cmd_lf = ttk.LabelFrame(t, padding=8)
-        cmd_lf.pack(fill="both", expand=True, pady=(0, 8))
+        cmd_lf.pack(fill="x", expand=False, pady=(0, 8))
         self._reg(cmd_lf, "cmd_preview_lf")
 
         self._cmd_text = tk.Text(cmd_lf, height=4, wrap="word", state="disabled",
                                   bg=ENTRY_BG, fg=FG, font=self._font("mono"),
                                   relief="solid", insertbackground=FG,
                                   highlightbackground=BORDER, highlightthickness=1)
-        self._cmd_text.pack(fill="both", expand=True)
+        self._cmd_text.pack(fill="x", expand=False)
 
         self._refresh_btn = ttk.Button(cmd_lf, style="Browse.TButton",
                                         command=self._refresh_cmd)
@@ -1246,12 +1279,21 @@ class App(tk.Tk):
         self._stop_btn.pack(side="left")
         self._reg(self._stop_btn, "stop_btn")
 
+        self._show_report_btn = ttk.Button(btn_frame, style="InfoBtn.TButton",
+                                            command=self._show_report, state="disabled")
+        self._show_report_btn.pack(side="left", padx=(10, 0))
+        self._reg(self._show_report_btn, "show_report_btn")
+
+        self._show_radiation_btn = ttk.Button(btn_frame, style="InfoBtn.TButton",
+                                               command=self._show_radiation, state="disabled")
+        self._show_radiation_btn.pack(side="left", padx=(6, 0))
+        self._reg(self._show_radiation_btn, "show_radiation_btn")
+
         self._status_lbl = ttk.Label(btn_frame, foreground=FG2)
         self._status_lbl.pack(side="left", padx=16)
-        self._reg_fn(lambda: self._status_lbl.config(text=self.t("idle"))
-                     if self._status_lbl.cget("text") in
-                        (STRINGS["en"]["idle"], STRINGS["es"]["idle"])
-                     else None)
+        self._status_key: str = "idle"   # tracks current status key for re-translation
+        self._reg_fn(lambda: self._status_lbl.config(text=self.t(self._status_key))
+                     if self._status_key else None)
 
         # Progress bar
         self._progress = ttk.Progressbar(t, mode="indeterminate", length=400)
@@ -1417,8 +1459,9 @@ class App(tk.Tk):
         if self._no_interact_var.get():
             cmd += ["--no-interactive"]
 
-        # Always pass the current GUI language to the optimizer
-        cmd += ["--lang", self._ui_lang]
+        # Pass the selected optimizer language; "auto" falls back to the GUI language
+        opt_lang = self._optlang_var.get().strip()
+        cmd += ["--lang", opt_lang if opt_lang and opt_lang != "auto" else self._ui_lang]
 
         return cmd
 
@@ -1457,9 +1500,11 @@ class App(tk.Tk):
         self._console.config(state="disabled")
 
     def _set_status_key(self, key: str, color: str = FG2, **kw):
+        self._status_key = key
         self._status_lbl.config(text=self.t(key, **kw), foreground=color)
 
     def _set_status_text(self, text: str, color: str = FG2):
+        self._status_key = ""   # no translatable key — clear so re-translate is a no-op
         self._status_lbl.config(text=text, foreground=color)
 
     # ── Run / Stop ────────────────────────────────────────────────────────
@@ -1497,8 +1542,11 @@ class App(tk.Tk):
                 return
 
         self._running = True
+        self._stopped = False
         self._run_btn.config(state="disabled")
         self._stop_btn.config(state="normal")
+        self._show_report_btn.config(state="disabled")
+        self._show_radiation_btn.config(state="disabled")
         self._progress.start(15)
         self._set_status_key("running", ACCENT)
 
@@ -1520,7 +1568,7 @@ class App(tk.Tk):
                 bufsize=1,
             )
             for line in self._process.stdout:
-                clean = re.sub(r'\x1b\[[0-9;]*m', '', line)
+                clean = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', line)
                 self.after(0, self._log, clean)
 
             self._process.wait()
@@ -1538,6 +1586,9 @@ class App(tk.Tk):
             self._process = None
 
     def _run_finished(self, success: bool, msg: str):
+        # Ignore late callbacks that arrive after the user clicked Stop
+        if self._stopped:
+            return
         self._running = False
         self._run_btn.config(state="normal")
         self._stop_btn.config(state="disabled")
@@ -1547,16 +1598,19 @@ class App(tk.Tk):
         self._log(f"\n{'─' * 60}\n{msg}\n", "ok" if success else "error")
 
         if success:
+            # Enable the report/radiation buttons only when files actually exist
             outdir = self._outdir_var.get().strip() or os.getcwd()
-            report = os.path.join(outdir, self._out_txt_var.get().strip())
-            if os.path.isfile(report):
-                if messagebox.askyesno(
-                    self.t("done_title"),
-                    self.t("done_msg", report=report),
-                ):
-                    self._open_file(report)
+            txt_name = self._out_txt_var.get().strip()
+            rad_name = self._out_rad_var.get().strip()
+            report  = os.path.join(outdir, txt_name) if txt_name else None
+            radfile = os.path.join(outdir, rad_name) if rad_name else None
+            if report and os.path.isfile(report):
+                self._show_report_btn.config(state="normal")
+            if radfile and os.path.isfile(radfile):
+                self._show_radiation_btn.config(state="normal")
 
     def _stop(self):
+        self._stopped = True
         if self._process is not None:
             try:
                 self._process.terminate()
@@ -1567,6 +1621,20 @@ class App(tk.Tk):
         self._run_btn.config(state="normal")
         self._stop_btn.config(state="disabled")
         self._progress.stop()
+
+    def _show_report(self):
+        outdir   = self._outdir_var.get().strip() or os.getcwd()
+        txt_name = self._out_txt_var.get().strip()
+        report   = os.path.join(outdir, txt_name) if txt_name else None
+        if report and os.path.isfile(report):
+            self._open_file(report)
+
+    def _show_radiation(self):
+        outdir   = self._outdir_var.get().strip() or os.getcwd()
+        rad_name = self._out_rad_var.get().strip()
+        radfile  = os.path.join(outdir, rad_name) if rad_name else None
+        if radfile and os.path.isfile(radfile):
+            self._open_file(radfile)
 
     @staticmethod
     def _open_file(path: str):
