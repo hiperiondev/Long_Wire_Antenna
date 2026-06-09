@@ -3107,7 +3107,7 @@ def write_best_nec_deck(
         fh.write("EX 0 1 1 0 1.0 0.0\n")
 
         d_theta = 90.0  / max(1, n_elevation - 1)
-        d_phi   = 360.0 / max(1, n_azimuth   - 1)
+        d_phi   = 360.0 / max(1, n_azimuth)       # Bug 1 fix: n points span 0..360-d_phi
 
         # Simulate ALL bands so inactive-band impedance data is also available
         # in the output deck.  RP pattern cards are written only for active bands
@@ -3162,9 +3162,9 @@ def plot_radiation_diagrams(
     freqs_all = [cr.freq_mhz for cr in calc_rows]
 
     d_theta = 90.0  / max(1, n_elevation - 1)
-    d_phi   = 360.0 / max(1, n_azimuth   - 1)
+    d_phi   = 360.0 / max(1, n_azimuth)           # Bug 1 fix: n points span 0..360-d_phi
     elevations_deg = [i * d_theta for i in range(n_elevation)]
-    azimuths_deg   = [i * d_phi   for i in range(n_azimuth)]
+    azimuths_deg   = [i * d_phi   for i in range(n_azimuth)]   # last point = 360-d_phi
 
     band_patterns: Dict[str, dict] = {}
 
@@ -3263,10 +3263,21 @@ def plot_radiation_diagrams(
         _cur_freq_ban: Optional[float] = None
 
         _freq_re = re.compile(r'FREQUENCY\s*=\s*([0-9.E+\-]+)\s*MHZ', re.IGNORECASE)
+        # Each column is a proper signed floating-point number, optionally in
+        # scientific notation.  The old pattern ([\d.E+\-]+) was a character
+        # class that matched arbitrary sequences of digits, dots, E, +, and -
+        # — it could not represent a signed number correctly and would also
+        # match separator lines like "----" (caught only by the later
+        # ValueError).  The pattern below uses a proper numeric grammar:
+        #   [-+]?          optional sign
+        #   (?:\d+\.?\d*   integer-part with optional decimal, OR
+        #      |\.\d+)     leading-dot decimal
+        #   (?:[Ee][+\-]?\d+)?  optional exponent
+        _SFLOAT = r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[Ee][+\-]?\d+)?'
         _rp_row_re = re.compile(
-            r'^\s*([\d.E+\-]+)\s+([\d.E+\-]+)'
-            r'\s+([-+]?[\d.E+\-]+)\s+([-+]?[\d.E+\-]+)'
-            r'\s+([-+]?[\d.E+\-]+)',
+            rf'^\s*({_SFLOAT})\s+({_SFLOAT})'
+            rf'\s+({_SFLOAT})\s+({_SFLOAT})'
+            rf'\s+({_SFLOAT})',
             re.MULTILINE,
         )
 
@@ -3287,6 +3298,7 @@ def plot_radiation_diagrams(
                     and "REQUESTED" not in line.upper()
                     and not stripped.startswith("CM")
                     and not stripped.startswith("*")):
+                in_rp = False           # Bug 2 fix: stop collecting for previous block immediately
                 _rp_block_idx += 1
                 if _rp_block_idx < len(_active_freqs):
                     _cur_freq_ord = _active_freqs[_rp_block_idx]
@@ -3305,7 +3317,7 @@ def plot_radiation_diagrams(
                         _rows_at_rp_start = len(existing)
                     in_rp = True
                 else:
-                    in_rp = False
+                    in_rp = False   # Bug 2 fix: also reset here for out-of-range blocks
                 continue
 
             if in_rp and _cur_freq_ord is not None:
@@ -3316,8 +3328,7 @@ def plot_radiation_diagrams(
                         phi      = float(m.group(2))
                         total_db = float(m.group(5))
                         bucket = parsed_patterns[_cur_freq_ord]
-                        if _rows_at_rp_start == 0 or len(bucket) < _rows_at_rp_start:
-                            bucket.append((theta, phi, total_db))
+                        bucket.append((theta, phi, total_db))   # Bug 3 fix: removed broken dedupe guard
                     except ValueError:
                         pass
 
@@ -3402,8 +3413,10 @@ def plot_radiation_diagrams(
             g_floor = min(gains_el) if gains_el else 0.0
             g_max   = max(gains_el) if gains_el else 0.0
             gains_norm = [g - g_floor for g in gains_el]
-            angles_mir = [-a for a in angles_el] + list(reversed(angles_el))
-            gains_mir  = list(reversed(gains_norm)) + gains_norm
+            # Bug 4 fix: assemble as a single sweep −90°→0°→+90°
+            # negative (left) half: mirror angles in ascending order, gains reversed
+            angles_mir = list(reversed([-a for a in angles_el])) + list(angles_el)
+            gains_mir  = list(reversed(gains_norm))               + gains_norm
             ax_el.plot(angles_mir, gains_mir, color="steelblue", linewidth=1.5)
             ax_el.fill(angles_mir, gains_mir, color="steelblue", alpha=0.15)
             ax_el.set_rmax(g_max - g_floor)
@@ -3430,8 +3443,12 @@ def plot_radiation_diagrams(
             g_floor_az = min(gains_az) if gains_az else 0.0
             gains_az_norm = [g - g_floor_az for g in gains_az]
             if angles_az and abs(angles_az[-1] - 2 * math.pi) > 0.01:
-                angles_az     = angles_az     + [2 * math.pi]
-                gains_az_norm = gains_az_norm + [gains_az_norm[0]]
+                # Bug 5 fix: after Bug 1 the last point is at 360-d_phi, so compare
+                # against that value rather than 2π to decide whether closure is needed.
+                d_phi_rad = math.radians(d_phi)
+                if abs(angles_az[-1] - (2 * math.pi - d_phi_rad)) < 0.01:
+                    angles_az     = angles_az     + [2 * math.pi]
+                    gains_az_norm = gains_az_norm + [gains_az_norm[0]]
             ax_az.plot(angles_az, gains_az_norm, color="darkorange", linewidth=1.5)
             ax_az.fill(angles_az, gains_az_norm, color="darkorange", alpha=0.15)
 
