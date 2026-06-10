@@ -3497,21 +3497,33 @@ def plot_radiation_diagrams(
             if rows:
                 all_db  = [db for (_, _, db) in rows]
                 max_db  = max(all_db)
+
+                # ── Azimuth: max-gain envelope per phi ──────────────────────
+                # For each azimuth angle φ keep the highest gain found at ANY
+                # elevation θ.  This is the standard antenna-pattern convention
+                # and correctly reveals directional patterns (e.g. the two
+                # broadside lobes of a 1.76λ wire on 20 m).  The old approach
+                # took a single horizontal slice at the θ of the global-max
+                # point; when that maximum fell near zenith (θ_nec ≈ 0–1°)
+                # the cut looked omnidirectional and hid real directionality.
+                _az_env: dict = {}   # phi_deg (rounded 2 dp) → max dBi
+                for (_t3, _p3, _db3) in rows:
+                    _pk = round(_p3, 2)
+                    if _pk not in _az_env or _db3 > _az_env[_pk]:
+                        _az_env[_pk] = _db3
+                az_data = sorted(_az_env.items(), key=lambda x: x[0])
+
+                # TOA: θ of the global-max gain point (first occurrence in
+                # parse order, i.e. lowest θ that matches within 0.1 dB)
                 best_theta = None
-                for (t, p, db) in rows:
-                    if abs(db - max_db) < 0.1:
-                        best_theta = t
+                for (_t3, _p3, _db3) in rows:
+                    if abs(_db3 - max_db) < 0.1:
+                        best_theta = _t3
                         break
-                if best_theta is not None:
-                    az_data = sorted(
-                        [(p, db) for (t, p, db) in rows if abs(t - best_theta) < d_theta * 1.5],
-                        key=lambda x: x[0]
-                    )
-                else:
-                    az_data = []
             else:
-                max_db = -999.0
-                az_data = []
+                max_db     = -999.0
+                az_data    = []
+                best_theta = None
 
             toa = 90.0 - (best_theta if best_theta is not None else 90.0)
 
@@ -3535,157 +3547,359 @@ def plot_radiation_diagrams(
         print(T("warn_no_rp_bands"))
         return
 
-    fig_height = max(5, 5 * n_bands)
-    fig = plt.figure(figsize=(18, fig_height))          # wider: 3 columns
+    # ── MMANA-GAL-style renderer (v2) ────────────────────────────────────
+    # White background, correct elevation orientation (horizon at bottom,
+    # zenith at top), true dBi rings, clean lobe rendering.
+    import numpy as _np
+
+    # ── Design tokens ────────────────────────────────────────────────────
+    _BG        = "white"
+    _FG        = "#111111"     # axis labels, titles, info text
+    _RING_COL  = "#ccddee"     # concentric dB ring lines
+    _RING_TXT  = "#336699"     # dB ring labels
+    _SPOKE_COL = "#ccddee"     # radial spoke lines
+    _ANG_TXT   = "#224466"     # compass / degree tick labels
+    _LOBE_EL   = "#0077cc"     # elevation lobe stroke (blue)
+    _FILL_EL   = "#0099ff"     # elevation lobe fill
+    _LOBE_AZ   = "#cc6600"     # azimuth lobe stroke  (orange)
+    _FILL_AZ   = "#ff8800"     # azimuth lobe fill
+    _TOA_COL   = "#cc0000"     # TOA dashed marker
+    _DB_STEPS  = 5             # dB per concentric ring
+    _DB_RINGS  = 6             # rings → 30 dB total dynamic range
+
+    # ── Helper: clamp raw point cloud to a sensible dB floor ─────────────
+    def _clamp_raw(raw_pts, floor_db=None, dyn=_DB_STEPS * _DB_RINGS + 5):
+        """Return raw_pts with gain values clamped to [max-dyn, max]."""
+        if not raw_pts:
+            return raw_pts
+        g_max = max(db for (_, _, db) in raw_pts)
+        if floor_db is None:
+            floor_db = g_max - dyn
+        return [(t, p, max(db, floor_db)) for (t, p, db) in raw_pts]
+
+    # ── Core polar drawing helper ─────────────────────────────────────────
+    def _draw_polar(ax, angles_rad, gains_raw,
+                    stroke, fill_c,
+                    title_str, info_str,
+                    toa_rad=None,
+                    theta_min=-90, theta_max=90,
+                    tick_degs=None, tick_labels=None):
+        """
+        Draw one MMANA-GAL polar panel.
+
+        Elevation:   theta_min=-90, theta_max=90, zero_loc='E'
+                     angles_rad in [−π/2 … +π/2] (mirrored sweep)
+        Azimuth:     theta_min=0,  theta_max=360, zero_loc='N'
+                     angles_rad in [0 … 2π]
+        """
+        ax.set_facecolor(_BG)
+        try:
+            ax.spines["polar"].set_color(_RING_COL)
+        except Exception:
+            pass
+
+        dyn_db  = _DB_STEPS * _DB_RINGS
+
+        if gains_raw:
+            g_max   = max(gains_raw)
+            g_floor = g_max - dyn_db
+
+            def _r(db):
+                return max(0.0, db - g_floor)
+
+            r_vals = [_r(g) for g in gains_raw]
+        else:
+            g_max = 0.0
+            r_vals = []
+
+        # ── Concentric dB rings ───────────────────────────────────────
+        _ring_theta = _np.linspace(
+            math.radians(theta_min), math.radians(theta_max), 361)
+        for ring_i in range(1, _DB_RINGS + 1):
+            r_ring = ring_i * _DB_STEPS
+            ax.plot(_ring_theta, [r_ring] * len(_ring_theta),
+                    color=_RING_COL, linewidth=0.8, zorder=1)
+            # Label innermost 5 rings (skip the outermost boundary ring)
+            if ring_i < _DB_RINGS:
+                db_label = g_max - (_DB_RINGS - ring_i) * _DB_STEPS
+                # Place label at a fixed angular position that stays inside the plot
+                if theta_min == -90:   # elevation: place at +20°
+                    lbl_angle = math.radians(20)
+                else:                  # azimuth: place at 35°
+                    lbl_angle = math.radians(35)
+                ax.text(lbl_angle, r_ring - 0.6,
+                        f"{db_label:.0f}",
+                        color=_RING_TXT, fontsize=6.5,
+                        ha="center", va="center", zorder=3)
+
+        # ── Radial spokes ─────────────────────────────────────────────
+        if tick_degs is not None:
+            for sa in tick_degs:
+                ax.plot([math.radians(sa), math.radians(sa)],
+                        [0, dyn_db],
+                        color=_SPOKE_COL, linewidth=0.6, zorder=1)
+
+        # ── Lobe ──────────────────────────────────────────────────────
+        if r_vals:
+            ax.fill(angles_rad, r_vals, color=fill_c, alpha=0.20, zorder=2)
+            ax.plot(angles_rad, r_vals, color=stroke,  linewidth=2.0, zorder=4)
+
+        # ── TOA marker ────────────────────────────────────────────────
+        if toa_rad is not None and r_vals:
+            for _sign in (+1, -1):
+                ax.plot([_sign * toa_rad, _sign * toa_rad], [0, dyn_db],
+                        color=_TOA_COL, linewidth=1.3,
+                        linestyle="--", zorder=5, alpha=0.9)
+
+        # ── Axes ──────────────────────────────────────────────────────
+        ax.set_rmax(dyn_db)
+        ax.set_rmin(0)
+        ax.set_rticks([])
+        ax.yaxis.set_visible(False)
+        ax.set_theta_direction(-1)
+        ax.set_thetamin(theta_min)
+        ax.set_thetamax(theta_max)
+
+        if tick_degs is not None and tick_labels is not None:
+            ax.set_xticks([math.radians(a) for a in tick_degs])
+            ax.set_xticklabels(tick_labels, fontsize=7.0, color=_ANG_TXT)
+        ax.tick_params(axis="x", pad=5, colors=_ANG_TXT)
+        ax.grid(False)
+
+        # ── Title & info ──────────────────────────────────────────────
+        ax.set_title(title_str, color=_FG, fontsize=10.5,
+                     pad=14, fontweight="bold")
+        ax.text(0.5, -0.08, info_str,
+                transform=ax.transAxes,
+                ha="center", va="top",
+                fontsize=7.5, color=_FG,
+                fontfamily="monospace",
+                bbox=dict(boxstyle="round,pad=0.3",
+                          facecolor="#eef4ff", edgecolor="#aabbcc",
+                          alpha=0.7))
+
+    # ── Figure layout ────────────────────────────────────────────────────
+    n_cols     = 3
+    cell_h     = 5.4
+    fig_height = max(5.4, cell_h * n_bands + 1.4)
+    fig        = plt.figure(figsize=(18, fig_height), facecolor=_BG)
     fig.suptitle(
         T("plot_radiation_title").format(best.wire_len_m, best.cp_len_m, cp_type),
-        fontsize=13, fontweight="bold", y=1.0
+        fontsize=13, fontweight="bold", color=_FG, y=1.0
     )
 
-    n_cols = 3  # col 0: elevation polar  col 1: azimuth polar  col 2: 3-D surface
-
     for row_idx, band in enumerate(band_list):
-        pat = band_patterns[band]
+        pat      = band_patterns[band]
         freq_str = f"{pat['freq_mhz']:.3f} MHz"
         vswr_str = f"VSWR {pat['vswr']:.2f}"
         max_str  = f"Max {pat['max_db']:.1f} dBi"
         toa_str  = f"TOA {pat['toa_deg']:.1f}°"
+        info     = f"{freq_str}  {vswr_str}  {max_str}  {toa_str}"
 
-        # ── Column 0: elevation polar ────────────────────────────────────
+        # ── Column 0: Elevation ───────────────────────────────────────
+        # elev_data: list of (elevation_deg, dBi)
+        #   elevation_deg = 90 − theta_nec,  so  0° = horizon, 90° = zenith
+        # We render as a symmetrical upper-hemisphere half-plane:
+        #   theta_zero = East  →  0° maps to rightmost spoke
+        #   The sweep goes  right (0°=horizon) → top (90°=zenith) → left (0°=horizon)
+        #   Mapping:  angle_on_polar = (90° − elevation_deg)  in radians,
+        #             then mirrored left/right.
         ax_el = fig.add_subplot(n_bands, n_cols, row_idx * n_cols + 1,
                                 projection="polar")
-        ax_el.set_title(f"{band}  {freq_str}\n{vswr_str}  {max_str}  {toa_str}",
-                        fontsize=9, pad=12)
+        ax_el.set_theta_zero_location("N")   # 0 rad points up → zenith at top
+
+        el_tick_degs   = list(range(-90, 91, 15))
+        el_tick_labels = []
+        for _a in el_tick_degs:
+            _elev = abs(_a)   # elevation = distance from horizon
+            el_tick_labels.append(f"{_elev}°" if _elev % 30 == 0 or _elev == 0 else "")
 
         if pat["elev"]:
-            angles_el = [math.radians(e) for (e, _) in pat["elev"]]
-            gains_el  = [g for (_, g) in pat["elev"]]
-            g_floor = min(gains_el) if gains_el else 0.0
-            g_max   = max(gains_el) if gains_el else 0.0
-            gains_norm = [g - g_floor for g in gains_el]
-            # Bug 4 fix: assemble as a single sweep −90°→0°→+90°
-            # negative (left) half: mirror angles in ascending order, gains reversed
-            angles_mir = list(reversed([-a for a in angles_el])) + list(angles_el)
-            gains_mir  = list(reversed(gains_norm))               + gains_norm
-            ax_el.plot(angles_mir, gains_mir, color="steelblue", linewidth=1.5)
-            ax_el.fill(angles_mir, gains_mir, color="steelblue", alpha=0.15)
-            ax_el.set_rmax(g_max - g_floor)
-            toa_rad = math.radians(pat["toa_deg"])
-            ax_el.axvline(toa_rad,  color="red",   linestyle="--", linewidth=0.8, alpha=0.7)
-            ax_el.axvline(-toa_rad, color="red",   linestyle="--", linewidth=0.8, alpha=0.7)
+            _elevs = [e for (e, _) in pat["elev"]]
+            _gains = [g for (_, g) in pat["elev"]]
+            # Map elevation angle → polar angle:
+            # elevation=0 (horizon) → polar=±90°, elevation=90 (zenith) → polar=0°
+            # i.e. polar_angle = 90° − elevation_deg,  then mirror
+            _polar_pos = [math.radians(90.0 - e) for e in _elevs]  # 0…π/2
+            # Full mirrored sweep: negative side (left) then positive (right)
+            _angles_mir = (
+                list(reversed([-a for a in _polar_pos])) + list(_polar_pos)
+            )
+            _gains_mir  = list(reversed(_gains)) + list(_gains)
+            toa_r = math.radians(90.0 - pat["toa_deg"])   # convert elev→polar
+            _draw_polar(ax_el,
+                        _angles_mir, _gains_mir,
+                        _LOBE_EL, _FILL_EL,
+                        f"{band}  Elevation", info,
+                        toa_rad=toa_r,
+                        theta_min=-90, theta_max=90,
+                        tick_degs=el_tick_degs,
+                        tick_labels=el_tick_labels)
+        else:
+            _draw_polar(ax_el, [], [],
+                        _LOBE_EL, _FILL_EL,
+                        f"{band}  Elevation", info,
+                        theta_min=-90, theta_max=90,
+                        tick_degs=el_tick_degs,
+                        tick_labels=el_tick_labels)
 
-        ax_el.set_theta_zero_location("N")
-        ax_el.set_theta_direction(-1)
-        ax_el.set_thetamin(-90)
-        ax_el.set_thetamax(90)
-        ax_el.set_xticks([math.radians(a) for a in range(-90, 91, 15)])
-        ax_el.set_xticklabels([f"{abs(a)}°" for a in range(-90, 91, 15)], fontsize=6)
-        ax_el.set_ylabel(T("plot_dB_norm"), fontsize=7, labelpad=30)
-        ax_el.grid(True, alpha=0.3)
-
-        # ── Column 1: azimuth polar ──────────────────────────────────────
+        # ── Column 1: Azimuth ─────────────────────────────────────────
         ax_az = fig.add_subplot(n_bands, n_cols, row_idx * n_cols + 2,
                                 projection="polar")
-        ax_az.set_title(T("plot_azimuth").format(band, freq_str), fontsize=9, pad=12)
+        ax_az.set_theta_zero_location("N")
+
+        az_tick_degs   = list(range(0, 360, 30))
+        compass        = {0: "N", 90: "E", 180: "S", 270: "W"}
+        az_tick_labels = [compass.get(a, f"{a}°") for a in az_tick_degs]
 
         if pat["azim"]:
-            angles_az = [math.radians(a) for (a, _) in pat["azim"]]
-            gains_az  = [g for (_, g) in pat["azim"]]
-            g_floor_az = min(gains_az) if gains_az else 0.0
-            gains_az_norm = [g - g_floor_az for g in gains_az]
-            if angles_az and abs(angles_az[-1] - 2 * math.pi) > 0.01:
-                # Bug 5 fix: after Bug 1 the last point is at 360-d_phi, so compare
-                # against that value rather than 2π to decide whether closure is needed.
-                d_phi_rad = math.radians(d_phi)
-                if abs(angles_az[-1] - (2 * math.pi - d_phi_rad)) < 0.01:
-                    angles_az     = angles_az     + [2 * math.pi]
-                    gains_az_norm = gains_az_norm + [gains_az_norm[0]]
-            ax_az.plot(angles_az, gains_az_norm, color="darkorange", linewidth=1.5)
-            ax_az.fill(angles_az, gains_az_norm, color="darkorange", alpha=0.15)
+            _azims = [a for (a, _) in pat["azim"]]
+            _gains = [g for (_, g) in pat["azim"]]
+            _a_rad = [math.radians(a) for a in _azims]
+            # Close the loop
+            _d_phi_r = math.radians(d_phi)
+            if abs(_a_rad[-1] - (2 * math.pi - _d_phi_r)) < 0.02:
+                _a_rad  = _a_rad  + [2 * math.pi]
+                _gains  = _gains  + [_gains[0]]
+            _draw_polar(ax_az,
+                        _a_rad, _gains,
+                        _LOBE_AZ, _FILL_AZ,
+                        f"{band}  Azimuth", info,
+                        theta_min=0, theta_max=360,
+                        tick_degs=az_tick_degs,
+                        tick_labels=az_tick_labels)
+        else:
+            _draw_polar(ax_az, [], [],
+                        _LOBE_AZ, _FILL_AZ,
+                        f"{band}  Azimuth", info,
+                        theta_min=0, theta_max=360,
+                        tick_degs=az_tick_degs,
+                        tick_labels=az_tick_labels)
 
-        ax_az.set_theta_zero_location("N")
-        ax_az.set_theta_direction(-1)
-        ax_az.set_xticks([math.radians(a) for a in range(0, 360, 30)])
-        ax_az.set_xticklabels([f"{a}°" for a in range(0, 360, 30)], fontsize=6)
-        ax_az.set_ylabel(T("plot_dB_norm"), fontsize=7, labelpad=30)
-        ax_az.grid(True, alpha=0.3)
-
-        # ── Column 2: 3-D radiation surface ─────────────────────────────
+        # ── Column 2: 3-D surface ─────────────────────────────────────
         ax3d = fig.add_subplot(n_bands, n_cols, row_idx * n_cols + 3,
                                projection="3d")
-        ax3d.set_title(f"3-D pattern  {band}  {freq_str}", fontsize=9, pad=6)
+        ax3d.set_facecolor(_BG)
+        ax3d.set_title(f"{band}  3-D Pattern  {freq_str}",
+                       fontsize=10.5, fontweight="bold", color=_FG, pad=8)
 
-        raw = pat.get("raw", [])
+        raw = _clamp_raw(pat.get("raw", []))
         if raw:
-            # Build a gain grid indexed by (theta_nec, phi_deg).
-            # theta_nec: 0° = zenith, 90° = horizon  →  elevation = 90 − theta_nec
-            # phi: azimuth 0..360
-            _raw_max = max(db for (_, _, db) in raw)
-            _raw_min = min(db for (_, _, db) in raw)
+            _raw_max  = max(db for (_, _, db) in raw)
+            _raw_min  = min(db for (_, _, db) in raw)
             _raw_span = max(1.0, _raw_max - _raw_min)
 
-            # Collect unique theta / phi values from the data
             _thetas_set = sorted({t for (t, _, _) in raw})
             _phis_set   = sorted({p for (_, p, _) in raw})
-
-            # Build lookup: (theta, phi) → db
             _grid_lut: dict = {}
             for (t, p, db) in raw:
                 _grid_lut[(round(t, 4), round(p, 4))] = db
 
-            import numpy as _np
+            _T  = _np.array(_thetas_set)
+            _P  = _np.array(_phis_set)
 
-            _T = _np.array(_thetas_set)   # NEC theta: 0 = zenith
-            _P = _np.array(_phis_set)
-            _TG, _PG = _np.meshgrid(_T, _P, indexing="ij")  # shape (nT, nP)
-
-            # Gain on the grid (fill missing points with min)
-            _DB = _np.full(_TG.shape, _raw_min)
+            _DB = _np.full((len(_thetas_set), len(_phis_set)), _raw_min)
             for _i, _t in enumerate(_thetas_set):
                 for _j, _p in enumerate(_phis_set):
                     _key = (round(_t, 4), round(_p, 4))
                     if _key in _grid_lut:
                         _DB[_i, _j] = _grid_lut[_key]
 
-            # Normalise to [0..1] for radius; add small offset so min is visible
-            _R = (_DB - _raw_min) / _raw_span + 0.05
+            # ── Fix 1: Mirror upper hemisphere → lower hemisphere ───────
+            # NEC2's RP card sweeps theta 0°→90° only (upper hemisphere;
+            # GN 2 ground zeroes radiation below ground).  Without mirroring
+            # the surface only covers the top half of the sphere and renders
+            # as a flat dome/mushroom cap.  The image-antenna principle gives
+            # perfect bilateral symmetry about the ground plane, so mirroring
+            # the upper-hemisphere data into theta 90°→180° closes the
+            # balloon correctly.  The equator row (theta=90°) is shared and
+            # must not be duplicated.
+            _T_lower = 180.0 - _T[::-1][1:]          # 90°+dθ … 180°
+            _DB_lo   = _DB[::-1, :][1:, :]            # mirror, skip equator
+            _T       = _np.concatenate([_T, _T_lower])
+            _DB      = _np.concatenate([_DB, _DB_lo], axis=0)
 
-            # Convert to Cartesian  (theta_nec 0=zenith; elevation = 90 − theta_nec)
-            _theta_rad = _np.radians(_TG)          # measured from zenith
+            # ── Fix 2: Collapse pole rows to a single apex ──────────────
+            # At theta=0 and theta=180, sin(theta)=0 so X=Y=0 for every φ,
+            # but Z = R·cos(θ) = R·(±1) still varies with φ if R = f(DB)
+            # and DB varies with φ at the pole.  Each meridional quad then
+            # fans out from a different apex height → triangular spike fins.
+            # Setting both pole rows to their mean DB collapses all apex
+            # points to the same Z, eliminating the fins.
+            _DB[0, :]  = _DB[0, :].mean()
+            _DB[-1, :] = _DB[-1, :].mean()
+
+            # ── Close the phi loop ──────────────────────────────────────
+            # NEC2 outputs phi from 0° to 360°−d_phi (e.g. 0…355° for
+            # n_azimuth=73).  plot_surface cannot bridge the gap back to 0°
+            # on its own, so each meridional strip appears as a separate
+            # "fin" / bar.  Appending a phi=360° column (identical to the
+            # phi=0° column) seals the surface into a closed shell.
+            if len(_phis_set) > 1 and _phis_set[-1] < 359.9:
+                _P = _np.append(_P, 360.0)
+                _DB = _np.concatenate([_DB, _DB[:, :1]], axis=1)
+
+            _TG, _PG = _np.meshgrid(_T, _P, indexing="ij")
+
+            # ── Fix 3: Normalise R to [floor, 1.0] ──────────────────────
+            # A floor of 0.30 keeps deep-null regions at 30 % of the peak
+            # radius so the balloon stays a connected surface (no wafers).
+            # CRITICAL: R must never exceed 1.0.  The old formula
+            #   R = (DB-min)/span + floor  → max R = 1 + floor = 1.30
+            # pushed the lower-hemisphere surface past the unit sphere.
+            # Matplotlib's software renderer depth-sorts by Z; when two
+            # faces lie at the same Z but different radii (one > 1, one < 1)
+            # the sort breaks, producing the spike/fin artifacts visible in
+            # the output image.  The correct bounded form is:
+            #   R = floor + (1-floor)*(DB-min)/span  → R ∈ [floor, 1.0]
+            _R3D_FLOOR = 0.30
+            _R         = _R3D_FLOOR + (1.0 - _R3D_FLOOR) * (_DB - _raw_min) / _raw_span
+            _theta_rad = _np.radians(_TG)
             _phi_rad   = _np.radians(_PG)
-
             _X = _R * _np.sin(_theta_rad) * _np.cos(_phi_rad)
             _Y = _R * _np.sin(_theta_rad) * _np.sin(_phi_rad)
             _Z = _R * _np.cos(_theta_rad)
 
-            # Colour-map by normalised gain
             _norm  = _mpl_colors.Normalize(vmin=_raw_min, vmax=_raw_max)
-            _cmap  = _mpl_cm.colormaps["jet"]
+            _get_cm = (lambda n: _mpl_cm.colormaps[n]) \
+                      if hasattr(_mpl_cm, "colormaps") else plt.get_cmap
+            _cmap    = _get_cm("jet")
             _fcolors = _cmap(_norm(_DB))
 
             ax3d.plot_surface(
                 _X, _Y, _Z,
                 facecolors=_fcolors,
                 rstride=1, cstride=1,
-                linewidth=0, antialiased=False,
+                linewidth=0, antialiased=True,
                 shade=False,
             )
 
-            # Colour-bar (gain in dBi)
             _sm = _mpl_cm.ScalarMappable(cmap=_cmap, norm=_norm)
             _sm.set_array([])
-            _cb = fig.colorbar(_sm, ax=ax3d, shrink=0.55, pad=0.08, aspect=15)
-            _cb.set_label("dBi", fontsize=7)
-            _cb.ax.tick_params(labelsize=6)
+            _cb = fig.colorbar(_sm, ax=ax3d, shrink=0.52, pad=0.08, aspect=14)
+            _cb.set_label("dBi", fontsize=7.5, color=_FG)
+            _cb.ax.tick_params(labelsize=6.5, colors=_FG)
 
+        # 3-D cosmetics (white background)
+        ax3d.xaxis.pane.fill = False
+        ax3d.yaxis.pane.fill = False
+        ax3d.zaxis.pane.fill = False
+        ax3d.xaxis.pane.set_edgecolor("#cccccc")
+        ax3d.yaxis.pane.set_edgecolor("#cccccc")
+        ax3d.zaxis.pane.set_edgecolor("#cccccc")
+        ax3d.tick_params(labelsize=6, colors=_FG)
+        ax3d.xaxis.label.set_color(_FG)
+        ax3d.yaxis.label.set_color(_FG)
+        ax3d.zaxis.label.set_color(_FG)
         ax3d.set_xlabel("X", fontsize=7, labelpad=2)
         ax3d.set_ylabel("Y", fontsize=7, labelpad=2)
         ax3d.set_zlabel("Z", fontsize=7, labelpad=2)
-        ax3d.tick_params(labelsize=6)
-        ax3d.view_init(elev=25, azim=-60)
+        ax3d.view_init(elev=28, azim=-55)
+        ax3d.grid(True, color="#cccccc", linewidth=0.5)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.98])
-    plt.savefig(out_png, dpi=150, bbox_inches="tight")
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.savefig(out_png, dpi=180, bbox_inches="tight",
+                facecolor=_BG, edgecolor="none")
     plt.close()
     print(T("radiation_saved").format(out_png))
 

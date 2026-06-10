@@ -3,53 +3,65 @@
   INFORME DEL OPTIMIZADOR DE LONGITUD DE ANTENA NEC2
 ════════════════════════════════════════════════════════════════════════════════
   Modo de evaluación: NEC2
-  Relación UnUn   : 4.0:1
+  Relación UnUn   : 9.0:1
   Rango de hilo   : 33.00 m … 37.00 m  paso 0.250 m
-  Rango de CP     : 5.00 m … 7.00 m  paso 0.250 m
-  Active bands    : 3 of 3  (40(*), 20(*), 10(*))  (* = scored for VSWR)
-  Total candidatos: 153
+  Rango de CP     : 8.00 m … 12.00 m  paso 0.250 m
+  Geometría hilo  : SLOPED  (altura extremo lejano = 0.0500 m)
+  Bandas activas  : 3 de 3  (40m(*), 20m(*), 20m(*))  (* = evaluadas para ROS)
+  Total candidatos: 289
 
 
 ════════════════════════════════════════════════════════════════════════════════
-  TOP 20 CANDIDATOS  (menor puntuación combinada = mejor)
+  TOP 30 CANDIDATOS  (menor puntuación combinada = mejor)
 ════════════════════════════════════════════════════════════════════════════════
-    #   Wire(m)    CP(m)     CP type    Score   meanVpen   1.5xWrst  -0.5xAv(a)   -0.1xCPbon       40       20       10  NEC2
+    #   Wire(m)    CP(m)     CP type    Score    meanPen   1.5xWpen  -0.5xAv(a)   -0.1xCPbon      40m      20m      20m  NEC2
   ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    1    35.500    6.500    vertical    0.067      0.074      0.135     -0.1250      -0.0167     1.61     1.64     1.58  ✓
-    2    35.500    6.750    vertical    0.085      0.041      0.187     -0.1250      -0.0178     1.69     1.42     1.41  ✓
-    3    35.250    6.750    vertical    0.116      0.049      0.210     -0.1250      -0.0178     1.71     1.51     1.28  ✓
-    4    35.250    7.000    vertical    0.189      0.060      0.272     -0.1250      -0.0188     1.77     1.27     1.23  ✓
-    5    35.000    7.000    vertical    0.228      0.068      0.304     -0.1250      -0.0188     1.80     1.41     1.18  ✓
-    6    35.750    6.500    vertical    0.290      0.109      0.320     -0.1231      -0.0167     1.60     1.57     1.82  ✓
-    7    35.500    7.000    vertical    0.322      0.137      0.329     -0.1250      -0.0188     1.83     1.45     1.79  ✓
-    8    35.000    6.750    vertical    0.375      0.188      0.330     -0.1250      -0.0178     1.83     1.79     1.72  ✓
-    9    34.750    7.000    vertical    0.473      0.188      0.423     -0.1190      -0.0188     1.92     1.74     1.68  ✓
-   10    35.250    6.500    vertical    0.503      0.229      0.416     -0.1250      -0.0167     1.73     1.88     1.92  ✓
-   11    35.750    6.750    vertical    0.606      0.196      0.551     -0.1231      -0.0178     1.76     1.57     2.05  ✓
-   12    35.750    6.250    vertical    0.726      0.208      0.656     -0.1231      -0.0156     1.52     1.76     2.16  ✓
-   13    35.500    6.250    vertical    1.045      0.329      0.857     -0.1250      -0.0156     1.64     1.99     2.36  ✓
-   14    34.500    7.000    vertical    1.168      0.477      0.814     -0.1032      -0.0188     2.12     2.21     2.31  ✓
-   15    34.750    6.750    vertical    1.213      0.471      0.878     -0.1190      -0.0178     2.04     2.21     2.38  ✓
-   16    36.000    6.250    vertical    1.217      0.285      1.063     -0.1152      -0.0156     1.52     1.70     2.56  ✓
-   17    36.000    6.500    vertical    1.310      0.333      1.109     -0.1152      -0.0167     1.69     1.70     2.61  ✓
-   18    35.750    7.000    vertical    1.349      0.408      1.083     -0.1231      -0.0188     1.96     1.79     2.58  ✓
-   19    35.000    6.500    vertical    1.415      0.501      1.055     -0.1250      -0.0167     1.95     2.26     2.56  ✓
-   20    35.250    6.250    vertical    1.905      0.588      1.457     -0.1250      -0.0156     1.85     2.34     2.96  ✓
+    1    35.250    9.250    vertical    4.027      1.249      2.914     -0.1250      -0.0105     4.41     2.85     2.85  ✓
+    2    35.000    9.250    vertical    4.035      1.212      2.959     -0.1250      -0.0105     4.46     2.75     2.75  ✓
+    3    35.500    9.250    vertical    4.041      1.289      2.888     -0.1250      -0.0105     4.39     2.96     2.96  ✓
+    4    34.750    9.250    vertical    4.055      1.179      3.011     -0.1250      -0.0105     4.51     2.65     2.65  ✓
+    5    35.750    9.250    vertical    4.070      1.328      2.874     -0.1212      -0.0105     4.37     3.05     3.05  ✓
+    6    34.500    9.250    vertical    4.094      1.151      3.078     -0.1250      -0.0105     4.58     2.55     2.55  ✓
+    7    35.250    9.500    vertical    4.099      1.173      3.060     -0.1250      -0.0098     4.56     2.61     2.61  ✓
+    8    35.500    9.500    vertical    4.100      1.188      3.047     -0.1250      -0.0098     4.55     2.65     2.65  ✓
+    9    35.750    9.500    vertical    4.119      1.206      3.044     -0.1212      -0.0098     4.54     2.69     2.69  ✓
+   10    36.000    9.250    vertical    4.119      1.362      2.872     -0.1054      -0.0105     4.37     3.13     3.13  ✓
+   11    35.000    9.500    vertical    4.122      1.166      3.091     -0.1250      -0.0098     4.59     2.58     2.58  ✓
+   12    34.750    9.500    vertical    4.153      1.161      3.127     -0.1250      -0.0098     4.63     2.55     2.55  ✓
+   13    34.250    9.250    vertical    4.159      1.135      3.159     -0.1241      -0.0105     4.66     2.47     2.47  ✓
+   14    36.000    9.500    vertical    4.161      1.226      3.051     -0.1054      -0.0098     4.55     2.73     2.73  ✓
+   15    34.500    9.000    vertical    4.167      1.314      2.989     -0.1250      -0.0113     4.49     2.96     2.96  ✓
+   16    34.750    9.000    vertical    4.169      1.401      2.904     -0.1250      -0.0113     4.40     3.20     3.20  ✓
+   17    36.250    9.250    vertical    4.173      1.391      2.882     -0.0897      -0.0105     4.38     3.19     3.19  ✓
+   18    35.000    9.000    vertical    4.192      1.494      2.834     -0.1250      -0.0113     4.33     3.44     3.44  ✓
+   19    34.250    9.000    vertical    4.198      1.242      3.091     -0.1241      -0.0113     4.59     2.75     2.75  ✓
+   20    34.500    9.500    vertical    4.202      1.162      3.175     -0.1250      -0.0098     4.67     2.53     2.53  ✓
+   21    36.250    9.500    vertical    4.214      1.247      3.067     -0.0897      -0.0098     4.57     2.77     2.77  ✓
+   22    35.250    9.000    vertical    4.222      1.584      2.775     -0.1250      -0.0113     4.28     3.68     3.68  ✓
+   23    36.500    9.250    vertical    4.225      1.411      2.898     -0.0739      -0.0105     4.40     3.23     3.23  ✓
+   24    35.250    9.750    L-shaped    4.259      1.192      3.201     -0.1250      -0.0092     4.70     2.58     2.58  ✓
+   25    35.500    9.000    vertical    4.259      1.659      2.736     -0.1250      -0.0113     4.24     3.87     3.87  ✓
+   26    35.500    9.750    L-shaped    4.261      1.197      3.198     -0.1250      -0.0092     4.70     2.59     2.59  ✓
+   27    34.000    9.250    vertical    4.261      1.131      3.261     -0.1201      -0.0105     4.76     2.41     2.41  ✓
+   28    36.500    9.500    vertical    4.268      1.264      3.088     -0.0739      -0.0098     4.59     2.80     2.80  ✓
+   29    34.250    9.500    vertical    4.271      1.169      3.236     -0.1241      -0.0098     4.74     2.51     2.51  ✓
+   30    34.000    9.000    vertical    4.275      1.191      3.216     -0.1201      -0.0113     4.72     2.57     2.57  ✓
 
 ════════════════════════════════════════════════════════════════════════════════
   FRENTE PARETO-ÓPTIMO  (1 candidatos)
 ════════════════════════════════════════════════════════════════════════════════
   Candidatos no dominados en penalización ROS y puntuación de evitación.
 
-    1  wire=35.500 m  cp=6.500 m  (vertical)  score=0.067  VSWR=[   1.61     1.64     1.58]  avoid_active=0.2500  avoid_all=0.2500
+    1  wire=35.250 m  cp=9.250 m  (vertical)  score=4.027  VSWR=[   4.41     2.85     2.85]  avoid_active=0.2500  avoid_all=0.2500
 
 ════════════════════════════════════════════════════════════════════════════════
   MEJOR CANDIDATO — DESGLOSE DETALLADO
 ════════════════════════════════════════════════════════════════════════════════
-  Longitud hilo : 35.500 m
-  Longitud CP   : 6.500 m   (orientación vertical)
-  Puntuación comb: 0.0672
-  Penaliz. ROS  : 0.0742  (media de penalización ROS en bandas activas; score_combined = media + 1.5×peor − bonos)
+  Longitud hilo : 35.250 m
+  Longitud CP   : 9.250 m   (orientación vertical)
+  Geometría hilo  : SLOPED  (punto alimentación z=10.000 m → extremo lejano z=0.0500 m)
+  Puntuación comb: 4.0270
+  Penaliz. ROS  : 1.2486  (media de penalización ROS en bandas activas; score_combined = media + 1.5×peor − bonos)
   Evitación(act): 0.2500  (media en bandas ACTIVAS — usada en score_combined)
   Evitación(all): 0.2500  (media en TODAS las bandas del CSV — referencia)
   Datos NEC2 usados: SÍ
@@ -57,57 +69,57 @@
   Resultados por banda:
         Band  Active   VSWR(Tx)     Avoid                  Rating  VSWR
     ────────────────────────────────────────────────────────────────────────────────
-          40     YES       1.61    0.2500           ★★★ EXCELENTE  BUENO
-          20     YES       1.64    0.2500           ★★★ EXCELENTE  BUENO
-          10     YES       1.58    0.2500           ★★★ EXCELENTE  BUENO
+         40m     YES       4.41    0.2500           ★★★ EXCELENTE  MARGINAL
+         20m     YES       2.85    0.2500           ★★★ EXCELENTE  BUENO
+         20m     YES       2.85    0.2500           ★★★ EXCELENTE  BUENO
 
   Impedancia por banda (lado antena y lado transmisor):
         Band   freq MHz    R_ant Ω    X_ant Ω    |Z_ant|Ω    R_tx Ω    X_tx Ω    |Z_tx|Ω    VSWR      Source
     ────────────────────────────────────────────────────────────────────────────────────────────────────
-          40     7.1000      124.8      +13.7       125.5     31.20     +3.42      31.38    1.61      NEC2-V
-          20    14.1750      132.8      -45.1       140.3     33.21    -11.28      35.07    1.64      NEC2-V
-          10    28.5000      291.2      -65.1       298.4     72.79    -16.27      74.59    1.58      NEC2-V
-    (UnUn 4:1 — Z lado antena dividida por 4 para obtener Z lado Tx)
+         40m     7.1000      147.3     +288.8       324.2     16.37    +32.09      36.02    4.41      NEC2-V
+         20m    14.1750     1276.1      -91.6      1279.4    141.79    -10.18     142.15    2.85      NEC2-V
+         20m    14.1750     1276.1      -91.6      1279.4    141.79    -10.18     142.15    2.85      NEC2-V
+    (UnUn 9:1 — Z lado antena dividida por 9 para obtener Z lado Tx)
 
 ════════════════════════════════════════════════════════════════════════════════
   ANÁLISIS DE RELACIÓN UnUn  (para la mejor geometría de antena)
 ════════════════════════════════════════════════════════════════════════════════
-  Relación UnUn usada (esta ejecución): 4.0:1
-  Óptimo continuo            : 3.92:1  (penalización ROS agregada 0.1801)
-  Mejor relación estándar    : 4:1  (penalización ROS agregada 0.2090)
-    → La relación actual 4:1 ya es óptima entre los valores estándar.
+  Relación UnUn usada (esta ejecución): 9.0:1
+  Óptimo continuo            : 8.25:1  (penalización ROS agregada 4.1351)
+  Mejor relación estándar    : 9:1  (penalización ROS agregada 4.1625)
+    → La relación actual 9:1 ya es óptima entre los valores estándar.
 
   Barrido de relaciones estándar:
-     Ratio    Score    VSWR@40    VSWR@20    VSWR@10
+     Ratio    Score   VSWR@40m   VSWR@20m   VSWR@20m
     ──────────────────────────────────────────────────
-        1:1   6.1446       2.53       3.01       6.12
-      1.5:1   3.3307       1.70       2.05       4.09
-        2:1   1.9511       1.29       1.61       3.08
-        3:1   0.6969       1.23       1.41       2.07
-        4:1   0.2090       1.61       1.64       1.58 ◄ BEST
-        6:1   1.2952       2.41       2.32       1.25
-        9:1   3.0288       3.61       3.42       1.60
-       12:1   4.8549       4.81       4.54       2.09
-       16:1   7.0521       6.41       6.04       2.77
-       25:1   9.4912      10.02       9.42       4.30
-       27:1   9.9292      10.82      10.18       4.65
-       36:1  11.6053      14.43      13.56       6.19
-       49:1  13.2782      19.64      18.45       8.42
-       64:1  14.7276      25.65      24.10      10.99
+        1:1  14.9766      14.54      25.65      25.65
+      1.5:1  12.7923       9.92      17.10      17.10
+        2:1  11.2538       7.68      12.83      12.83
+        3:1   9.0776       5.60       8.55       8.55
+        4:1   7.5281       4.71       6.41       6.41
+        6:1   4.6056       4.17       4.28       4.28
+        9:1   4.1625       4.41       2.85       2.85 ◄ BEST
+       12:1   4.6419       5.07       2.14       2.14
+       16:1   5.6532       6.16       1.61       1.61
+       25:1   7.0896       8.95       1.08       1.08
+       27:1   7.3664       9.59       1.09       1.09
+       36:1   8.4333      12.54       1.42       1.42
+       49:1   9.8022      16.86       1.92       1.92
+       64:1  11.1033      21.90       2.51       2.51
 
   Impedancia lado antena (independiente de la relación UnUn):
         Band    R_ant Ω    X_ant Ω   |Z_ant| Ω      θ °
     ────────────────────────────────────────────────────
-          40      124.8      +13.7       125.5     +6.3
-          20      132.8      -45.1       140.3    -18.8
-          10      291.2      -65.1       298.4    -12.6
+         40m      147.3     +288.8       324.2    +63.0
+         20m     1276.1      -91.6      1279.4     -4.1
+         20m     1276.1      -91.6      1279.4     -4.1
 
   Relación óptima por banda (independiente, continua):
         Band    Best ratio     VSWR
     ──────────────────────────────────
-          40        2.51:1    1.116
-          20        2.81:1    1.396
-          10        5.97:1    1.248
+         40m        6.48:1    4.161
+         20m       25.59:1    1.074
+         20m       25.59:1    1.074
 
   Nota: las relaciones por banda optimizan cada banda de forma independiente y pueden
         entrar en conflicto entre sí.  La puntuación agregada anterior es la
@@ -138,10 +150,10 @@
 
   3. ROS después del UnUn
      Todos los valores de ROS mostrados corresponden al lado del TRANSMISOR
-     (coaxial 50 Ω) DESPUÉS del UnUn 4:1.  La impedancia del lado antena se
-     divide por 4 antes de calcular el ROS.  Una relación UnUn bien elegida
+     (coaxial 50 Ω) DESPUÉS del UnUn 9:1.  La impedancia del lado antena se
+     divide por 9 antes de calcular el ROS.  Una relación UnUn bien elegida
      puede mejorar o empeorar la adaptación: si el ROS es pobre en todas las
-     bandas, considere probar 4:1 o 16:1 en lugar de 4:1.
+     bandas, considere probar 4:1 o 16:1 en lugar de 9:1.
 
   4. NEC2 vs. empírico
      Cuando nec2c está disponible, el optimizador ejecuta una simulación
