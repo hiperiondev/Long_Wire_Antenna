@@ -84,6 +84,19 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
+    from mpl_toolkits.mplot3d import Axes3D          # noqa: F401 – registers '3d' projection
+    import matplotlib.cm as _mpl_cm
+    import matplotlib.colors as _mpl_colors
+    # colormaps registry: available as matplotlib.cm.colormaps (≥3.7) or
+    # matplotlib.colormaps (≥3.5); fall back to get_cmap for older installs.
+    if not hasattr(_mpl_cm, "colormaps"):
+        import matplotlib as _matplotlib
+        if hasattr(_matplotlib, "colormaps"):
+            _mpl_cm.colormaps = _matplotlib.colormaps
+        else:
+            class _CmapShim:
+                def __getitem__(self, name): return _mpl_cm.get_cmap(name)
+            _mpl_cm.colormaps = _CmapShim()
     HAS_MPL = True
 except ImportError:
     HAS_MPL = False
@@ -3506,6 +3519,7 @@ def plot_radiation_diagrams(
                 "freq_mhz": freq,
                 "elev": elev_data,
                 "azim": az_data,
+                "raw":  rows,       # full (theta_nec, phi, dBi) point cloud for 3-D plot
                 "max_db": max_db,
                 "toa_deg": toa,
                 "vswr": best.band_vswr.get(cr.band, 999.0),
@@ -3515,16 +3529,20 @@ def plot_radiation_diagrams(
         print(T("warn_no_rp_bands"))
         return
 
-    n_bands = len(band_patterns)
+    band_list = [cr.band for cr in active if cr.band in band_patterns]
+    n_bands = len(band_list)          # must match band_list length exactly
+    if n_bands == 0:
+        print(T("warn_no_rp_bands"))
+        return
+
     fig_height = max(5, 5 * n_bands)
-    fig = plt.figure(figsize=(12, fig_height))
+    fig = plt.figure(figsize=(18, fig_height))          # wider: 3 columns
     fig.suptitle(
         T("plot_radiation_title").format(best.wire_len_m, best.cp_len_m, cp_type),
         fontsize=13, fontweight="bold", y=1.0
     )
 
-    band_list = [cr.band for cr in active if cr.band in band_patterns]
-    n_cols = 2
+    n_cols = 3  # col 0: elevation polar  col 1: azimuth polar  col 2: 3-D surface
 
     for row_idx, band in enumerate(band_list):
         pat = band_patterns[band]
@@ -3533,6 +3551,7 @@ def plot_radiation_diagrams(
         max_str  = f"Max {pat['max_db']:.1f} dBi"
         toa_str  = f"TOA {pat['toa_deg']:.1f}°"
 
+        # ── Column 0: elevation polar ────────────────────────────────────
         ax_el = fig.add_subplot(n_bands, n_cols, row_idx * n_cols + 1,
                                 projection="polar")
         ax_el.set_title(f"{band}  {freq_str}\n{vswr_str}  {max_str}  {toa_str}",
@@ -3564,6 +3583,7 @@ def plot_radiation_diagrams(
         ax_el.set_ylabel(T("plot_dB_norm"), fontsize=7, labelpad=30)
         ax_el.grid(True, alpha=0.3)
 
+        # ── Column 1: azimuth polar ──────────────────────────────────────
         ax_az = fig.add_subplot(n_bands, n_cols, row_idx * n_cols + 2,
                                 projection="polar")
         ax_az.set_title(T("plot_azimuth").format(band, freq_str), fontsize=9, pad=12)
@@ -3589,6 +3609,80 @@ def plot_radiation_diagrams(
         ax_az.set_xticklabels([f"{a}°" for a in range(0, 360, 30)], fontsize=6)
         ax_az.set_ylabel(T("plot_dB_norm"), fontsize=7, labelpad=30)
         ax_az.grid(True, alpha=0.3)
+
+        # ── Column 2: 3-D radiation surface ─────────────────────────────
+        ax3d = fig.add_subplot(n_bands, n_cols, row_idx * n_cols + 3,
+                               projection="3d")
+        ax3d.set_title(f"3-D pattern  {band}  {freq_str}", fontsize=9, pad=6)
+
+        raw = pat.get("raw", [])
+        if raw:
+            # Build a gain grid indexed by (theta_nec, phi_deg).
+            # theta_nec: 0° = zenith, 90° = horizon  →  elevation = 90 − theta_nec
+            # phi: azimuth 0..360
+            _raw_max = max(db for (_, _, db) in raw)
+            _raw_min = min(db for (_, _, db) in raw)
+            _raw_span = max(1.0, _raw_max - _raw_min)
+
+            # Collect unique theta / phi values from the data
+            _thetas_set = sorted({t for (t, _, _) in raw})
+            _phis_set   = sorted({p for (_, p, _) in raw})
+
+            # Build lookup: (theta, phi) → db
+            _grid_lut: dict = {}
+            for (t, p, db) in raw:
+                _grid_lut[(round(t, 4), round(p, 4))] = db
+
+            import numpy as _np
+
+            _T = _np.array(_thetas_set)   # NEC theta: 0 = zenith
+            _P = _np.array(_phis_set)
+            _TG, _PG = _np.meshgrid(_T, _P, indexing="ij")  # shape (nT, nP)
+
+            # Gain on the grid (fill missing points with min)
+            _DB = _np.full(_TG.shape, _raw_min)
+            for _i, _t in enumerate(_thetas_set):
+                for _j, _p in enumerate(_phis_set):
+                    _key = (round(_t, 4), round(_p, 4))
+                    if _key in _grid_lut:
+                        _DB[_i, _j] = _grid_lut[_key]
+
+            # Normalise to [0..1] for radius; add small offset so min is visible
+            _R = (_DB - _raw_min) / _raw_span + 0.05
+
+            # Convert to Cartesian  (theta_nec 0=zenith; elevation = 90 − theta_nec)
+            _theta_rad = _np.radians(_TG)          # measured from zenith
+            _phi_rad   = _np.radians(_PG)
+
+            _X = _R * _np.sin(_theta_rad) * _np.cos(_phi_rad)
+            _Y = _R * _np.sin(_theta_rad) * _np.sin(_phi_rad)
+            _Z = _R * _np.cos(_theta_rad)
+
+            # Colour-map by normalised gain
+            _norm  = _mpl_colors.Normalize(vmin=_raw_min, vmax=_raw_max)
+            _cmap  = _mpl_cm.colormaps["jet"]
+            _fcolors = _cmap(_norm(_DB))
+
+            ax3d.plot_surface(
+                _X, _Y, _Z,
+                facecolors=_fcolors,
+                rstride=1, cstride=1,
+                linewidth=0, antialiased=False,
+                shade=False,
+            )
+
+            # Colour-bar (gain in dBi)
+            _sm = _mpl_cm.ScalarMappable(cmap=_cmap, norm=_norm)
+            _sm.set_array([])
+            _cb = fig.colorbar(_sm, ax=ax3d, shrink=0.55, pad=0.08, aspect=15)
+            _cb.set_label("dBi", fontsize=7)
+            _cb.ax.tick_params(labelsize=6)
+
+        ax3d.set_xlabel("X", fontsize=7, labelpad=2)
+        ax3d.set_ylabel("Y", fontsize=7, labelpad=2)
+        ax3d.set_zlabel("Z", fontsize=7, labelpad=2)
+        ax3d.tick_params(labelsize=6)
+        ax3d.view_init(elev=25, azim=-60)
 
     plt.tight_layout(rect=[0, 0, 1, 0.98])
     plt.savefig(out_png, dpi=150, bbox_inches="tight")
