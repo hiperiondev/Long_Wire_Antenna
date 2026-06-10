@@ -3835,13 +3835,18 @@ def plot_radiation_diagrams(
 
             _TG, _PG = _np.meshgrid(_T, _P, indexing="ij")
 
-            # ── Normalise R ∈ [floor, 1.0] ──────────────────────────────
-            # floor=0.05 keeps deep nulls as a thin surface (avoids
-            # degenerate zero-area polygons) while preserving full dynamic
-            # range so lobe shapes are clearly visible.
-            _R3D_FLOOR = 0.05
-            _R = (_R3D_FLOOR
-                  + (1.0 - _R3D_FLOOR) * (_DB - _raw_min) / _raw_span)
+            # ── Normalise R via dB-to-amplitude: R = 10^((dB - max)/20) ────
+            # This maps: max_dB → R=1.0, (max−20 dB) → R=0.1, (max−40 dB) → R=0.01
+            # Physical meaning: R is proportional to field amplitude, so lobe
+            # shapes match MMANA-GAL / EZNEC exactly.
+            # The previous linear mapping (floor + linear fraction of raw_span)
+            # collapsed all gains toward R≈1 when real dynamic range was
+            # narrower than the 30 dB clamp window, producing a near-sphere
+            # that set_box_aspect([1,1,0.75]) then flattened into a disc.
+            # A hard floor at 0.01 (−40 dB below peak) avoids degenerate
+            # zero-area polygons at deep nulls.
+            _R3D_FLOOR = 0.01
+            _R = _np.maximum(_R3D_FLOOR, 10.0 ** ((_DB - _raw_max) / 20.0))
 
             # ── Spherical → Cartesian (upper hemisphere: Z >= 0) ────────
             _theta_rad = _np.radians(_TG)   # 0…π/2  →  cos >= 0  →  Z >= 0
@@ -3855,11 +3860,13 @@ def plot_radiation_diagrams(
             _cmap    = _get_cm("jet")
             _norm    = _mpl_colors.Normalize(vmin=_raw_min, vmax=_raw_max)
 
-            # plot_surface with rstride=1, cstride=1 needs facecolors with
-            # shape (n_theta-1, n_phi-1, 4) — one fewer row and column than
-            # the vertex grid.  Average each 2×2 quad of vertex DB values so
-            # the face colour represents its four surrounding vertices, then
-            # trim to the correct face-count dimensions.
+            # plot_surface(rstride=1, cstride=1) creates (n_theta-1)*(n_phi-1)
+            # quad faces — one per pair of adjacent rows/columns.  facecolors
+            # must therefore have shape (n_theta-1, n_phi-1, 4), NOT the full
+            # vertex shape (n_theta, n_phi, 4).  Passing vertex-sized colors
+            # causes matplotlib to mis-assign colors to faces, producing the
+            # fin/spike artifacts seen in the broken output.
+            # Fix: average each 2×2 vertex quad → one face color.
             _DB_face = (
                 _DB[ :-1,  :-1]
               + _DB[1:  ,  :-1]
@@ -3910,11 +3917,16 @@ def plot_radiation_diagrams(
         ax3d.set_xlabel("X", fontsize=7, labelpad=2)
         ax3d.set_ylabel("Y", fontsize=7, labelpad=2)
         ax3d.set_zlabel("Z", fontsize=7, labelpad=2)
-        ax3d.set_zlim(0, 1)
+        # Z ∈ [0, 1]: R_max=1.0 at peak, hemisphere sits on Z=0 ground.
+        # Consistent with 10^(dB/20) normalization: cos(0°)=1 at zenith.
+        ax3d.set_zlim(0.0, 1.0)
+        # Equal X/Y/Z aspect so the half-balloon is not distorted.
+        # The previous [1, 1, 0.75] compressed Z by 25 %, which — combined
+        # with near-sphere data — produced a flat disc artifact.
         try:
-            ax3d.set_box_aspect([1, 1, 0.7])   # slightly flattened hemisphere
+            ax3d.set_box_aspect([1.0, 1.0, 1.0])
         except AttributeError:
-            pass  # set_box_aspect requires matplotlib ≥ 3.3
+            pass
         ax3d.view_init(elev=28, azim=-55)
         ax3d.grid(True, color="#cccccc", linewidth=0.5)
 
