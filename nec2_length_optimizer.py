@@ -3786,22 +3786,29 @@ def plot_radiation_diagrams(
         # ── 3-D pattern: upper hemisphere only (theta 0°→90°) ────────────
         # NEC2 with GN 2 (Sommerfeld-Norton ground) produces RP data only
         # for theta 0°→90°.  The correct visualisation is a half-balloon
-        # sitting on the Z=0 ground plane, exactly matching MMANA-GAL /
-        # EZNEC preview output.
+        # sitting on the Z=0 ground plane.
         #
-        # PREVIOUS BUG: the code mirrored the upper hemisphere into the
-        # lower hemisphere (theta 90°→180°) to form a full sphere.  This
-        # is physically wrong (there is no radiation below ground) AND
-        # causes matplotlib's software depth-sort to fail: when the two
-        # hemispherical surfaces overlap in Z, faces are drawn out of order
-        # producing the flat disc with spike/fin artifacts seen in the
-        # output.  The fix is simply to NOT mirror — show theta 0→90 only.
+        # ROOT CAUSE of fin/spike artifacts:
+        # Antenna patterns like 40m (TOA=58°) or 20m (TOA=89°) produce
+        # non-convex surfaces: R(theta) peaks at the TOA angle then drops
+        # to the floor both toward zenith (theta→0) AND toward horizon
+        # (theta→90).  This means Z = R·cos(theta) is non-monotonic —
+        # it rises from the zenith, peaks near TOA, then falls to zero at
+        # the horizon.  matplotlib's plot_surface painter algorithm assigns
+        # each face a single Z-centroid depth and sorts on that alone; on a
+        # non-monotonic surface multiple faces share similar Z values but
+        # are at completely different screen positions, so they composite in
+        # the wrong order producing the "spike/fin" artefacts.
+        #
+        # FIX: replace plot_surface with Poly3DCollection + manual depth sort.
+        # We project every face centroid onto the camera view vector and sort
+        # back-to-front (furthest face drawn first).  This is the correct
+        # painter algorithm and handles non-convex surfaces correctly.
         _raw_pts = _clamp_raw(pat.get("raw", []),
                               dyn=_DB_STEPS * _DB_RINGS)   # 30 dB range
         if _raw_pts:
             _raw_max  = max(db for (_, _, db) in _raw_pts)
             _raw_min  = min(db for (_, _, db) in _raw_pts)
-            _raw_span = max(1.0, _raw_max - _raw_min)
 
             _thetas_set = sorted({t for (t, _, _) in _raw_pts})
             _phis_set   = sorted({p for (_, p, _) in _raw_pts})
@@ -3812,80 +3819,185 @@ def plot_radiation_diagrams(
             _T  = _np.array(_thetas_set)   # 0° … 90° only
             _P  = _np.array(_phis_set)
 
-            _DB = _np.full((len(_thetas_set), len(_phis_set)), _raw_min)
+            # Pre-fill with NaN sentinel; real NEC2 values overwrite below.
+            _DB = _np.full((len(_thetas_set), len(_phis_set)), _np.nan)
             for _i, _t in enumerate(_thetas_set):
                 for _j, _p in enumerate(_phis_set):
                     _key = (round(_t, 4), round(_p, 4))
                     if _key in _grid_lut:
                         _DB[_i, _j] = _grid_lut[_key]
 
-            # ── Smooth zenith pole row ───────────────────────────────────
-            # At theta=0, sin(θ)=0 so X=Y=0 for all φ, but R still varies
-            # with φ if DB varies → spike fins at the apex.  Average the
-            # DB values in the zenith row to a single value so all apex
-            # points collapse to the same Z height.
-            _DB[0, :] = _DB[0, :].mean()
+            # ── Fill missing (theta, phi) grid cells ─────────────────────
+            # ROOT CAUSE of "spike fan + washed-out green" on 40m/20m:
+            # the previous code filled every missing cell with _raw_min
+            # (= g_max - 30 dB after clamping, i.e. the BOTTOM of the
+            # colour range).  When the parsed point cloud doesn't form a
+            # perfectly dense theta×phi grid (a few cells missing — e.g.
+            # one RP block ending early or a duplicate-angle row), those
+            # flat-floor cells:
+            #   1. create deep "valleys" immediately next to full-height
+            #      neighbours → thin radial spike/fin silhouettes, and
+            #   2. drag a large fraction of the face-colour samples down
+            #      to vmin, so the turbo colormap renders almost entirely
+            #      blue/green with the true high-gain (red/yellow) lobe
+            #      reduced to a few isolated faces.
+            # Fix: fill missing cells by interpolating from neighbouring
+            # theta rows at the same phi (linear, nearest-available),
+            # falling back to the row mean, then to _raw_min only if an
+            # entire row/column is empty.  This keeps the surface smooth
+            # and keeps colours representative of the true gain pattern.
+            for _j in range(_DB.shape[1]):
+                _col = _DB[:, _j]
+                _valid = ~_np.isnan(_col)
+                if _valid.any() and not _valid.all():
+                    _idx_valid = _np.where(_valid)[0]
+                    _DB[:, _j] = _np.interp(
+                        _np.arange(len(_col)),
+                        _idx_valid, _col[_idx_valid])
+            # Any rows/columns that were entirely NaN (no data anywhere
+            # for that theta) — fill from the overall mean of valid data.
+            if _np.isnan(_DB).any():
+                _overall_mean = _np.nanmean(_DB) if not _np.all(_np.isnan(_DB)) else _raw_min
+                _DB = _np.where(_np.isnan(_DB), _overall_mean, _DB)
+
+            # ── Smooth pole rows (zenith side) ────────────────────────────
+            # At theta=0, sin(θ)=0 so X=Y=0 for all φ regardless of DB.  If
+            # DB varies across φ at theta=0 (or at very small theta, where
+            # sin(θ)≈0 collapses nearly all points to the same XYZ location
+            # but R still differs per-φ), the result is a fan of thin
+            # "spike/fin" wedges radiating from the apex — the artefact
+            # visible on the 40m/20m 3-D plots (high-TOA patterns whose
+            # peak gain sits at or very near theta≈0).  10m (TOA=15°,
+            # low-elevation pattern) has its peak far from the pole and is
+            # unaffected.
+            #
+            # Fix: average DB across φ for EVERY theta row close enough to
+            # the pole that sin(θ) is small (theta <= ~2×dθ), not just the
+            # exact theta=0 row.  This collapses all near-apex points to a
+            # consistent radius, eliminating the fin artefacts while leaving
+            # the rest of the pattern (including any genuine high-TOA lobe
+            # that is NOT exactly at the pole) intact.
+            _pole_tol_deg = max(2.0 * (_thetas_set[1] - _thetas_set[0])
+                                 if len(_thetas_set) > 1 else 0.0, 1e-6)
+            for _i, _t in enumerate(_thetas_set):
+                if _t <= _pole_tol_deg:
+                    _DB[_i, :] = _DB[_i, :].mean()
 
             # ── Close the phi loop ───────────────────────────────────────
             # NEC2 outputs phi 0°…360°−dφ.  Append phi=360° = phi=0° column
-            # so plot_surface stitches the last meridional strip to the first.
+            # so the last meridional strip stitches to the first.
             if len(_phis_set) > 1 and _phis_set[-1] < 359.9:
                 _P  = _np.append(_P, 360.0)
                 _DB = _np.concatenate([_DB, _DB[:, :1]], axis=1)
 
             _TG, _PG = _np.meshgrid(_T, _P, indexing="ij")
 
-            # ── Normalise R via dB-to-amplitude: R = 10^((dB - max)/20) ────
-            # This maps: max_dB → R=1.0, (max−20 dB) → R=0.1, (max−40 dB) → R=0.01
-            # Physical meaning: R is proportional to field amplitude, so lobe
-            # shapes match MMANA-GAL / EZNEC exactly.
-            # The previous linear mapping (floor + linear fraction of raw_span)
-            # collapsed all gains toward R≈1 when real dynamic range was
-            # narrower than the 30 dB clamp window, producing a near-sphere
-            # that set_box_aspect([1,1,0.75]) then flattened into a disc.
-            # A hard floor at 0.01 (−40 dB below peak) avoids degenerate
-            # zero-area polygons at deep nulls.
+            # ── Normalise R via dB-to-amplitude: R = 10^((dB - max)/20) ──
             _R3D_FLOOR = 0.01
             _R = _np.maximum(_R3D_FLOOR, 10.0 ** ((_DB - _raw_max) / 20.0))
 
-            # ── Spherical → Cartesian (upper hemisphere: Z >= 0) ────────
-            _theta_rad = _np.radians(_TG)   # 0…π/2  →  cos >= 0  →  Z >= 0
+            # ── Spherical → Cartesian (upper hemisphere: Z >= 0) ─────────
+            _theta_rad = _np.radians(_TG)   # 0…π/2
             _phi_rad   = _np.radians(_PG)
             _X = _R * _np.sin(_theta_rad) * _np.cos(_phi_rad)
             _Y = _R * _np.sin(_theta_rad) * _np.sin(_phi_rad)
             _Z = _R * _np.cos(_theta_rad)
 
+            # ── Colormap and normalization ────────────────────────────────
             _get_cm  = (lambda n: _mpl_cm.colormaps[n]) \
                        if hasattr(_mpl_cm, "colormaps") else plt.get_cmap
-            _cmap    = _get_cm("jet")
-            _norm    = _mpl_colors.Normalize(vmin=_raw_min, vmax=_raw_max)
+            # "turbo" has better perceptual uniformity than "jet":
+            # blue=low gain, green=mid, red=peak.
+            try:
+                _cmap = _get_cm("turbo")
+            except KeyError:
+                _cmap = _get_cm("jet")
 
-            # plot_surface(rstride=1, cstride=1) creates (n_theta-1)*(n_phi-1)
-            # quad faces — one per pair of adjacent rows/columns.  facecolors
-            # must therefore have shape (n_theta-1, n_phi-1, 4), NOT the full
-            # vertex shape (n_theta, n_phi, 4).  Passing vertex-sized colors
-            # causes matplotlib to mis-assign colors to faces, producing the
-            # fin/spike artifacts seen in the broken output.
-            # Fix: average each 2×2 vertex quad → one face color.
-            _DB_face = (
-                _DB[ :-1,  :-1]
-              + _DB[1:  ,  :-1]
-              + _DB[ :-1, 1:  ]
-              + _DB[1:  , 1:  ]
-            ) / 4.0
-            _fcolors = _cmap(_norm(_DB_face))
-
-            ax3d.plot_surface(
-                _X, _Y, _Z,
-                facecolors=_fcolors,
-                rstride=1, cstride=1,
-                linewidth=0, antialiased=True,
-                shade=False,
+            # Fixed 30 dB window so colours match the 2-D ring labels.
+            _COLOUR_DYN = float(_DB_STEPS * _DB_RINGS)   # 30 dB
+            _norm = _mpl_colors.Normalize(
+                vmin=_raw_max - _COLOUR_DYN,
+                vmax=_raw_max,
             )
 
-            # ── Ground-plane disc at Z=0 ─────────────────────────────────
-            # Closes the open base of the half-balloon, matching the flat
-            # ground reference visible in MMANA-GAL / EZNEC previews.
+            # ── Dynamic view elevation based on TOA ───────────────────────
+            # Near-zenith patterns (20m, TOA≈89°) are invisible from a low
+            # camera angle; raise the viewpoint so the lobe is visible.
+            _toa_deg = pat.get("toa_deg", 30.0)
+            if _toa_deg >= 70.0:
+                _view_elev = 60   # near-zenith: look from above
+            elif _toa_deg >= 45.0:
+                _view_elev = 40   # mid-elevation
+            else:
+                _view_elev = 25   # near-horizon: show horizontal spread
+
+            # ── Camera view vector for depth sorting ──────────────────────
+            # matplotlib view_init(elev, azim): camera sits at
+            #   (cos(elev)*cos(azim), cos(elev)*sin(azim), sin(elev)) * dist
+            # The vector FROM camera TOWARD origin (into scene):
+            _ve = math.radians(_view_elev)
+            _va = math.radians(-55.0)          # azim fixed at -55°
+            _cam_in = _np.array([
+                -math.cos(_ve) * math.cos(_va),
+                -math.cos(_ve) * math.sin(_va),
+                -math.sin(_ve),
+            ])
+
+            # ── Build face list: quads + depth + colour ───────────────────
+            # Lambertian shading is intentionally omitted: it crushes colors
+            # on high-TOA (near-zenith) lobes where face normals point
+            # upward and the lateral light vector yields near-zero dot
+            # products, forcing all faces toward the ambient floor and
+            # collapsing the full turbo colour range to a narrow dark band.
+            # Pure colormap colours faithfully convey gain across all bands.
+
+            _nt, _np2 = _X.shape
+            _n_faces  = (_nt - 1) * (_np2 - 1)
+            _verts3d  = []     # list of (4,3) vertex arrays
+            _depths   = _np.empty(_n_faces)
+            _fcolors  = []
+
+            _idx = 0
+            for _fi in range(_nt - 1):
+                for _fj in range(_np2 - 1):
+                    _v = _np.array([
+                        [_X[_fi,   _fj],   _Y[_fi,   _fj],   _Z[_fi,   _fj]  ],
+                        [_X[_fi+1, _fj],   _Y[_fi+1, _fj],   _Z[_fi+1, _fj]  ],
+                        [_X[_fi+1, _fj+1], _Y[_fi+1, _fj+1], _Z[_fi+1, _fj+1]],
+                        [_X[_fi,   _fj+1], _Y[_fi,   _fj+1], _Z[_fi,   _fj+1]],
+                    ])
+                    _verts3d.append(_v)
+
+                    # Depth = projection of centroid onto the inward camera ray.
+                    # Larger value → face is further from camera → draw first.
+                    _c = _v.mean(axis=0)
+                    _depths[_idx] = _np.dot(_c, _cam_in)
+
+                    # Per-face dB (average of 4 vertices)
+                    _db_f = (_DB[_fi,   _fj]   + _DB[_fi+1, _fj] +
+                             _DB[_fi+1, _fj+1] + _DB[_fi,   _fj+1]) / 4.0
+
+                    # Direct colormap lookup — no shading multiplier so the
+                    # full turbo blue→green→red range is preserved on every
+                    # antenna pattern regardless of lobe orientation.
+                    _rgba = _cmap(_norm(_db_f))
+                    _fcolors.append(_rgba)
+
+                    _idx += 1
+
+            # Sort back-to-front: largest depth (furthest from camera) first.
+            _order = _np.argsort(-_depths)   # descending → furthest first
+
+            from mpl_toolkits.mplot3d.art3d import Poly3DCollection as _P3C
+            _poly = _P3C(
+                [_verts3d[_k] for _k in _order],
+                facecolors=[_fcolors[_k] for _k in _order],
+                linewidths=0,
+                edgecolors="none",
+            )
+            ax3d.add_collection3d(_poly)
+
+            # ── Ground-plane disc at Z=0 ──────────────────────────────────
             _disc_phi = _np.linspace(0, 2 * _np.pi, 73)
             _disc_r   = _np.linspace(0, 1.0, 10)
             _DP, _DR  = _np.meshgrid(_disc_phi, _disc_r)
@@ -3897,11 +4009,16 @@ def plot_radiation_diagrams(
                 linewidth=0, shade=False,
             )
 
+            # ── Colorbar ──────────────────────────────────────────────────
             _sm = _mpl_cm.ScalarMappable(cmap=_cmap, norm=_norm)
             _sm.set_array([])
             _cb = fig.colorbar(_sm, ax=ax3d, shrink=0.52, pad=0.08, aspect=14)
             _cb.set_label("dBi", fontsize=7.5, color=_FG)
             _cb.ax.tick_params(labelsize=6.5, colors=_FG)
+
+        # Fallback view angle if _raw_pts was empty (no data for this band)
+        if not _raw_pts:
+            _view_elev = 30
 
         # 3-D cosmetics (white background)
         ax3d.xaxis.pane.fill = False
@@ -3917,17 +4034,17 @@ def plot_radiation_diagrams(
         ax3d.set_xlabel("X", fontsize=7, labelpad=2)
         ax3d.set_ylabel("Y", fontsize=7, labelpad=2)
         ax3d.set_zlabel("Z", fontsize=7, labelpad=2)
-        # Z ∈ [0, 1]: R_max=1.0 at peak, hemisphere sits on Z=0 ground.
-        # Consistent with 10^(dB/20) normalization: cos(0°)=1 at zenith.
-        ax3d.set_zlim(0.0, 1.0)
-        # Equal X/Y/Z aspect so the half-balloon is not distorted.
-        # The previous [1, 1, 0.75] compressed Z by 25 %, which — combined
-        # with near-sphere data — produced a flat disc artifact.
+        ax3d.set_xlim(-1.0, 1.0)
+        ax3d.set_ylim(-1.0, 1.0)
+        ax3d.set_zlim( 0.0, 1.0)
         try:
-            ax3d.set_box_aspect([1.0, 1.0, 1.0])
+            # X and Y span 2 units (-1…1), Z spans 1 unit (0…1).
+            # box_aspect must reflect this 2:2:1 ratio so the half-balloon
+            # is not vertically squashed into a flat pancake.
+            ax3d.set_box_aspect([2.0, 2.0, 1.0])
         except AttributeError:
             pass
-        ax3d.view_init(elev=28, azim=-55)
+        ax3d.view_init(elev=_view_elev, azim=-55)
         ax3d.grid(True, color="#cccccc", linewidth=0.5)
 
     plt.tight_layout(rect=[0, 0, 1, 0.97])
