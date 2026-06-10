@@ -3783,19 +3783,33 @@ def plot_radiation_diagrams(
         ax3d.set_title(f"{band}  3-D Pattern  {freq_str}",
                        fontsize=10.5, fontweight="bold", color=_FG, pad=8)
 
-        raw = _clamp_raw(pat.get("raw", []))
-        if raw:
-            _raw_max  = max(db for (_, _, db) in raw)
-            _raw_min  = min(db for (_, _, db) in raw)
+        # ── 3-D pattern: upper hemisphere only (theta 0°→90°) ────────────
+        # NEC2 with GN 2 (Sommerfeld-Norton ground) produces RP data only
+        # for theta 0°→90°.  The correct visualisation is a half-balloon
+        # sitting on the Z=0 ground plane, exactly matching MMANA-GAL /
+        # EZNEC preview output.
+        #
+        # PREVIOUS BUG: the code mirrored the upper hemisphere into the
+        # lower hemisphere (theta 90°→180°) to form a full sphere.  This
+        # is physically wrong (there is no radiation below ground) AND
+        # causes matplotlib's software depth-sort to fail: when the two
+        # hemispherical surfaces overlap in Z, faces are drawn out of order
+        # producing the flat disc with spike/fin artifacts seen in the
+        # output.  The fix is simply to NOT mirror — show theta 0→90 only.
+        _raw_pts = _clamp_raw(pat.get("raw", []),
+                              dyn=_DB_STEPS * _DB_RINGS)   # 30 dB range
+        if _raw_pts:
+            _raw_max  = max(db for (_, _, db) in _raw_pts)
+            _raw_min  = min(db for (_, _, db) in _raw_pts)
             _raw_span = max(1.0, _raw_max - _raw_min)
 
-            _thetas_set = sorted({t for (t, _, _) in raw})
-            _phis_set   = sorted({p for (_, p, _) in raw})
+            _thetas_set = sorted({t for (t, _, _) in _raw_pts})
+            _phis_set   = sorted({p for (_, p, _) in _raw_pts})
             _grid_lut: dict = {}
-            for (t, p, db) in raw:
+            for (t, p, db) in _raw_pts:
                 _grid_lut[(round(t, 4), round(p, 4))] = db
 
-            _T  = _np.array(_thetas_set)
+            _T  = _np.array(_thetas_set)   # 0° … 90° only
             _P  = _np.array(_phis_set)
 
             _DB = _np.full((len(_thetas_set), len(_phis_set)), _raw_min)
@@ -3805,66 +3819,54 @@ def plot_radiation_diagrams(
                     if _key in _grid_lut:
                         _DB[_i, _j] = _grid_lut[_key]
 
-            # ── Fix 1: Mirror upper hemisphere → lower hemisphere ───────
-            # NEC2's RP card sweeps theta 0°→90° only (upper hemisphere;
-            # GN 2 ground zeroes radiation below ground).  Without mirroring
-            # the surface only covers the top half of the sphere and renders
-            # as a flat dome/mushroom cap.  The image-antenna principle gives
-            # perfect bilateral symmetry about the ground plane, so mirroring
-            # the upper-hemisphere data into theta 90°→180° closes the
-            # balloon correctly.  The equator row (theta=90°) is shared and
-            # must not be duplicated.
-            _T_lower = 180.0 - _T[::-1][1:]          # 90°+dθ … 180°
-            _DB_lo   = _DB[::-1, :][1:, :]            # mirror, skip equator
-            _T       = _np.concatenate([_T, _T_lower])
-            _DB      = _np.concatenate([_DB, _DB_lo], axis=0)
+            # ── Smooth zenith pole row ───────────────────────────────────
+            # At theta=0, sin(θ)=0 so X=Y=0 for all φ, but R still varies
+            # with φ if DB varies → spike fins at the apex.  Average the
+            # DB values in the zenith row to a single value so all apex
+            # points collapse to the same Z height.
+            _DB[0, :] = _DB[0, :].mean()
 
-            # ── Fix 2: Collapse pole rows to a single apex ──────────────
-            # At theta=0 and theta=180, sin(theta)=0 so X=Y=0 for every φ,
-            # but Z = R·cos(θ) = R·(±1) still varies with φ if R = f(DB)
-            # and DB varies with φ at the pole.  Each meridional quad then
-            # fans out from a different apex height → triangular spike fins.
-            # Setting both pole rows to their mean DB collapses all apex
-            # points to the same Z, eliminating the fins.
-            _DB[0, :]  = _DB[0, :].mean()
-            _DB[-1, :] = _DB[-1, :].mean()
-
-            # ── Close the phi loop ──────────────────────────────────────
-            # NEC2 outputs phi from 0° to 360°−d_phi (e.g. 0…355° for
-            # n_azimuth=73).  plot_surface cannot bridge the gap back to 0°
-            # on its own, so each meridional strip appears as a separate
-            # "fin" / bar.  Appending a phi=360° column (identical to the
-            # phi=0° column) seals the surface into a closed shell.
+            # ── Close the phi loop ───────────────────────────────────────
+            # NEC2 outputs phi 0°…360°−dφ.  Append phi=360° = phi=0° column
+            # so plot_surface stitches the last meridional strip to the first.
             if len(_phis_set) > 1 and _phis_set[-1] < 359.9:
-                _P = _np.append(_P, 360.0)
+                _P  = _np.append(_P, 360.0)
                 _DB = _np.concatenate([_DB, _DB[:, :1]], axis=1)
 
             _TG, _PG = _np.meshgrid(_T, _P, indexing="ij")
 
-            # ── Fix 3: Normalise R to [floor, 1.0] ──────────────────────
-            # A floor of 0.30 keeps deep-null regions at 30 % of the peak
-            # radius so the balloon stays a connected surface (no wafers).
-            # CRITICAL: R must never exceed 1.0.  The old formula
-            #   R = (DB-min)/span + floor  → max R = 1 + floor = 1.30
-            # pushed the lower-hemisphere surface past the unit sphere.
-            # Matplotlib's software renderer depth-sorts by Z; when two
-            # faces lie at the same Z but different radii (one > 1, one < 1)
-            # the sort breaks, producing the spike/fin artifacts visible in
-            # the output image.  The correct bounded form is:
-            #   R = floor + (1-floor)*(DB-min)/span  → R ∈ [floor, 1.0]
-            _R3D_FLOOR = 0.30
-            _R         = _R3D_FLOOR + (1.0 - _R3D_FLOOR) * (_DB - _raw_min) / _raw_span
-            _theta_rad = _np.radians(_TG)
+            # ── Normalise R ∈ [floor, 1.0] ──────────────────────────────
+            # floor=0.05 keeps deep nulls as a thin surface (avoids
+            # degenerate zero-area polygons) while preserving full dynamic
+            # range so lobe shapes are clearly visible.
+            _R3D_FLOOR = 0.05
+            _R = (_R3D_FLOOR
+                  + (1.0 - _R3D_FLOOR) * (_DB - _raw_min) / _raw_span)
+
+            # ── Spherical → Cartesian (upper hemisphere: Z >= 0) ────────
+            _theta_rad = _np.radians(_TG)   # 0…π/2  →  cos >= 0  →  Z >= 0
             _phi_rad   = _np.radians(_PG)
             _X = _R * _np.sin(_theta_rad) * _np.cos(_phi_rad)
             _Y = _R * _np.sin(_theta_rad) * _np.sin(_phi_rad)
             _Z = _R * _np.cos(_theta_rad)
 
-            _norm  = _mpl_colors.Normalize(vmin=_raw_min, vmax=_raw_max)
-            _get_cm = (lambda n: _mpl_cm.colormaps[n]) \
-                      if hasattr(_mpl_cm, "colormaps") else plt.get_cmap
+            _get_cm  = (lambda n: _mpl_cm.colormaps[n]) \
+                       if hasattr(_mpl_cm, "colormaps") else plt.get_cmap
             _cmap    = _get_cm("jet")
-            _fcolors = _cmap(_norm(_DB))
+            _norm    = _mpl_colors.Normalize(vmin=_raw_min, vmax=_raw_max)
+
+            # plot_surface with rstride=1, cstride=1 needs facecolors with
+            # shape (n_theta-1, n_phi-1, 4) — one fewer row and column than
+            # the vertex grid.  Average each 2×2 quad of vertex DB values so
+            # the face colour represents its four surrounding vertices, then
+            # trim to the correct face-count dimensions.
+            _DB_face = (
+                _DB[ :-1,  :-1]
+              + _DB[1:  ,  :-1]
+              + _DB[ :-1, 1:  ]
+              + _DB[1:  , 1:  ]
+            ) / 4.0
+            _fcolors = _cmap(_norm(_DB_face))
 
             ax3d.plot_surface(
                 _X, _Y, _Z,
@@ -3872,6 +3874,20 @@ def plot_radiation_diagrams(
                 rstride=1, cstride=1,
                 linewidth=0, antialiased=True,
                 shade=False,
+            )
+
+            # ── Ground-plane disc at Z=0 ─────────────────────────────────
+            # Closes the open base of the half-balloon, matching the flat
+            # ground reference visible in MMANA-GAL / EZNEC previews.
+            _disc_phi = _np.linspace(0, 2 * _np.pi, 73)
+            _disc_r   = _np.linspace(0, 1.0, 10)
+            _DP, _DR  = _np.meshgrid(_disc_phi, _disc_r)
+            ax3d.plot_surface(
+                _DR * _np.cos(_DP),
+                _DR * _np.sin(_DP),
+                _np.zeros_like(_DR),
+                color="#cccccc", alpha=0.25,
+                linewidth=0, shade=False,
             )
 
             _sm = _mpl_cm.ScalarMappable(cmap=_cmap, norm=_norm)
@@ -3894,6 +3910,11 @@ def plot_radiation_diagrams(
         ax3d.set_xlabel("X", fontsize=7, labelpad=2)
         ax3d.set_ylabel("Y", fontsize=7, labelpad=2)
         ax3d.set_zlabel("Z", fontsize=7, labelpad=2)
+        ax3d.set_zlim(0, 1)
+        try:
+            ax3d.set_box_aspect([1, 1, 0.7])   # slightly flattened hemisphere
+        except AttributeError:
+            pass  # set_box_aspect requires matplotlib ≥ 3.3
         ax3d.view_init(elev=28, azim=-55)
         ax3d.grid(True, color="#cccccc", linewidth=0.5)
 
