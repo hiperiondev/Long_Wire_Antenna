@@ -1,4 +1,4 @@
 band,freq_mhz,active,lambda_half_m,lambda_qtr_m,wire_len_m,L_over_lhalf,R_wire_ohm,X_wire_ohm,vswr_no_cp,vswr_with_cp,Z_eff_ohm,Zcp_ohm,unun_ratio,avoidance_score,quality_rating,cp_len_m,cp_height_m,num_radials
-40m,7.1,YES,21.1121,10.5561,37.0,1.7525,291.88,544.48,106.495,4.133,617.78,,16.0,0.25,★★★ EXCELENTE,9.0,0.5,1
-20m,14.175,YES,10.5747,5.2873,37.0,3.4989,1765.5,-1.06,1.225,2.207,1765.5,,16.0,0.0022,✗   RIESGO DE RESONANCIA,9.0,0.5,1
+40m,7.1,YES,21.1121,10.5561,37.0,1.7525,291.88,544.48,106.495,4.133,617.78,,16.0,0.25,★★★ EXCELLENT,9.0,0.5,1
+20m,14.175,YES,10.5747,5.2873,37.0,3.4989,1765.5,-1.06,1.225,2.207,1765.5,,16.0,0.0022,✗   RESONANCE RISK,9.0,0.5,1
 10m,28.5,YES,5.2595,2.6298,37.0,7.0349,1163.3,-254.3,76.478,1.577,1190.77,,16.0,0.0697,★   MARGINAL,9.0,0.5,1

@@ -816,7 +816,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     },
     "report_wire_geom_sloped_summary": {
         "en": "Wire geometry   : SLOPED  (far-end height = {0:.4f} m)",
-        "es": "Geometría hilo  : SLOPED  (altura extremo lejano = {0:.4f} m)",
+        "es": "Geometría hilo  : INCLINADO  (altura extremo lejano = {0:.4f} m)",
     },
     "report_wire_geom_horizontal": {
         "en": "Wire geometry   : horizontal (flat)",
@@ -824,7 +824,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     },
     "report_wire_geom_sloped_detail": {
         "en": "Wire geometry   : SLOPED  (feedpoint z={0:.3f} m → far end z={1:.4f} m)",
-        "es": "Geometría hilo  : SLOPED  (punto alimentación z={0:.3f} m → extremo lejano z={1:.4f} m)",
+        "es": "Geometría hilo  : INCLINADO  (punto alimentación z={0:.3f} m → extremo lejano z={1:.4f} m)",
     },
     "report_wire_geom_horizontal_const": {
         "en": "Wire geometry   : horizontal (flat, z = constant)",
@@ -1403,6 +1403,33 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "pdf_col_freq": {"en": "Freq (MHz)", "es": "Frec (MHz)"},
     "pdf_col_vswr": {"en": "VSWR", "es": "ROE"},
     "pdf_col_rating": {"en": "Rating", "es": "Calificación"},
+    "pdf_col_r_ant": {"en": "R_ant (Ω)", "es": "R_ant (Ω)"},
+    "pdf_col_x_ant": {"en": "X_ant (Ω)", "es": "X_ant (Ω)"},
+    "pdf_col_z_ant": {"en": "|Z_ant| (Ω)", "es": "|Z_ant| (Ω)"},
+    "pdf_col_r_tx":  {"en": "R_tx (Ω)",  "es": "R_tx (Ω)"},
+    "pdf_col_x_tx":  {"en": "X_tx (Ω)",  "es": "X_tx (Ω)"},
+    "pdf_col_z_tx":  {"en": "|Z_tx| (Ω)", "es": "|Z_tx| (Ω)"},
+    "pdf_col_source": {"en": "Source", "es": "Fuente"},
+    "pdf_col_theta":  {"en": "θ (°)", "es": "θ (°)"},
+    "pdf_col_ratio":  {"en": "Ratio", "es": "Relación"},
+    "pdf_col_score":  {"en": "Score", "es": "Puntuación"},
+    "pdf_col_best_ratio": {"en": "Best ratio", "es": "Mejor relación"},
+    "pdf_col_vswr_label": {"en": "VSWR quality", "es": "Calidad ROE"},
+    "pdf_col_avoidance":  {"en": "Avoidance", "es": "Evitación"},
+    "pdf_unun_used_label":      {"en": "UnUn ratio (this run)",      "es": "Relación UnUn (esta ejecución)"},
+    "pdf_unun_continuous_label":{"en": "Continuous optimum",         "es": "Óptimo continuo"},
+    "pdf_unun_best_std_label":  {"en": "Best standard ratio",        "es": "Mejor relación estándar"},
+    "pdf_unun_recommendation":  {"en": "Recommendation",             "es": "Recomendación"},
+    "pdf_unun_penalty_label":   {"en": "agg. VSWR penalty",         "es": "penaliz. ROS agr."},
+    "pdf_detail_wire_len":      {"en": "Wire length",                "es": "Longitud del hilo"},
+    "pdf_detail_cp_len":        {"en": "CP length",                  "es": "Longitud del CP"},
+    "pdf_detail_geometry":      {"en": "Wire geometry",              "es": "Geometría del hilo"},
+    "pdf_detail_score":         {"en": "Combined score",             "es": "Puntuación combinada"},
+    "pdf_detail_vswr_penalty":  {"en": "VSWR penalty",               "es": "Penalización ROS"},
+    "pdf_detail_avoid_act":     {"en": "Avoidance (active bands)",   "es": "Evitación (bandas activas)"},
+    "pdf_detail_avoid_all":     {"en": "Avoidance (all bands)",      "es": "Evitación (todas las bandas)"},
+    "pdf_detail_nec2":          {"en": "NEC2 data used",             "es": "Datos NEC2 usados"},
+    "pdf_geom_horizontal":      {"en": "horizontal (flat, z = constant)", "es": "horizontal (plano, z = constante)"},
     "pdf_spec_wire_len": {"en": "Radiator length", "es": "Longitud del radiador"},
     "pdf_spec_cp_len": {"en": "Counterpoise length", "es": "Longitud del contrapeso"},
     "pdf_spec_cp_type": {"en": "Counterpoise type", "es": "Tipo de contrapeso"},
@@ -4467,15 +4494,13 @@ def plot_construction_diagram(
         vert_len = max(0.0, z_near - cp_height_m)
         horiz_rem = cp_len
 
-    fig = plt.figure(figsize=(15, 9.5), facecolor=BG)
-    fig.suptitle(T("construction_title"), fontsize=17, fontweight="bold",
-                  color=TEXT, y=0.985)
+    fig = plt.figure(figsize=(13, 9.5), facecolor=BG)
 
-    gs = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[2.1, 1.0],
-                            wspace=0.06, left=0.045, right=0.985,
-                            top=0.90, bottom=0.06)
+    gs = gridspec.GridSpec(1, 1, figure=fig,
+                            left=0.07, right=0.97,
+                            top=0.97, bottom=0.07)
 
-    # ── LEFT: side-view schematic ───────────────────────────────────────
+    # ── side-view schematic ─────────────────────────────────────────────
     ax = fig.add_subplot(gs[0, 0])
     ax.set_facecolor(PANEL)
 
@@ -4599,68 +4624,6 @@ def plot_construction_diagram(
     leg = ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85,
                      facecolor=PANEL, edgecolor=GRID, labelcolor=TEXT)
 
-
-    # ── RIGHT: build sheet (construction specifications only) ───────────
-    axr = fig.add_subplot(gs[0, 1])
-    axr.set_facecolor(PANEL)
-    axr.set_xlim(0, 1)
-    axr.set_ylim(0, 1)
-    axr.axis("off")
-
-    cp_type_label = {
-        "horizontal": T("construction_cp_horizontal"),
-        "vertical":   T("construction_cp_vertical"),
-        "both":       T("construction_cp_both"),
-    }.get(best.cp_type, best.cp_type)
-
-    wire_diam_mm = wire_radius_mm * 2.0
-
-    spec_lines = [
-        (T("construction_spec_radiator"), f"{wire_len:.2f} m"),
-        (T("construction_spec_cp"),        f"{cp_len:.2f} m  ({cp_type_label})"),
-        (T("construction_spec_height"),    f"{wire_height_m:.2f} m"),
-        (T("construction_spec_cp_height"), f"{cp_height_m:.2f} m"),
-        (T("construction_spec_unun"),      f"{unun_ratio:.0f} : 1" if unun_ratio > 1
-                                             else T("construction_spec_unun_none")),
-        (T("construction_spec_wire_diam"), f"⌀ {wire_diam_mm:.1f} mm"),
-    ]
-    if slope_end is not None:
-        spec_lines.append((T("construction_spec_slope"), f"{wire_height_m:.2f} → {z_far:.2f} m"))
-        spec_lines.append((T("construction_dim_far_support"), f"{x_far:.2f} m"))
-
-    y = 0.985
-    axr.text(0, y, T("construction_specs_title"), color=TEXT, fontsize=13,
-             fontweight="bold", va="top")
-    y -= 0.045
-    axr.plot([0, 1], [y, y], color=GRID, linewidth=1)
-    y -= 0.035
-
-    for label, value in spec_lines:
-        axr.text(0.0, y, label, color=SUBTEXT, fontsize=9.5, va="top")
-        axr.text(1.0, y, value, color=TEXT, fontsize=9.5, va="top",
-                 ha="right", fontweight="bold")
-        y -= 0.026
-
-    # ── Vertically center the left diagram on the build-sheet content ──
-    # `y` (axes fraction, top=1) marks the bottom of the last spec line;
-    # the content spans from 1.0 down to y. Find its center in axes
-    # coordinates, then map to figure coordinates and re-center the
-    # left axis (preserving its height) on that point.
-    content_top_axr = 1.0
-    content_bottom_axr = y
-    content_center_axr = (content_top_axr + content_bottom_axr) / 2.0
-
-    axr_pos = axr.get_position()
-    content_center_fig_y = axr_pos.y0 + content_center_axr * axr_pos.height
-
-    ax_pos = ax.get_position()
-    new_y0 = content_center_fig_y - ax_pos.height / 2.0
-    # Don't let the diagram rise into the title area.
-    max_y0 = 0.90 - ax_pos.height
-    new_y0 = min(new_y0, max_y0)
-    new_y0 = max(new_y0, 0.0)
-    ax.set_position([ax_pos.x0, new_y0, ax_pos.width, ax_pos.height])
-
     plt.savefig(out_png, dpi=170, bbox_inches="tight", facecolor=BG)
     plt.close()
     print(T("construction_saved").format(out_png))
@@ -4712,6 +4675,7 @@ def write_pdf_brochure(
     construction_png: Optional[str] = None,
     radiation_png: Optional[str] = None,
     wire_height_m: float = DEFAULT_HEIGHT_M,
+    unun_result: Optional["UnUnResult"] = None,
 ) -> bool:
     """
     Render a modern, commercial-brochure-style PDF datasheet summarising the
@@ -4720,7 +4684,9 @@ def write_pdf_brochure(
         1. Cover / configuration overview
         2. Construction diagram
         3. Performance report (specs + per-band table)
-        4. Radiation pattern diagrams
+        4. Best candidate detailed breakdown
+        5. UnUn ratio analysis
+        6. Radiation pattern diagrams
 
     Returns True on success, False if reportlab is unavailable or required
     images are missing.
@@ -4833,6 +4799,7 @@ def write_pdf_brochure(
         [T("pdf_spec_bands"),     band_names],
         [T("pdf_spec_mode"),      mode.upper()],
         [T("pdf_spec_score"),     f"{best.score_combined:.3f}"],
+        [T("pdf_detail_geometry"), slope_note],
     ]
     spec_table = Table(
         [[Paragraph(f"<b>{k}</b>", style_body), Paragraph(v, style_body)]
@@ -4850,12 +4817,10 @@ def write_pdf_brochure(
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    story.append(spec_table)
-    story.append(Paragraph(slope_note, style_small))
+    story.append(KeepTogether(spec_table))
     story.append(Spacer(1, 6 * mm))
 
     # ── 1. CONSTRUCTION DIAGRAM ────────────────────────────────────────────
-    story.append(Paragraph(T("pdf_section_construction"), style_h1))
     if construction_png:
         try:
             from PIL import Image as _PILImage
@@ -4876,7 +4841,6 @@ def write_pdf_brochure(
 
     # ── 2. PERFORMANCE REPORT ──────────────────────────────────────────────
     story.append(Paragraph(T("pdf_section_performance"), style_h1))
-    story.append(Paragraph(T("pdf_section_perband"), style_h2))
 
     table_data = [[T("pdf_col_band"), T("pdf_col_freq"), T("pdf_col_vswr"), T("pdf_col_rating")]]
     row_colors = []
@@ -4914,13 +4878,13 @@ def write_pdf_brochure(
         style_cmds.append(("TEXTCOLOR", (2, i), (2, i), c))
         style_cmds.append(("FONTNAME", (2, i), (2, i), "Helvetica-Bold"))
     perf_table.setStyle(TableStyle(style_cmds))
-    story.append(perf_table)
+    story.append(KeepTogether([Paragraph(T("pdf_section_perband"), style_h2), perf_table]))
     story.append(Spacer(1, 6 * mm))
 
     # NEC2 / impedance details
     if any(b in best.band_R_ant for b in (cr.band for cr in active)):
-        story.append(Paragraph(T("report_per_band_imp"), style_h2))
-        imp_data = [["Band", "R_ant (Ω)", "X_ant (Ω)", "R_tx (Ω)", "X_tx (Ω)", "Source"]]
+        imp_data = [[T("pdf_col_band"), T("pdf_col_r_ant"), T("pdf_col_x_ant"),
+                     T("pdf_col_r_tx"), T("pdf_col_x_tx"), T("pdf_col_source")]]
         for cr in active:
             b = cr.band
             imp_data.append([
@@ -4945,10 +4909,209 @@ def write_pdf_brochure(
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
         ]))
-        story.append(imp_table)
+        story.append(KeepTogether([Paragraph(T("report_per_band_imp"), style_h2), imp_table]))
         story.append(Spacer(1, 6 * mm))
 
-    # ── 3. RADIATION PATTERNS ──────────────────────────────────────────────
+    # ── 2b. BEST CANDIDATE — DETAILED BREAKDOWN ───────────────────────────
+    detail_data = [
+        [T("pdf_detail_wire_len"),   f"{best.wire_len_m:.3f} m"],
+        [T("pdf_detail_cp_len"),     f"{best.cp_len_m:.3f} m  ({best.cp_type})"],
+    ]
+    if best.wire_slope_end_m is not None:
+        detail_data.append([T("pdf_detail_geometry"),
+                             T("report_wire_geom_sloped_detail").format(wire_height_m, best.wire_slope_end_m)])
+    else:
+        detail_data.append([T("pdf_detail_geometry"), T("pdf_geom_horizontal")])
+    detail_data += [
+        [T("pdf_detail_score"),        f"{best.score_combined:.4f}"],
+        [T("pdf_detail_vswr_penalty"), f"{best.score_vswr:.4f}"],
+        [T("pdf_detail_avoid_act"),    f"{best.score_avoidance_active:.4f}"],
+        [T("pdf_detail_avoid_all"),    f"{best.score_avoidance:.4f}"],
+        [T("pdf_detail_nec2"),         T("report_nec2_yes") if best.nec2_ok else T("report_nec2_no")],
+    ]
+    detail_table = Table(
+        [[Paragraph(f"<b>{row[0]}</b>", style_body), Paragraph(str(row[1]), style_body)]
+         for row in detail_data],
+        colWidths=[70 * mm, 100 * mm],
+    )
+    detail_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [LIGHT, colors.white]),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(KeepTogether([Paragraph(T("report_best_header"), style_h1), detail_table]))
+    story.append(Spacer(1, 4 * mm))
+
+    # Per-band avoidance + VSWR quality table
+    active_bands_list = [cr for cr in calc_rows if cr.active]
+    if active_bands_list:
+        pb_hdr = [T("construction_col_band"), T("construction_col_freq"),
+                  T("construction_col_vswr"), T("construction_col_quality"),
+                  T("pdf_col_avoidance")]
+        pb_data = [pb_hdr]
+        pb_vswr_colors = []
+        for cr in active_bands_list:
+            b = cr.band
+            v = best.band_vswr.get(b, 999.0)
+            a = best.band_avoidance.get(b, 0.0)
+            rating = re.sub(r'[^\w\s★]', '', _avoidance_rating(a)).strip()
+            if v <= 1.5:
+                vlabel = T("vswr_excellent"); vc = GOOD
+            elif v <= 3.0:
+                vlabel = T("vswr_good");      vc = ACCENT2
+            elif v <= 6.0:
+                vlabel = T("vswr_marginal");  vc = WARN
+            else:
+                vlabel = T("vswr_poor");      vc = BAD
+            pb_data.append([b, f"{cr.freq_mhz:.3f}", f"{v:.2f}  {vlabel}", rating, f"{a:.4f}"])
+            pb_vswr_colors.append(vc)
+        pb_table = Table(pb_data, colWidths=[20 * mm, 22 * mm, 42 * mm, 46 * mm, 22 * mm])
+        pb_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ]
+        for _i, _vc in enumerate(pb_vswr_colors, start=1):
+            pb_style.append(("TEXTCOLOR", (2, _i), (2, _i), _vc))
+            pb_style.append(("FONTNAME",  (2, _i), (2, _i), "Helvetica-Bold"))
+        pb_table.setStyle(TableStyle(pb_style))
+        story.append(KeepTogether(pb_table))
+        story.append(Spacer(1, 6 * mm))
+
+    # ── 2c. UnUn RATIO ANALYSIS ───────────────────────────────────────────
+    if unun_result is not None:
+        cont_n = unun_result.best_continuous_ratio
+        boundary_note = ""
+        if cont_n >= 99.5:
+            boundary_note = "  " + T("report_unun_cont_hit_upper")
+        elif cont_n <= 1.5:
+            boundary_note = "  " + T("report_unun_cont_hit_lower")
+
+        bands_active = [cr.band for cr in calc_rows if cr.active]
+
+        unun_summary = [
+            [T("pdf_unun_used_label"),
+             f"{unun_ratio:.1f}:1"],
+            [T("pdf_unun_continuous_label"),
+             f"{cont_n:.2f}:1  ({T('pdf_unun_penalty_label')}: "
+             f"{unun_result.best_continuous_score:.4f}){boundary_note}"],
+            [T("pdf_unun_best_std_label"),
+             f"{unun_result.best_standard_ratio:.0f}:1  ("
+             f"{T('pdf_unun_penalty_label')}: "
+             f"{unun_result.best_standard_score:.4f})"],
+        ]
+        cur_score = unun_result.ratio_score.get(unun_ratio, 999.0)
+        std_n = unun_result.best_standard_ratio
+        std_score = unun_result.best_standard_score
+        if cur_score > 0 and (cur_score - std_score) > 0.001 and abs(std_n - unun_ratio) > 0.5:
+            unun_summary.append([
+                T("pdf_unun_recommendation"),
+                T("report_unun_improve").format(std_n, cur_score - std_score, 100.0 * (cur_score - std_score) / cur_score),
+            ])
+        else:
+            unun_summary.append([T("pdf_unun_recommendation"), T("report_unun_already_optimal").format(unun_ratio)])
+
+        unun_sum_table = Table(
+            [[Paragraph(f"<b>{row[0]}</b>", style_body), Paragraph(str(row[1]), style_body)]
+             for row in unun_summary],
+            colWidths=[60 * mm, 110 * mm],
+        )
+        unun_sum_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [LIGHT, colors.white]),
+            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(KeepTogether([Paragraph(T("report_unun_section"), style_h1), unun_sum_table]))
+        story.append(Spacer(1, 4 * mm))
+
+        # Standard ratio sweep table
+        sweep_hdr = [T("pdf_col_ratio"), T("pdf_col_score")] + \
+                    [f"{T('pdf_col_vswr')}@{b}" for b in bands_active]
+        sweep_data = [sweep_hdr]
+        for n in sorted(unun_result.ratio_score.keys()):
+            score = unun_result.ratio_score[n]
+            row = [f"{n:.4g}:1", f"{score:.4f}"]
+            for b in bands_active:
+                row.append(f"{unun_result.ratio_band_vswr[n].get(b, 999):.2f}")
+            sweep_data.append(row)
+
+        n_cols_sweep = len(sweep_hdr)
+        col_w_each = 170 * mm / n_cols_sweep
+        sweep_table = Table(sweep_data, colWidths=[col_w_each] * n_cols_sweep)
+        sweep_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ]
+        # Highlight best standard ratio row and current ratio row
+        for _ri, n in enumerate(sorted(unun_result.ratio_score.keys()), start=1):
+            if n == unun_result.best_standard_ratio:
+                sweep_style.append(("BACKGROUND", (0, _ri), (-1, _ri), GOOD))
+                sweep_style.append(("TEXTCOLOR",  (0, _ri), (-1, _ri), colors.white))
+            elif n == unun_ratio:
+                sweep_style.append(("BACKGROUND", (0, _ri), (-1, _ri), colors.HexColor("#eef4ff")))
+        sweep_table.setStyle(TableStyle(sweep_style))
+        story.append(KeepTogether([Paragraph(T("report_std_sweep"), style_h2), sweep_table]))
+
+        # Per-band antenna-side impedance and optimal ratio
+        if unun_result.band_impedances:
+            story.append(Spacer(1, 4 * mm))
+            imp_hdr2 = [T("pdf_col_band"), T("pdf_col_r_ant"), T("pdf_col_x_ant"),
+                        T("pdf_col_z_ant"), T("pdf_col_theta"),
+                        T("pdf_col_best_ratio")]
+            imp_data2 = [imp_hdr2]
+            for bname, R_a, X_a in unun_result.band_impedances:
+                Z_a   = math.hypot(R_a, X_a)
+                theta = math.degrees(math.atan2(X_a, R_a))
+                opt_n = unun_result.per_band_best_ratio.get(bname)
+                opt_n_str = f"{opt_n:.2f}:1" if opt_n is not None else T("pdf_na")
+                imp_data2.append([bname, f"{R_a:.1f}", f"{X_a:+.1f}",
+                                   f"{Z_a:.1f}", f"{theta:+.1f}", opt_n_str])
+            imp_table2 = Table(imp_data2,
+                colWidths=[20 * mm, 28 * mm, 28 * mm, 28 * mm, 22 * mm, 44 * mm])
+            imp_table2.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ]))
+            story.append(KeepTogether([Paragraph(T("report_ant_impedance"), style_h2), imp_table2]))
+        story.append(Spacer(1, 6 * mm))
     story.append(PageBreak())
     story.append(Paragraph(T("pdf_section_radiation"), style_h1))
     if radiation_png:
@@ -5762,6 +5925,7 @@ def main() -> None:
             construction_png=args.out_construction,
             radiation_png=_rad_png,
             wire_height_m=_wh_out,
+            unun_result=unun_result,
         )
         if _ok:
             print(T("pdf_saved").format(args.out_pdf))

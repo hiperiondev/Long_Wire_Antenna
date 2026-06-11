@@ -1,18 +1,18 @@
 
 ════════════════════════════════════════════════════════════════════════════════
-  INFORME DEL OPTIMIZADOR DE LONGITUD DE ANTENA NEC2
+  NEC2 ANTENNA LENGTH OPTIMIZER REPORT
 ════════════════════════════════════════════════════════════════════════════════
-  Modo de evaluación: NEC2
-  Relación UnUn   : 9.0:1
-  Rango de hilo   : 33.00 m … 37.00 m  paso 0.250 m
-  Rango de CP     : 8.00 m … 12.00 m  paso 0.250 m
-  Geometría hilo  : SLOPED  (altura extremo lejano = 0.0500 m)
-  Bandas activas  : 3 de 3  (40m(*), 20m(*), 10m(*))  (* = evaluadas para ROS)
-  Total candidatos: 289
+  Evaluation mode : NEC2
+  UnUn ratio      : 9.0:1
+  Wire range      : 33.00 m … 37.00 m  step 0.250 m
+  CP range        : 8.00 m … 12.00 m  step 0.250 m
+  Wire geometry   : SLOPED  (far-end height = 0.0500 m)
+  Active bands    : 3 of 3  (40m(*), 20m(*), 10m(*))  (* = scored for VSWR)
+  Total candidates: 289
 
 
 ════════════════════════════════════════════════════════════════════════════════
-  TOP 30 CANDIDATOS  (menor puntuación combinada = mejor)
+  TOP 30 CANDIDATES  (lower combined score = better)
 ════════════════════════════════════════════════════════════════════════════════
     #   Wire(m)    CP(m)     CP type    Score    meanPen   1.5xWpen  -0.5xAv(a)   -0.1xCPbon      40m      20m      10m  NEC2
   ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -48,9 +48,9 @@
    30    33.750    8.750    vertical    4.325      1.192      3.251     -0.1022      -0.0163     4.75     3.00     2.12  ✓
 
 ════════════════════════════════════════════════════════════════════════════════
-  FRENTE PARETO-ÓPTIMO  (4 candidatos)
+  PARETO-OPTIMAL FRONT  (4 candidates)
 ════════════════════════════════════════════════════════════════════════════════
-  Candidatos no dominados en penalización ROS y puntuación de evitación.
+  Candidates not dominated on both VSWR-penalty and avoidance score.
 
     1  wire=37.000 m  cp=9.000 m  (vertical)  score=4.055  VSWR=[   4.21     3.92     2.73]  avoid_active=0.1073  avoid_all=0.1073
     2  wire=34.500 m  cp=9.000 m  (vertical)  score=4.091  VSWR=[   4.39     3.01     3.03]  avoid_active=0.2064  avoid_all=0.2064
@@ -58,44 +58,44 @@
     4  wire=35.000 m  cp=9.000 m  (vertical)  score=4.129  VSWR=[   4.23     3.53     3.65]  avoid_active=0.2500  avoid_all=0.2500
 
 ════════════════════════════════════════════════════════════════════════════════
-  MEJOR CANDIDATO — DESGLOSE DETALLADO
+  BEST CANDIDATE — DETAILED BREAKDOWN
 ════════════════════════════════════════════════════════════════════════════════
-  Longitud hilo : 37.000 m
-  Longitud CP   : 9.000 m   (orientación vertical)
-  Geometría hilo  : SLOPED  (punto alimentación z=10.000 m → extremo lejano z=0.0500 m)
-  Puntuación comb: 4.0553
-  Penaliz. ROS  : 1.4138  (media de penalización ROS en bandas activas; score_combined = media + 1.5×peor − bonos)
-  Evitación(act): 0.1073  (media en bandas ACTIVAS — usada en score_combined)
-  Evitación(all): 0.1073  (media en TODAS las bandas del CSV — referencia)
-  Datos NEC2 usados: SÍ
-  ⚠  HILO en el máximo de búsqueda (37.000 m) — 1/5 mejores candidatos tocaron este límite.  El óptimo real puede ser mayor.  Re-ejecute con --wire-max mayor o aumente --margin.
+  Wire length   : 37.000 m
+  CP length     : 9.000 m   (vertical orientation)
+  Wire geometry   : SLOPED  (feedpoint z=10.000 m → far end z=0.0500 m)
+  Combined score: 4.0553
+  VSWR penalty  : 1.4138  (mean VSWR penalty across active bands; score_combined = mean + 1.5×worst − bonuses)
+  Avoidance(act): 0.1073  (mean across ACTIVE bands — used in score_combined)
+  Avoidance(all): 0.1073  (mean across ALL bands in CSV — shown for reference)
+  NEC2 data used: YES
+  ⚠  WIRE at search maximum (37.000 m) — 1/5 top candidates hit this boundary.  True optimum may be longer.  Re-run with larger --wire-max or increase --margin.
 
-  Resultados por banda:
+  Per-band results:
         Band  Active   VSWR(Tx)     Avoid                  Rating  VSWR
     ────────────────────────────────────────────────────────────────────────────────
-         40m     YES       4.21    0.2500           ★★★ EXCELENTE  MARGINAL
-         20m     YES       3.92    0.0022  ✗   RIESGO DE RESONANCIA  MARGINAL
-         10m     YES       2.73    0.0697            ★   MARGINAL  BUENO
+         40m     YES       4.21    0.2500           ★★★ EXCELLENT  MARGINAL
+         20m     YES       3.92    0.0022      ✗   RESONANCE RISK  MARGINAL
+         10m     YES       2.73    0.0697            ★   MARGINAL  GOOD
 
-  Impedancia por banda (lado antena y lado transmisor):
+  Per-band impedance (antenna side and transmitter side):
         Band   freq MHz    R_ant Ω    X_ant Ω    |Z_ant|Ω    R_tx Ω    X_tx Ω    |Z_tx|Ω    VSWR      Source
     ────────────────────────────────────────────────────────────────────────────────────────────────────
          40m     7.1000      291.9     +544.5       617.8     32.43    +60.50      68.64    4.21      NEC2-V
          20m    14.1750     1765.5       -1.1      1765.5    196.17     -0.12     196.17    3.92      NEC2-V
          10m    28.5000     1163.3     -254.3      1190.8    129.26    -28.26     132.31    2.73      NEC2-V
-    (UnUn 9:1 — Z lado antena dividida por 9 para obtener Z lado Tx)
+    (UnUn 9:1 — antenna-side Z divided by 9 to give Tx-side Z)
 
 ════════════════════════════════════════════════════════════════════════════════
-  ANÁLISIS DE RELACIÓN UnUn  (para la mejor geometría de antena)
+  UnUn RATIO ANALYSIS  (for best antenna geometry)
 ════════════════════════════════════════════════════════════════════════════════
-  Relación UnUn usada (esta ejecución): 9.0:1
-  Óptimo continuo            : 14.52:1  (penalización ROS agregada 3.3621)
-  Mejor relación estándar    : 16:1  (penalización ROS agregada 3.3928)
-    → Cambiar a 16:1 mejora la penalización ROS agregada en 0.7309  (17.7 %)
-    ⚠  Las clasificaciones de este informe se calcularon con 9:1.
-       Re-ejecute con --unun 16 para clasificar candidatos con la relación recomendada.
+  Used UnUn ratio (this run) : 9.0:1
+  Continuous optimum         : 14.52:1  (aggregate VSWR penalty 3.3621)
+  Best standard ratio        : 16:1  (aggregate VSWR penalty 3.3928)
+    → Switching to 16:1 improves aggregate VSWR penalty by 0.7309  (17.7 %)
+    ⚠  Rankings in this report were computed with 9:1.
+       Re-run with --unun 16 to rank candidates under the recommended ratio.
 
-  Barrido de relaciones estándar:
+  Standard ratio sweep:
      Ratio    Score   VSWR@40m   VSWR@20m   VSWR@10m
     ──────────────────────────────────────────────────
         1:1  16.6401      26.29      35.31      24.38
@@ -113,70 +113,66 @@
        49:1   7.1722       8.81       1.39       2.13
        64:1   8.3662      11.28       1.81       2.77
 
-  Impedancia lado antena (independiente de la relación UnUn):
+  Antenna-side impedance (independent of UnUn ratio):
         Band    R_ant Ω    X_ant Ω   |Z_ant| Ω      θ °
     ────────────────────────────────────────────────────
          40m      291.9     +544.5       617.8    +61.8
          20m     1765.5       -1.1      1765.5     -0.0
          10m     1163.3     -254.3      1190.8    -12.3
 
-  Relación óptima por banda (independiente, continua):
+  Per-band optimal ratio (independent, continuous):
         Band    Best ratio     VSWR
     ──────────────────────────────────
          40m       12.36:1    3.982
          20m       35.31:1    1.001
          10m       23.82:1    1.242
 
-  Nota: las relaciones por banda optimizan cada banda de forma independiente y pueden
-        entrar en conflicto entre sí.  La puntuación agregada anterior es la
-        métrica correcta para un UnUn multibanda único.
+  Note: per-band ratios optimise each band independently and may
+        conflict with each other.  The aggregate score above is the
+        correct metric for a single multi-band UnUn.
 
 ════════════════════════════════════════════════════════════════════════════════
-  INTERPRETACIÓN FÍSICA
+  PHYSICAL INTERPRETATION
 ════════════════════════════════════════════════════════════════════════════════
-  1. Selección de longitud del hilo
-     El hilo óptimo evita caer en CUALQUIER múltiplo de λ/4 en TODAS las bandas
-     del CSV simultáneamente — incluyendo las marcadas como inactivas para ROS.
-     Las resonancias ocurren en cada paso λ/4: λ/4 (Z baja / máx. corriente),
-     λ/2 (Z alta / máx. voltaje), 3λ/4 (Z baja de nuevo), λ (Z alta), etc.  La
-     puntuación de evitación es la distancia fraccional al múltiplo λ/4 MÁS
-     CERCANO en todas las bandas; máximo alcanzable = 0.25 (punto medio entre
-     resonancias) = ★★★ EXCELENTE. Valores inferiores a 0.06 indican RIESGO DE
-     RESONANCIA.
+  1. Wire length selection
+     The optimal wire avoids landing on ANY multiple of λ/4 on ALL bands in the
+     CSV simultaneously — including those marked inactive for VSWR scoring.
+     Resonances occur at every λ/4 step: λ/4 (low Z / current max), λ/2 (high Z
+     / voltage max), 3λ/4 (low Z again), λ (high Z), etc.  The avoidance score
+     is the fractional distance to the NEAREST λ/4 multiple across all bands;
+     maximum achievable = 0.25 (midway between resonances) = ★★★ EXCELLENT.
+     Values below 0.06 flag RESONANCE RISK.
 
-  2. Selección de longitud del contrapeso
-     El contrapeso actúa como la mitad faltante del sistema de antena.  Una
-     longitud cercana a λ/4 en la frecuencia de operación (o un múltiplo impar:
-     3λ/4, 5λ/4 …) proporciona un camino de retorno de baja impedancia y es
-     recompensado por el optimizador. Longitudes cercanas a un múltiplo par de
-     λ/4 (λ/2, λ, 3λ/2 …) producen un camino de retorno de alta impedancia y no
-     reciben recompensa.  Este bono es intencionalmente pequeño respecto al
-     término ROS para que la resonancia del CP pueda influir entre candidatos
-     cercanos pero no anule una mala adaptación de ROS.
+  2. Counterpoise length selection
+     The counterpoise acts as the missing half of the antenna system.  A length
+     near λ/4 at the operating frequency (or an odd multiple thereof: 3λ/4,
+     5λ/4 …) provides a low-impedance return path and is actively rewarded by
+     the optimizer. Lengths near an even multiple of λ/4 (i.e. λ/2, λ, 3λ/2 …)
+     produce a high-impedance return path and receive no reward.  This bonus is
+     intentionally small relative to the VSWR term so that CP resonance can
+     nudge a close pair of candidates but cannot override a poor VSWR match.
 
-  3. ROS después del UnUn
-     Todos los valores de ROS mostrados corresponden al lado del TRANSMISOR
-     (coaxial 50 Ω) DESPUÉS del UnUn 9:1.  La impedancia del lado antena se
-     divide por 9 antes de calcular el ROS.  Una relación UnUn bien elegida
-     puede mejorar o empeorar la adaptación: si el ROS es pobre en todas las
-     bandas, considere probar 4:1 o 16:1 en lugar de 9:1.
+  3. VSWR after UnUn
+     All VSWR values shown are referred to the TRANSMITTER side (50 Ω coaxial)
+     AFTER the 9:1 UnUn.  The antenna-side impedance is divided by 9 before
+     computing VSWR.  A well-chosen UnUn ratio can improve or worsen match: if
+     VSWR is poor on every band consider trying 4:1 or 16:1 instead of 9:1.
 
-  4. NEC2 vs. empírico
-     Cuando nec2c está disponible, el optimizador ejecuta una simulación
-     completa de tierra Sommerfeld-Norton para cada candidato.  Sin NEC2 se
-     usan las fórmulas empíricas R = 50·80^cos²(π·L/λ½) y X =
-     1500·sin(2π·L/λ½).  El modelo empírico sobreestima la precisión de
-     impedancia cerca de resonancias; los resultados NEC2 siempre son
-     preferidos.  Valide con un VNA en el banco.
+  4. NEC2 vs empirical
+     When nec2c is available, the optimizer runs a full Sommerfeld-Norton
+     ground simulation for each candidate.  Without NEC2, the empirical
+     formulas R = 50·80^cos²(π·L/λ½) and X = 1500·sin(2π·L/λ½) are used.  The
+     empirical model overestimates impedance accuracy near resonances; NEC2
+     results are always preferred.  Cross-validate with a VNA on the bench.
 
-  5. Próximos pasos
-     1. Valide con un VNA antes de cortar el hilo final.  2. Si ROS > 3 en
-     alguna banda prioritaria, pruebe una relación UnUn diferente   o agregue
-     un segundo radial de CP cortado a λ/4 para esa banda específica.  3. Re-
-     ejecute con --wire-step / --cp-step más finos alrededor del mejor
-     candidato   para refinar el óptimo en una ventana más estrecha.
+  5. Next steps
+     1. Validate with a VNA before cutting the final wire.  2. If VSWR > 3 on
+     any priority band, try a different UnUn ratio or add   a second CP radial
+     cut to λ/4 for that specific band.  3. Re-run with a finer --wire-step /
+     --cp-step around the best candidate   to refine the optimum within a
+     narrower window.
 
 
 ════════════════════════════════════════════════════════════════════════════════
-  FIN DEL INFORME DEL OPTIMIZADOR
+  END OF OPTIMIZER REPORT
 ════════════════════════════════════════════════════════════════════════════════
