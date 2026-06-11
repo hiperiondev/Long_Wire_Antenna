@@ -575,6 +575,146 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "  📊  Optimizer plot saved → {0}",
         "es": "  📊  Gráfico del optimizador guardado → {0}",
     },
+    "construction_saved": {
+        "en": "  🛠️  Construction diagram saved → {0}",
+        "es": "  🛠️  Diagrama de construcción guardado → {0}",
+    },
+    "nec2_deck_saved": {
+        "en": "  📡  Best-antenna NEC2 deck saved → {0}",
+        "es": "  📡  Archivo NEC2 de la mejor antena guardado → {0}",
+    },
+    "construction_title": {
+        "en": "Antenna Construction Diagram",
+        "es": "Diagrama de Construcción de la Antena",
+    },
+    "construction_ground_label": {
+        "en": "ground",
+        "es": "tierra",
+    },
+    "construction_feedpoint": {
+        "en": "Feedpoint",
+        "es": "Punto de alimentación",
+    },
+    "construction_radiator_label": {
+        "en": "Radiator (long wire)",
+        "es": "Radiador (hilo largo)",
+    },
+    "construction_cp_label": {
+        "en": "Counterpoise / ground",
+        "es": "Contrapeso / tierra",
+    },
+    "construction_dim_radiator": {
+        "en": "Radiator length",
+        "es": "Longitud del radiador",
+    },
+    "construction_dim_cp": {
+        "en": "Counterpoise length",
+        "es": "Longitud del contrapeso",
+    },
+    "construction_dim_height": {
+        "en": "Support height",
+        "es": "Altura de soporte",
+    },
+    "construction_dim_far_height": {
+        "en": "Far-end height",
+        "es": "Altura extremo lejano",
+    },
+    "construction_dim_far_support": {
+        "en": "Far-end support distance",
+        "es": "Distancia soporte extremo lejano",
+    },
+    "construction_dim_feed_support": {
+        "en": "Feedpoint mast support distance",
+        "es": "Distancia soporte mástil de alimentación",
+    },
+    "construction_xlabel": {
+        "en": "Horizontal distance (m)",
+        "es": "Distancia horizontal (m)",
+    },
+    "construction_ylabel": {
+        "en": "Height above ground (m)",
+        "es": "Altura sobre el suelo (m)",
+    },
+    "construction_specs_title": {
+        "en": "Build Specifications",
+        "es": "Especificaciones de Construcción",
+    },
+    "construction_spec_radiator": {
+        "en": "Radiator wire length",
+        "es": "Longitud del hilo radiador",
+    },
+    "construction_spec_cp": {
+        "en": "Counterpoise length",
+        "es": "Longitud del contrapeso",
+    },
+    "construction_spec_height": {
+        "en": "Support height",
+        "es": "Altura de soporte",
+    },
+    "construction_spec_cp_height": {
+        "en": "Counterpoise height",
+        "es": "Altura del contrapeso",
+    },
+    "construction_spec_unun": {
+        "en": "UnUn ratio",
+        "es": "Relación UnUn",
+    },
+    "construction_spec_unun_none": {
+        "en": "1:1 (none)",
+        "es": "1:1 (ninguno)",
+    },
+    "construction_spec_wire_diam": {
+        "en": "Wire diameter",
+        "es": "Diámetro del hilo",
+    },
+    "construction_spec_slope": {
+        "en": "Wire height (near → far)",
+        "es": "Altura del hilo (cerca → lejos)",
+    },
+    "construction_cp_horizontal": {
+        "en": "horizontal",
+        "es": "horizontal",
+    },
+    "construction_cp_vertical": {
+        "en": "vertical",
+        "es": "vertical",
+    },
+    "construction_cp_both": {
+        "en": "horizontal/vertical",
+        "es": "horizontal/vertical",
+    },
+    "construction_bands_title": {
+        "en": "Per-band Performance",
+        "es": "Rendimiento por Banda",
+    },
+    "construction_col_band": {
+        "en": "Band",
+        "es": "Banda",
+    },
+    "construction_col_freq": {
+        "en": "MHz",
+        "es": "MHz",
+    },
+    "construction_col_vswr": {
+        "en": "VSWR",
+        "es": "ROE",
+    },
+    "construction_col_quality": {
+        "en": "Quality",
+        "es": "Calidad",
+    },
+    "construction_quality_excellent": {
+        "en": "Excellent",
+        "es": "Excelente",
+    },
+    "construction_quality_good": {
+        "en": "Good",
+        "es": "Buena",
+    },
+    "construction_quality_poor": {
+        "en": "Poor",
+        "es": "Pobre",
+    },
     "matplotlib_missing": {
         "en": "  matplotlib not available — skipping plot.",
         "es": "  matplotlib no disponible — omitiendo gráfico.",
@@ -1174,6 +1314,10 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "ap_out_radiation": {
         "en": "Radiation diagram PNG for all active bands (default: radiation_diagrams.png).",
         "es": "PNG de diagramas de radiación para todas las bandas activas (por defecto: radiation_diagrams.png).",
+    },
+    "ap_out_construction": {
+        "en": "Construction diagram PNG with build dimensions (default: antenna_construction.png).",
+        "es": "PNG del diagrama de construcción con dimensiones (por defecto: antenna_construction.png).",
     },
     "ap_retry": {
         "en": ("If the best candidate hits a search boundary (wire or CP at min/max), "
@@ -3257,7 +3401,7 @@ def write_best_nec_deck(
 
         fh.write("EN\n")
 
-    print(f"  📡  Best-antenna NEC2 deck saved → {out_path}")
+    print(T("nec2_deck_saved").format(out_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4192,6 +4336,299 @@ def plot_results(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# CONSTRUCTION DIAGRAM
+# ═══════════════════════════════════════════════════════════════════════════
+
+def plot_construction_diagram(
+    best: "CandidateResult",
+    calc_rows: List[CalcRow],
+    unun_ratio: float,
+    out_png: str,
+    wire_height_m: float = DEFAULT_HEIGHT_M,
+    cp_height_m: float = 0.5,
+    wire_slope_end_m: Optional[float] = None,
+    wire_radius_mm: float = 1.0,
+) -> None:
+    """
+    Render a clean, modern, human-readable PNG showing the physical layout
+    of the winning antenna (radiator + counterpoise/radials), annotated with
+    every dimension needed for construction, plus a per-band summary table.
+    """
+    if not HAS_MPL:
+        print(T("matplotlib_missing"))
+        return
+
+    # ── palette (white background, print-friendly) ─────────────────────────
+    BG       = "#ffffff"
+    PANEL    = "#ffffff"
+    GRID     = "#d8dee5"
+    TEXT     = "#1a2330"
+    SUBTEXT  = "#5a6b7a"
+    ACCENT   = "#1f7fb8"     # radiator wire
+    ACCENT2  = "#c97a1a"     # counterpoise / ground system
+    GROUND   = "#9aa7b3"
+
+    cp_type   = best.cp_type if best.cp_type != "both" else "horizontal"
+    slope_end = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
+
+    wire_len = best.wire_len_m
+    cp_len   = best.cp_len_m
+
+    # geometry of the radiator (mirrors write_nec_deck logic)
+    z_near = wire_height_m
+    if slope_end is not None:
+        z_far = max(float(slope_end), wire_radius_mm / 1000.0)
+        rise  = z_near - z_far
+        rise  = min(rise, wire_len)
+        x_far = math.sqrt(max(0.0, wire_len ** 2 - rise ** 2))
+    else:
+        z_far = z_near
+        x_far = wire_len
+
+    # geometry of the counterpoise/ground wire
+    if cp_type == "vertical":
+        cp_top_z    = z_near
+        cp_bottom_z = max(cp_height_m, z_near - cp_len)
+        vert_len    = max(0.0, cp_top_z - cp_bottom_z)
+        horiz_rem   = max(0.0, cp_len - vert_len)
+    else:
+        cp_top_z = cp_bottom_z = cp_height_m
+        vert_len = max(0.0, z_near - cp_height_m)
+        horiz_rem = cp_len
+
+    fig = plt.figure(figsize=(15, 9.5), facecolor=BG)
+    fig.suptitle(T("construction_title"), fontsize=17, fontweight="bold",
+                  color=TEXT, y=0.985)
+
+    gs = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[2.1, 1.0],
+                            wspace=0.06, left=0.045, right=0.985,
+                            top=0.90, bottom=0.06)
+
+    # ── LEFT: side-view schematic ───────────────────────────────────────
+    ax = fig.add_subplot(gs[0, 0])
+    ax.set_facecolor(PANEL)
+
+    max_x = max(wire_len, x_far, cp_len) + 1.5
+    max_z = max(wire_height_m, z_near, z_far, cp_top_z) + 1.9
+
+    # ground line
+    ax.axhline(0, color=GROUND, linewidth=2.5, zorder=1)
+    ax.fill_between([-1.5, max_x], -0.4, 0, color=GROUND, alpha=0.35, zorder=0)
+    ax.text(-1.3, -0.22, T("construction_ground_label"), color=SUBTEXT,
+            fontsize=8.5, va="center", ha="left")
+
+    # mast / support pole at feedpoint
+    ax.plot([0, 0], [0, z_near], color="#5b6b7c", linewidth=4, zorder=2,
+            solid_capstyle="round")
+
+    # feedpoint marker
+    ax.scatter([0], [z_near], s=90, color=ACCENT, edgecolors=TEXT,
+               linewidths=1.2, zorder=5)
+    ax.annotate(T("construction_feedpoint"), xy=(0, z_near),
+                xytext=(-8, 12), textcoords="offset points",
+                fontsize=8.5, color=TEXT, ha="right", fontweight="bold")
+
+    # radiator wire (radiator/long wire)
+    ax.plot([0, x_far], [z_near, z_far], color=ACCENT, linewidth=3.2,
+            zorder=4, solid_capstyle="round",
+            label=T("construction_radiator_label"))
+    ax.scatter([x_far], [z_far], s=60, color=ACCENT, edgecolors=TEXT,
+               linewidths=1, zorder=5)
+
+    # radiator end support if sloped
+    if abs(z_far) > 0.05:
+        ax.plot([x_far, x_far], [0, z_far], color="#5b6b7c", linewidth=3,
+                zorder=2, linestyle=(0, (4, 3)))
+
+    # dimension line: radiator length
+    _dim_line(ax, (0, z_near + 1.0), (x_far, z_far + 1.0),
+              f"{T('construction_dim_radiator')}\n{wire_len:.2f} m",
+              color=ACCENT, text_color=TEXT, bg=BG)
+
+    # counterpoise / ground system
+    cp_x0 = 0
+    cp_label_total = f"{cp_len:.2f} m"
+    if cp_type == "vertical" and vert_len > 0.01:
+        ax.plot([cp_x0, cp_x0], [z_near, cp_top_z], color=ACCENT2,
+                linewidth=3, zorder=3, linestyle=(0, (1, 0)))
+        ax.plot([cp_x0, -horiz_rem], [cp_bottom_z, cp_bottom_z],
+                color=ACCENT2, linewidth=3, zorder=3,
+                label=T("construction_cp_label"))
+        ax.scatter([-horiz_rem], [cp_bottom_z], s=55, color=ACCENT2,
+                   edgecolors=TEXT, linewidths=1, zorder=5)
+        _dim_line(ax, (cp_x0, cp_bottom_z - 0.6), (-horiz_rem, cp_bottom_z - 0.6),
+                  f"{T('construction_dim_cp')}\n{cp_label_total}",
+                  color=ACCENT2, text_color=TEXT, below=True, bg=BG)
+        if vert_len > 0.05:
+            ax.text(cp_x0 + 0.15, (z_near + cp_bottom_z) / 2,
+                    f"{vert_len:.2f} m", color=ACCENT2, fontsize=8,
+                    rotation=90, va="center", ha="left",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
+                              edgecolor="none", alpha=0.85))
+    else:
+        ax.plot([cp_x0, -cp_len], [cp_height_m, cp_height_m],
+                color=ACCENT2, linewidth=3, zorder=3,
+                label=T("construction_cp_label"))
+        ax.scatter([cp_x0, -cp_len], [cp_height_m, cp_height_m], s=55,
+                   color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
+        _dim_line(ax, (cp_x0, cp_height_m - 0.6), (-cp_len, cp_height_m - 0.6),
+                  f"{T('construction_dim_cp')}\n{cp_label_total}",
+                  color=ACCENT2, text_color=TEXT, below=True, bg=BG)
+
+    # height annotations
+    _vdim_line(ax, -1.1, 0, z_near, f"{T('construction_dim_height')}\n{wire_height_m:.2f} m",
+               color="#5b6b7c", text_color=TEXT, bg=BG)
+    if cp_type == "horizontal" or vert_len < 0.01:
+        if abs(cp_height_m - 0) > 0.02 and abs(cp_height_m - z_near) > 0.02:
+            _vdim_line(ax, -cp_len - 0.9, 0, cp_height_m,
+                       f"{cp_height_m:.2f} m", color=ACCENT2, text_color=TEXT,
+                       small=True, bg=BG)
+
+    far_height_extra = 0.0
+    if abs(z_far - z_near) > 0.05:
+        ax.plot([x_far, x_far + 0.7], [z_far, z_far], color=ACCENT,
+                linewidth=1, linestyle="--", alpha=0.8, zorder=3)
+        far_label_text = ax.text(
+            x_far + 0.85, z_far,
+            f"{T('construction_dim_far_height')}\n{z_far:.2f} m",
+            color=TEXT, fontsize=8.5, ha="left", va="center",
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
+                      edgecolor=ACCENT, alpha=0.9, linewidth=0.8))
+
+        # Measure the rendered label width and convert to data units so the
+        # axes can be widened enough to fit it regardless of language/length.
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        bbox_px = far_label_text.get_window_extent(renderer=renderer)
+        bbox_data = ax.transData.inverted().transform(bbox_px)
+        label_width_data = bbox_data[1][0] - bbox_data[0][0]
+        far_height_extra = (x_far + 0.85 + label_width_data) - x_far
+
+    # sloped antenna: support distance (mast-to-anchor along the ground)
+    if slope_end is not None:
+        # Far-end anchor support distance (horizontal run from feed mast base
+        # to the far-end anchor point on the ground)
+        _dim_line(ax, (0, -0.55), (x_far, -0.55),
+                  f"{T('construction_dim_far_support')}\n{x_far:.2f} m",
+                  color=ACCENT, text_color=TEXT, below=True, bg=BG)
+
+    extra_right = max(2.6 if slope_end is not None else 0.0,
+                       far_height_extra + 0.3)
+    extra_below = 0.7 if slope_end is not None else 0.0
+    ax.set_xlim(-max(cp_len, horiz_rem) - 1.8, max_x + extra_right)
+    ax.set_ylim(-0.9 - extra_below, max_z)
+    ax.set_xlabel(T("construction_xlabel"), color=SUBTEXT, fontsize=9)
+    ax.set_ylabel(T("construction_ylabel"), color=SUBTEXT, fontsize=9)
+    ax.set_aspect("equal", adjustable="box")
+    ax.tick_params(colors=SUBTEXT, labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_color(GRID)
+    ax.grid(True, color=GRID, linewidth=0.6, alpha=0.6)
+    leg = ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85,
+                     facecolor=PANEL, edgecolor=GRID, labelcolor=TEXT)
+
+
+    # ── RIGHT: build sheet (construction specifications only) ───────────
+    axr = fig.add_subplot(gs[0, 1])
+    axr.set_facecolor(PANEL)
+    axr.set_xlim(0, 1)
+    axr.set_ylim(0, 1)
+    axr.axis("off")
+
+    cp_type_label = {
+        "horizontal": T("construction_cp_horizontal"),
+        "vertical":   T("construction_cp_vertical"),
+        "both":       T("construction_cp_both"),
+    }.get(best.cp_type, best.cp_type)
+
+    wire_diam_mm = wire_radius_mm * 2.0
+
+    spec_lines = [
+        (T("construction_spec_radiator"), f"{wire_len:.2f} m"),
+        (T("construction_spec_cp"),        f"{cp_len:.2f} m  ({cp_type_label})"),
+        (T("construction_spec_height"),    f"{wire_height_m:.2f} m"),
+        (T("construction_spec_cp_height"), f"{cp_height_m:.2f} m"),
+        (T("construction_spec_unun"),      f"{unun_ratio:.0f} : 1" if unun_ratio > 1
+                                             else T("construction_spec_unun_none")),
+        (T("construction_spec_wire_diam"), f"⌀ {wire_diam_mm:.1f} mm"),
+    ]
+    if slope_end is not None:
+        spec_lines.append((T("construction_spec_slope"), f"{wire_height_m:.2f} → {z_far:.2f} m"))
+        spec_lines.append((T("construction_dim_far_support"), f"{x_far:.2f} m"))
+
+    y = 0.985
+    axr.text(0, y, T("construction_specs_title"), color=TEXT, fontsize=13,
+             fontweight="bold", va="top")
+    y -= 0.045
+    axr.plot([0, 1], [y, y], color=GRID, linewidth=1)
+    y -= 0.035
+
+    for label, value in spec_lines:
+        axr.text(0.0, y, label, color=SUBTEXT, fontsize=9.5, va="top")
+        axr.text(1.0, y, value, color=TEXT, fontsize=9.5, va="top",
+                 ha="right", fontweight="bold")
+        y -= 0.026
+
+    # ── Vertically center the left diagram on the build-sheet content ──
+    # `y` (axes fraction, top=1) marks the bottom of the last spec line;
+    # the content spans from 1.0 down to y. Find its center in axes
+    # coordinates, then map to figure coordinates and re-center the
+    # left axis (preserving its height) on that point.
+    content_top_axr = 1.0
+    content_bottom_axr = y
+    content_center_axr = (content_top_axr + content_bottom_axr) / 2.0
+
+    axr_pos = axr.get_position()
+    content_center_fig_y = axr_pos.y0 + content_center_axr * axr_pos.height
+
+    ax_pos = ax.get_position()
+    new_y0 = content_center_fig_y - ax_pos.height / 2.0
+    # Don't let the diagram rise into the title area.
+    max_y0 = 0.90 - ax_pos.height
+    new_y0 = min(new_y0, max_y0)
+    new_y0 = max(new_y0, 0.0)
+    ax.set_position([ax_pos.x0, new_y0, ax_pos.width, ax_pos.height])
+
+    plt.savefig(out_png, dpi=170, bbox_inches="tight", facecolor=BG)
+    plt.close()
+    print(T("construction_saved").format(out_png))
+
+
+def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False, bg="#ffffff"):
+    """Draw a horizontal dimension line with end ticks and a centred label."""
+    x0, y0 = p0
+    x1, y1 = p1
+    ax.plot([x0, x1], [y0, y1], color=color, linewidth=1, linestyle="--",
+            alpha=0.8, zorder=3)
+    tick = 0.18
+    ax.plot([x0, x0], [y0 - tick, y0 + tick], color=color, linewidth=1, alpha=0.8)
+    ax.plot([x1, x1], [y1 - tick, y1 + tick], color=color, linewidth=1, alpha=0.8)
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    offset = -0.32 if below else 0.32
+    ax.text(mx, my + offset, label, color=text_color, fontsize=8.5,
+            ha="center", va="center" if not below else "top",
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor=bg,
+                      edgecolor=color, alpha=0.9, linewidth=0.8))
+
+
+def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False, bg="#ffffff", right: bool = False):
+    """Draw a vertical dimension line with end ticks and a side label."""
+    ax.plot([x, x], [z0, z1], color=color, linewidth=1, linestyle="--",
+            alpha=0.8, zorder=3)
+    tick = 0.12
+    ax.plot([x - tick, x + tick], [z0, z0], color=color, linewidth=1, alpha=0.8)
+    ax.plot([x - tick, x + tick], [z1, z1], color=color, linewidth=1, alpha=0.8)
+    fontsize = 7.5 if small else 8.5
+    label_x = x + 0.15 if right else x - 0.15
+    ax.text(label_x, (z0 + z1) / 2, label, color=text_color, fontsize=fontsize,
+            ha="left" if right else "right", va="center", fontweight="bold", rotation=90,
+            bbox=dict(boxstyle="round,pad=0.2", facecolor=bg,
+                      edgecolor=color, alpha=0.9, linewidth=0.8))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -4266,6 +4703,8 @@ def _build_parser() -> argparse.ArgumentParser:
                    help=T("ap_out_nec"))
     p.add_argument("--out-radiation", metavar="FILE", default="radiation_diagrams.png",
                    help=T("ap_out_radiation"))
+    p.add_argument("--out-construction", metavar="FILE", default="antenna_construction.png",
+                   help=T("ap_out_construction"))
     p.add_argument("--retry", metavar="N", type=int, default=0,
                    help=T("ap_retry"))
     p.add_argument("--no-interactive", action="store_true",
@@ -4900,6 +5339,18 @@ def main() -> None:
 
     _wh_out  = args.wire_height if args.wire_height is not None else DEFAULT_HEIGHT_M
     _cph_out = args.cp_height   if args.cp_height   is not None else 0.5
+
+    if ranked:
+        plot_construction_diagram(
+            best=ranked[0],
+            calc_rows=calc_rows,
+            unun_ratio=export_unun,
+            out_png=args.out_construction,
+            wire_height_m=_wh_out,
+            cp_height_m=_cph_out,
+            wire_slope_end_m=_slope,
+            wire_radius_mm=WIRE_RADIUS_M * 1000.0,
+        )
 
     if ranked:
         write_best_nec_deck(
