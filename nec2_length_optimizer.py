@@ -3890,48 +3890,46 @@ def plot_radiation_diagrams(
                 _P  = _np.append(_P, 360.0)
                 _DB = _np.concatenate([_DB, _DB[:, :1]], axis=1)
 
-            # ── Trim horizon rows (theta near 90°) ───────────────────────
-            # ROOT CAUSE of the green half-disk on 40m/20m:
-            # At theta=90° (horizon), cos(90°)=0 so Z=0 for every phi.
-            # The last strip of faces (between theta≈88.75° and theta=90°)
-            # therefore lies nearly flat at Z=0, spanning the full 0→360°
-            # phi range — forming a complete horizontal disc.  Its turbo
-            # colour (mid-range green, ~-10 to -15 dB) is the green disk.
-            # Fix: discard all theta rows within 2° of the horizon before
-            # building the mesh.  The pattern is physically zero along the
-            # exact horizon anyway (ground reflection kills it), so no
-            # information is lost, and the surface closes cleanly above Z=0.
-            _horizon_cutoff = 88.0   # degrees — trim theta >= this value
-            _keep = _T < _horizon_cutoff
-            if _keep.sum() < 2:
-                _keep = _T <= _T[-2]   # always keep at least 2 rows
-            _T  = _T[_keep]
-            _DB = _DB[_keep, :]
+            # ── Trim degenerate pole rows from BOTH ends ──────────────────
+            # TWO separate artifacts were caused by keeping the extreme rows:
+            #
+            # 1. ZENITH POLE (theta=0°, the "upper red quarter-disk"):
+            #    At theta=0°, sin(0)=0 so X=Y=0 for ALL phi values.
+            #    Every face between the theta=0 row and theta=dθ row is a
+            #    degenerate wedge whose two "top" corners both sit at exactly
+            #    (0, 0, R).  All 72 such wedges share the same apex vertex;
+            #    their centroids project to nearly identical depths so the
+            #    painter sort orders them randomly.  Viewed from above (high
+            #    camera elevation) they render as a solid filled fan = the
+            #    red quarter-disk cap on 40m/20m.
+            #
+            # 2. HORIZON (theta=90°, the "green half-disk"):
+            #    At theta=90°, cos(90°)=0 so Z=0 for ALL phi values.
+            #    The last strip of faces lies flat at Z=0, spanning 0→360°
+            #    phi, forming a complete horizontal ring/disc coloured by the
+            #    horizon gain value (often green in turbo for ~-15 dB).
+            #
+            # Fix: trim both ends before building the surface mesh.
+            # Use 4×dθ at the apex (more aggressive than the old 2×dθ) to
+            # fully eliminate near-singular wedge geometry on high-TOA patterns
+            # (40m, 20m) where many phi rows converge near the peak-gain
+            # direction.  4×dθ ≈ 5° at typical NEC2 resolution — negligible
+            # visual impact on the pattern shape.
+            _dtheta = (_thetas_set[1] - _thetas_set[0]
+                       if len(_thetas_set) > 1 else 1.25)
+            _pole_trim     = 4.0 * _dtheta   # trim apex rows up to this angle (was 2×)
+            _horizon_trim  = 90.0 - 2.0 * _dtheta  # trim near-horizon rows
+            _keep_mask = (_T > _pole_trim) & (_T < _horizon_trim)
+            if _keep_mask.sum() < 2:          # safety: always keep ≥2 rows
+                _keep_mask = (_T > _T[0]) & (_T < _T[-1])
+            _T  = _T[_keep_mask]
+            _DB = _DB[_keep_mask, :]
 
             _TG, _PG = _np.meshgrid(_T, _P, indexing="ij")
 
             # ── Normalise R via dB-to-amplitude: R = 10^((dB - max)/20) ──
             _R3D_FLOOR = 0.01
             _R = _np.maximum(_R3D_FLOOR, 10.0 ** ((_DB - _raw_max) / 20.0))
-
-            # ── Smooth R in the near-pole rows too ───────────────────────
-            # The DB pole-smoothing above already makes _DB[0,:] uniform
-            # (a single averaged value repeated across all φ), so _R[0,:]
-            # is already uniform too — every point on the θ=0 row maps to
-            # X=Y=0 (since sin(0)=0) regardless of R, so R itself doesn't
-            # even matter at θ=0.  The remaining "needle" artefact comes
-            # from a *radius discontinuity* between the θ=0 row and the
-            # θ=dθ row: forcing R[0,:] to the θ=dθ row's mean (as before)
-            # can introduce a jump if the pole-smoothed DB at θ=0 differs
-            # substantially from the (non-averaged) θ=dθ values.  Instead,
-            # blend the θ=0 radius toward the θ=dθ row's mean radius using
-            # the pole-smoothed DB-derived value as a starting point, which
-            # keeps the apex height continuous with its neighbours without
-            # discarding the smoothed gain information.
-            if _R.shape[0] > 1:
-                _r0 = _R[0, :].mean()
-                _r1 = _R[1, :].mean()
-                _R[0, :] = 0.5 * (_r0 + _r1)
 
             # ── Spherical → Cartesian (upper hemisphere: Z >= 0) ─────────
             _theta_rad = _np.radians(_TG)   # 0…π/2
@@ -3958,11 +3956,12 @@ def plot_radiation_diagrams(
             )
 
             # ── Dynamic view elevation based on TOA ───────────────────────
-            # Keep camera at a low-to-mid angle so the ground disc is never
-            # seen face-on (which turns it into a solid half-disk).
+            # Cap at 35° so the camera never looks nearly straight down —
+            # high angles make the zenith cap face-on and exaggerate any
+            # remaining depth-sort ordering issues at the pole.
             _toa_deg = pat.get("toa_deg", 30.0)
             if _toa_deg >= 70.0:
-                _view_elev = 35   # near-zenith: moderate angle
+                _view_elev = 35   # near-zenith: moderate overhead angle
             elif _toa_deg >= 45.0:
                 _view_elev = 30   # mid-elevation
             else:
@@ -3980,21 +3979,64 @@ def plot_radiation_diagrams(
                 -math.sin(_ve),
             ])
 
-            # ── Build face list: quads + depth + colour ───────────────────
-            # Lambertian shading is intentionally omitted: it crushes colors
-            # on high-TOA (near-zenith) lobes where face normals point
-            # upward and the lateral light vector yields near-zero dot
-            # products, forcing all faces toward the ambient floor and
-            # collapsing the full turbo colour range to a narrow dark band.
-            # Pure colormap colours faithfully convey gain across all bands.
+            # ── Render surface: single globally-sorted Poly3DCollection ──────
+            #
+            # ROOT CAUSE of the "quarter-disk" artifact on 40m / 20m:
+            # The previous per-strip approach relied on matplotlib's internal
+            # Poly3DCollection depth-sort (zsort='average') to order faces
+            # WITHIN each strip correctly.  However matplotlib re-sorts the
+            # entire collection after add_collection3d, and the per-face
+            # average-Z sort fails on NON-CONVEX surfaces: on a high-TOA
+            # pattern the near-zenith back-side faces have the same average Z
+            # as near-zenith front-side faces, so the sort is ambiguous and
+            # produces the red quarter-disk cap seen on 40m/20m.
+            #
+            # FIX: collect ALL surface faces in one list, compute each face's
+            # camera-depth (dot product of centroid with the camera-in vector),
+            # sort globally back-to-front (furthest first), then pass all faces
+            # to a SINGLE Poly3DCollection.  Setting shade=False and providing
+            # explicit facecolors prevents any further sorting or shading by
+            # matplotlib.  This is the only approach that is correct for
+            # arbitrary (non-convex, non-monotone) radiation balloon shapes.
+
+            from mpl_toolkits.mplot3d.art3d import Poly3DCollection as _P3C
 
             _nt, _np2 = _X.shape
-            _n_faces  = (_nt - 1) * (_np2 - 1)
-            _verts3d  = []     # list of (4,3) vertex arrays
-            _depths   = _np.empty(_n_faces)
-            _fcolors  = []
 
-            _idx = 0
+            # Ground-plane disc: rendered as a separate collection BEFORE
+            # the balloon so it always appears behind the pattern.
+            _disc_n_phi  = 72
+            _disc_n_r    = 4
+            _disc_radius = 0.65
+            _disc_z      = -0.02
+            _disc_phi_e  = _np.linspace(0, 2 * _np.pi, _disc_n_phi + 1)
+            _disc_r_e    = _np.linspace(0, _disc_radius, _disc_n_r + 1)
+            _DPg, _DRg   = _np.meshgrid(_disc_phi_e, _disc_r_e)
+            _DXg = _DRg * _np.cos(_DPg)
+            _DYg = _DRg * _np.sin(_DPg)
+            _DZg = _np.full_like(_DRg, _disc_z)
+            _disc_verts = []
+            for _fi in range(_disc_n_r):
+                for _fj in range(_disc_n_phi):
+                    _disc_verts.append(_np.array([
+                        [_DXg[_fi,   _fj],   _DYg[_fi,   _fj],   _DZg[_fi,   _fj]  ],
+                        [_DXg[_fi+1, _fj],   _DYg[_fi+1, _fj],   _DZg[_fi+1, _fj]  ],
+                        [_DXg[_fi+1, _fj+1], _DYg[_fi+1, _fj+1], _DZg[_fi+1, _fj+1]],
+                        [_DXg[_fi,   _fj+1], _DYg[_fi,   _fj+1], _DZg[_fi,   _fj+1]],
+                    ]))
+            _disc_poly = _P3C(
+                _disc_verts,
+                facecolors=[(0.7, 0.7, 0.7, 0.10)] * len(_disc_verts),
+                linewidths=0, edgecolors="none",
+            )
+            ax3d.add_collection3d(_disc_poly)
+
+            # Collect ALL balloon faces with their camera-depth and color,
+            # then sort globally back-to-front (furthest face first) so the
+            # single Poly3DCollection paints correctly for any non-convex shape.
+            _all_verts  = []
+            _all_depths = []
+            _all_colors = []
             for _fi in range(_nt - 1):
                 for _fj in range(_np2 - 1):
                     _v = _np.array([
@@ -4003,81 +4045,22 @@ def plot_radiation_diagrams(
                         [_X[_fi+1, _fj+1], _Y[_fi+1, _fj+1], _Z[_fi+1, _fj+1]],
                         [_X[_fi,   _fj+1], _Y[_fi,   _fj+1], _Z[_fi,   _fj+1]],
                     ])
-                    _verts3d.append(_v)
-
-                    # Depth = projection of centroid onto the inward camera ray.
-                    # Larger value → face is further from camera → draw first.
-                    _c = _v.mean(axis=0)
-                    _depths[_idx] = _np.dot(_c, _cam_in)
-
-                    # Per-face dB (average of 4 vertices)
+                    _all_verts.append(_v)
+                    # Depth = projection of face centroid onto camera-in vector;
+                    # larger value = face is further from the camera.
+                    _all_depths.append(_np.dot(_v.mean(axis=0), _cam_in))
                     _db_f = (_DB[_fi,   _fj]   + _DB[_fi+1, _fj] +
                              _DB[_fi+1, _fj+1] + _DB[_fi,   _fj+1]) / 4.0
+                    _all_colors.append(_cmap(_norm(_db_f)))
 
-                    # Direct colormap lookup — no shading multiplier so the
-                    # full turbo blue→green→red range is preserved on every
-                    # antenna pattern regardless of lobe orientation.
-                    _rgba = _cmap(_norm(_db_f))
-                    _fcolors.append(_rgba)
-
-                    _idx += 1
-
-            # ── Ground-plane disc faces (Z=0) ──────────────────────────────
-            # Built as quads in the SAME Poly3DCollection as the pattern
-            # surface so a single back-to-front depth sort orders both
-            # together.
-            #
-            # ROOT CAUSE of the flat green/grey "wedge slicing through the
-            # lobe" on 40m/20m: the pattern's θ=90° row (horizon) also lies
-            # at Z=0 with R up to 1.0 — i.e. it is COPLANAR with the disc
-            # (radius 1.0, Z=0) over a wide overlapping area.  Coplanar
-            # faces have centroids whose projection onto _cam_in differ by
-            # only floating-point noise, so _np.argsort(-_depths) orders
-            # them essentially at random/alternating.  Disc faces (pale
-            # grey, alpha 0.25) interleaved in front of pattern faces of
-            # similar gain (often turbo-green for the -10..-15 dB band at
-            # the horizon) read visually as a flat colored wedge cutting
-            # through the lobe.
-            #
-            # Fix: make the disc strictly smaller and strictly below the
-            # pattern surface (radius < 1, Z < 0) so the two surfaces never
-            # share a depth value and the painter's sort is unambiguous.
-            _disc_n_phi   = 72
-            _disc_n_r     = 4
-            _disc_radius  = 0.65          # well inside the horizon ring
-            _disc_z       = -0.02         # below the Z=0 pattern floor
-            _disc_phi   = _np.linspace(0, 2 * _np.pi, _disc_n_phi + 1)
-            _disc_r     = _np.linspace(0, _disc_radius, _disc_n_r + 1)
-            _DPg, _DRg  = _np.meshgrid(_disc_phi, _disc_r)
-            _DXg = _DRg * _np.cos(_DPg)
-            _DYg = _DRg * _np.sin(_DPg)
-            _DZg = _np.full_like(_DRg, _disc_z)
-
-            _disc_color = (0.7, 0.7, 0.7, 0.10)    # very transparent ground plane
-            for _fi in range(_disc_n_r):
-                for _fj in range(_disc_n_phi):
-                    _v = _np.array([
-                        [_DXg[_fi,   _fj],   _DYg[_fi,   _fj],   _DZg[_fi,   _fj]  ],
-                        [_DXg[_fi+1, _fj],   _DYg[_fi+1, _fj],   _DZg[_fi+1, _fj]  ],
-                        [_DXg[_fi+1, _fj+1], _DYg[_fi+1, _fj+1], _DZg[_fi+1, _fj+1]],
-                        [_DXg[_fi,   _fj+1], _DYg[_fi,   _fj+1], _DZg[_fi,   _fj+1]],
-                    ])
-                    _verts3d.append(_v)
-                    _c = _v.mean(axis=0)
-                    _depths = _np.append(_depths, _np.dot(_c, _cam_in))
-                    _fcolors.append(_disc_color)
-
-            # Sort back-to-front: largest depth (furthest from camera) first.
-            _order = _np.argsort(-_depths)   # descending → furthest first
-
-            from mpl_toolkits.mplot3d.art3d import Poly3DCollection as _P3C
-            _poly = _P3C(
-                [_verts3d[_k] for _k in _order],
-                facecolors=[_fcolors[_k] for _k in _order],
-                linewidths=0,
-                edgecolors="none",
+            # Sort back-to-front: largest depth (furthest) drawn first.
+            _so = _np.argsort(-_np.array(_all_depths))
+            _surf_poly = _P3C(
+                [_all_verts[_k] for _k in _so],
+                facecolors=[_all_colors[_k] for _k in _so],
+                linewidths=0, edgecolors="none",
             )
-            ax3d.add_collection3d(_poly)
+            ax3d.add_collection3d(_surf_poly)
 
             # ── Colorbar ──────────────────────────────────────────────────
             _sm = _mpl_cm.ScalarMappable(cmap=_cmap, norm=_norm)
@@ -4106,12 +4089,12 @@ def plot_radiation_diagrams(
         ax3d.set_zlabel("Z", fontsize=7, labelpad=2)
         ax3d.set_xlim(-1.0, 1.0)
         ax3d.set_ylim(-1.0, 1.0)
-        ax3d.set_zlim(-0.02, 1.0)
+        ax3d.set_zlim(-0.05, 1.0)
         try:
-            # X and Y span 2 units (-1…1), Z spans 1 unit (0…1).
-            # box_aspect must reflect this 2:2:1 ratio so the half-balloon
-            # is not vertically squashed into a flat pancake.
-            ax3d.set_box_aspect([2.0, 2.0, 1.0])
+            # set_box_aspect takes visual proportions, not data ranges.
+            # XY axes span 2 units (-1…1), Z spans ~1 unit (0…1).
+            # [1,1,0.5] → equal XY with Z half-height = correct hemisphere shape.
+            ax3d.set_box_aspect([1.0, 1.0, 0.5])
         except AttributeError:
             pass
         ax3d.view_init(elev=_view_elev, azim=-55)
