@@ -1350,6 +1350,77 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "  No --unun supplied and no CSV to read it from.  Use --unun RATIO (e.g. --unun 9).",
         "es": "  No se proporcionó --unun y no hay CSV de donde leerlo.  Use --unun RELACION (ej: --unun 9).",
     },
+    # ── PDF brochure ──────────────────────────────────────────────────────
+    "ap_out_pdf": {
+        "en": "Output PDF brochure (default: %(default)s)",
+        "es": "Folleto PDF de salida (por defecto: %(default)s)",
+    },
+    "pdf_generating": {
+        "en": "Generating PDF brochure...",
+        "es": "Generando folleto PDF...",
+    },
+    "pdf_saved": {
+        "en": "  ✓ PDF brochure saved -> {0}",
+        "es": "  ✓ Folleto PDF guardado -> {0}",
+    },
+    "pdf_skip_no_reportlab": {
+        "en": "  ⚠ reportlab not installed — skipping PDF brochure (pip install reportlab)",
+        "es": "  ⚠ reportlab no está instalado — se omite el folleto PDF (pip install reportlab)",
+    },
+    "pdf_skip_no_images": {
+        "en": "  ⚠ Skipping PDF brochure (construction/radiation diagrams not available)",
+        "es": "  ⚠ Se omite el folleto PDF (diagramas de construcción/radiación no disponibles)",
+    },
+    "pdf_brand_title": {
+        "en": "Multiband Wire Antenna",
+        "es": "Antena de Hilo Multibanda",
+    },
+    "pdf_brand_subtitle": {
+        "en": "NEC2-Optimized Configuration Datasheet",
+        "es": "Hoja de Datos de Configuración Optimizada con NEC2",
+    },
+    "pdf_section_overview": {
+        "en": "Configuration Overview",
+        "es": "Resumen de la Configuración",
+    },
+    "pdf_section_construction": {
+        "en": "Construction Diagram",
+        "es": "Diagrama de Construcción",
+    },
+    "pdf_section_performance": {
+        "en": "Performance Report",
+        "es": "Informe de Rendimiento",
+    },
+    "pdf_section_radiation": {
+        "en": "Radiation Patterns",
+        "es": "Diagramas de Radiación",
+    },
+    "pdf_section_perband": {
+        "en": "Per-Band Performance",
+        "es": "Rendimiento por Banda",
+    },
+    "pdf_col_band": {"en": "Band", "es": "Banda"},
+    "pdf_col_freq": {"en": "Freq (MHz)", "es": "Frec (MHz)"},
+    "pdf_col_vswr": {"en": "VSWR", "es": "ROE"},
+    "pdf_col_rating": {"en": "Rating", "es": "Calificación"},
+    "pdf_spec_wire_len": {"en": "Radiator length", "es": "Longitud del radiador"},
+    "pdf_spec_cp_len": {"en": "Counterpoise length", "es": "Longitud del contrapeso"},
+    "pdf_spec_cp_type": {"en": "Counterpoise type", "es": "Tipo de contrapeso"},
+    "pdf_spec_unun": {"en": "Recommended UnUn ratio", "es": "Relación de UnUn recomendada"},
+    "pdf_spec_height": {"en": "Radiator height", "es": "Altura del radiador"},
+    "pdf_spec_score": {"en": "Combined score (lower = better)", "es": "Puntaje combinado (menor = mejor)"},
+    "pdf_spec_mode": {"en": "Optimization mode", "es": "Modo de optimización"},
+    "pdf_spec_bands": {"en": "Active bands", "es": "Bandas activas"},
+    "pdf_footer": {
+        "en": "Generated automatically by the NEC2 Antenna Length Optimizer (LU3VEA, CC0 v1.0). "
+              "All values are simulation estimates over average ground; on-site results may vary.",
+        "es": "Generado automáticamente por el Optimizador de Longitud de Antena NEC2 (LU3VEA, CC0 v1.0). "
+              "Todos los valores son estimaciones de simulación sobre tierra promedio; los resultados "
+              "en el sitio pueden variar.",
+    },
+    "pdf_horizontal": {"en": "horizontal", "es": "horizontal"},
+    "pdf_vertical": {"en": "vertical", "es": "vertical"},
+    "pdf_both": {"en": "both", "es": "ambos"},
 }
 
 
@@ -4629,6 +4700,302 @@ def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False, bg=
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PDF BROCHURE EXPORT
+# ═══════════════════════════════════════════════════════════════════════════
+
+def write_pdf_brochure(
+    best: "CandidateResult",
+    calc_rows: List[CalcRow],
+    unun_ratio: float,
+    mode: str,
+    out_path: str,
+    construction_png: Optional[str] = None,
+    radiation_png: Optional[str] = None,
+    wire_height_m: float = DEFAULT_HEIGHT_M,
+) -> bool:
+    """
+    Render a modern, commercial-brochure-style PDF datasheet summarising the
+    optimisation result.  Order of sections:
+
+        1. Cover / configuration overview
+        2. Construction diagram
+        3. Performance report (specs + per-band table)
+        4. Radiation pattern diagrams
+
+    Returns True on success, False if reportlab is unavailable or required
+    images are missing.
+    """
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+            Image as RLImage, HRFlowable, PageBreak,
+        )
+        from reportlab.platypus.flowables import KeepTogether
+    except ImportError:
+        print(T("pdf_skip_no_reportlab"))
+        return False
+
+    if not construction_png or not os.path.isfile(construction_png):
+        construction_png = None
+    if not radiation_png or not os.path.isfile(radiation_png):
+        radiation_png = None
+
+    # ── palette ────────────────────────────────────────────────────────
+    NAVY    = colors.HexColor("#0f2a43")
+    ACCENT  = colors.HexColor("#1f7a8c")
+    ACCENT2 = colors.HexColor("#22a699")
+    LIGHT   = colors.HexColor("#f4f7f9")
+    GREY    = colors.HexColor("#6b7785")
+    GOOD    = colors.HexColor("#1f9d55")
+    WARN    = colors.HexColor("#d18f00")
+    BAD     = colors.HexColor("#c0392b")
+
+    styles = getSampleStyleSheet()
+    style_title = ParagraphStyle(
+        "BrTitle", parent=styles["Title"], fontSize=24, leading=28,
+        textColor=NAVY, spaceAfter=2, alignment=TA_LEFT)
+    style_subtitle = ParagraphStyle(
+        "BrSubtitle", parent=styles["Normal"], fontSize=12, leading=15,
+        textColor=ACCENT, spaceAfter=10, alignment=TA_LEFT)
+    style_h1 = ParagraphStyle(
+        "BrH1", parent=styles["Heading1"], fontSize=15, leading=18,
+        textColor=NAVY, spaceBefore=14, spaceAfter=8)
+    style_h2 = ParagraphStyle(
+        "BrH2", parent=styles["Heading2"], fontSize=11, leading=14,
+        textColor=ACCENT, spaceBefore=8, spaceAfter=4)
+    style_body = ParagraphStyle(
+        "BrBody", parent=styles["Normal"], fontSize=9.5, leading=13.5,
+        textColor=colors.HexColor("#222b33"))
+    style_small = ParagraphStyle(
+        "BrSmall", parent=styles["Normal"], fontSize=8, leading=10.5,
+        textColor=GREY)
+    style_caption = ParagraphStyle(
+        "BrCaption", parent=styles["Normal"], fontSize=8.5, leading=11,
+        textColor=GREY, alignment=TA_CENTER, spaceBefore=4)
+    style_kpi_label = ParagraphStyle(
+        "BrKpiLabel", parent=styles["Normal"], fontSize=8, leading=10,
+        textColor=colors.white, alignment=TA_CENTER)
+    style_kpi_value = ParagraphStyle(
+        "BrKpiValue", parent=styles["Normal"], fontSize=15, leading=18,
+        textColor=colors.white, alignment=TA_CENTER, fontName="Helvetica-Bold")
+
+    story = []
+
+    # ── HEADER / COVER BAND ───────────────────────────────────────────────
+    cp_type_key = {"horizontal": "pdf_horizontal",
+                    "vertical": "pdf_vertical",
+                    "both": "pdf_both"}.get(best.cp_type, best.cp_type)
+    cp_type_label = T(cp_type_key) if cp_type_key.startswith("pdf_") else best.cp_type
+
+    header_tbl = Table(
+        [[Paragraph(T("pdf_brand_title"), style_title),
+          Paragraph(f"{best.wire_len_m:.2f} m", style_kpi_value)],
+         [Paragraph(T("pdf_brand_subtitle"), style_subtitle),
+          Paragraph(T("pdf_spec_wire_len").upper(), style_kpi_label)]],
+        colWidths=[125 * mm, 45 * mm],
+    )
+    header_tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"),
+        ("BACKGROUND", (1, 0), (1, 1), NAVY),
+        ("SPAN", (1, 0), (1, 0)),
+        ("SPAN", (1, 1), (1, 1)),
+        ("TOPPADDING", (1, 0), (1, 1), 8),
+        ("BOTTOMPADDING", (1, 0), (1, 1), 8),
+        ("LEFTPADDING", (0, 0), (0, -1), 0),
+        ("RIGHTPADDING", (1, 0), (1, -1), 8),
+    ]))
+    story.append(header_tbl)
+    story.append(HRFlowable(width="100%", thickness=2, color=ACCENT2, spaceBefore=6, spaceAfter=10))
+
+    # ── CONFIGURATION OVERVIEW ─────────────────────────────────────────────
+    story.append(Paragraph(T("pdf_section_overview"), style_h1))
+
+    active = [r for r in calc_rows if r.active]
+    band_names = ", ".join(cr.band for cr in active)
+    slope_note = ""
+    if best.wire_slope_end_m is not None:
+        slope_note = (T("report_wire_geom_sloped_detail")
+                       .format(wire_height_m, best.wire_slope_end_m))
+    else:
+        slope_note = T("report_wire_geom_horizontal_const")
+
+    spec_rows = [
+        [T("pdf_spec_wire_len"),  f"{best.wire_len_m:.3f} m"],
+        [T("pdf_spec_cp_len"),    f"{best.cp_len_m:.3f} m  ({cp_type_label})"],
+        [T("pdf_spec_height"),    f"{wire_height_m:.2f} m"],
+        [T("pdf_spec_unun"),      f"{unun_ratio:g} : 1"],
+        [T("pdf_spec_bands"),     band_names],
+        [T("pdf_spec_mode"),      mode.upper()],
+        [T("pdf_spec_score"),     f"{best.score_combined:.3f}"],
+    ]
+    spec_table = Table(
+        [[Paragraph(f"<b>{k}</b>", style_body), Paragraph(v, style_body)]
+         for k, v in spec_rows],
+        colWidths=[60 * mm, 110 * mm],
+    )
+    spec_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [LIGHT, colors.white]),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(spec_table)
+    story.append(Paragraph(slope_note, style_small))
+    story.append(Spacer(1, 6 * mm))
+
+    # ── 1. CONSTRUCTION DIAGRAM ────────────────────────────────────────────
+    story.append(Paragraph(T("pdf_section_construction"), style_h1))
+    if construction_png:
+        try:
+            from PIL import Image as _PILImage
+            with _PILImage.open(construction_png) as _im:
+                iw, ih = _im.size
+            avail_w = 170 * mm
+            avail_h = 150 * mm
+            scale = min(avail_w / iw, avail_h / ih)
+            img = RLImage(construction_png, width=iw * scale, height=ih * scale)
+            img.hAlign = "CENTER"
+            story.append(img)
+        except Exception:
+            story.append(Paragraph("(construction diagram unavailable)", style_small))
+    else:
+        story.append(Paragraph("(construction diagram unavailable)", style_small))
+
+    story.append(PageBreak())
+
+    # ── 2. PERFORMANCE REPORT ──────────────────────────────────────────────
+    story.append(Paragraph(T("pdf_section_performance"), style_h1))
+    story.append(Paragraph(T("pdf_section_perband"), style_h2))
+
+    table_data = [[T("pdf_col_band"), T("pdf_col_freq"), T("pdf_col_vswr"), T("pdf_col_rating")]]
+    row_colors = []
+    for cr in active:
+        b = cr.band
+        v = best.band_vswr.get(b, 999.0)
+        a = best.band_avoidance.get(b, 0.0)
+        rating = re.sub(r'[^\w\s★]', '', _avoidance_rating(a)).strip()
+        if v <= 1.5:
+            vcolor = GOOD
+        elif v <= 3.0:
+            vcolor = ACCENT2
+        elif v <= 6.0:
+            vcolor = WARN
+        else:
+            vcolor = BAD
+        table_data.append([b, f"{cr.freq_mhz:.3f}", f"{v:.2f}", rating])
+        row_colors.append(vcolor)
+
+    perf_table = Table(table_data, colWidths=[35 * mm, 35 * mm, 35 * mm, 65 * mm])
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+    ]
+    for i, c in enumerate(row_colors, start=1):
+        style_cmds.append(("TEXTCOLOR", (2, i), (2, i), c))
+        style_cmds.append(("FONTNAME", (2, i), (2, i), "Helvetica-Bold"))
+    perf_table.setStyle(TableStyle(style_cmds))
+    story.append(perf_table)
+    story.append(Spacer(1, 6 * mm))
+
+    # NEC2 / impedance details
+    if any(b in best.band_R_ant for b in (cr.band for cr in active)):
+        story.append(Paragraph(T("report_per_band_imp"), style_h2))
+        imp_data = [["Band", "R_ant (Ω)", "X_ant (Ω)", "R_tx (Ω)", "X_tx (Ω)", "Source"]]
+        for cr in active:
+            b = cr.band
+            imp_data.append([
+                b,
+                f"{best.band_R_ant.get(b, 0.0):.1f}",
+                f"{best.band_X_ant.get(b, 0.0):+.1f}",
+                f"{best.band_R_tx.get(b, 0.0):.2f}",
+                f"{best.band_X_tx.get(b, 0.0):+.2f}",
+                best.band_imp_src.get(b, "?"),
+            ])
+        imp_table = Table(imp_data, colWidths=[22 * mm, 28 * mm, 28 * mm, 28 * mm, 28 * mm, 36 * mm])
+        imp_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ]))
+        story.append(imp_table)
+        story.append(Spacer(1, 6 * mm))
+
+    # ── 3. RADIATION PATTERNS ──────────────────────────────────────────────
+    story.append(PageBreak())
+    story.append(Paragraph(T("pdf_section_radiation"), style_h1))
+    if radiation_png:
+        try:
+            from PIL import Image as _PILImage
+            with _PILImage.open(radiation_png) as _im:
+                iw, ih = _im.size
+            avail_w = 170 * mm
+            avail_h = 220 * mm
+            scale = min(avail_w / iw, avail_h / ih)
+            img = RLImage(radiation_png, width=iw * scale, height=ih * scale)
+            img.hAlign = "CENTER"
+            story.append(img)
+        except Exception:
+            story.append(Paragraph("(radiation diagrams unavailable)", style_small))
+    else:
+        story.append(Paragraph("(radiation diagrams unavailable — NEC2 mode required)", style_small))
+
+    # ── FOOTER NOTE ─────────────────────────────────────────────────────────
+    story.append(Spacer(1, 8 * mm))
+    story.append(HRFlowable(width="100%", thickness=0.6, color=GREY, spaceAfter=4))
+    story.append(Paragraph(T("pdf_footer"), style_small))
+
+    def _on_page(canvas, doc):
+        canvas.saveState()
+        canvas.setFillColor(GREY)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.drawRightString(
+            doc.pagesize[0] - 15 * mm, 12 * mm,
+            f"{T('pdf_brand_title')} — {best.wire_len_m:.2f} m / {best.cp_len_m:.2f} m "
+            f"{cp_type_label}    |    {doc.page}")
+        canvas.setStrokeColor(ACCENT2)
+        canvas.setLineWidth(1.2)
+        canvas.line(15 * mm, 16 * mm, doc.pagesize[0] - 15 * mm, 16 * mm)
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        out_path, pagesize=A4,
+        topMargin=15 * mm, bottomMargin=20 * mm,
+        leftMargin=15 * mm, rightMargin=15 * mm,
+        title=T("pdf_brand_title"), author="NEC2 Antenna Length Optimizer",
+    )
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -4705,6 +5072,8 @@ def _build_parser() -> argparse.ArgumentParser:
                    help=T("ap_out_radiation"))
     p.add_argument("--out-construction", metavar="FILE", default="antenna_construction.png",
                    help=T("ap_out_construction"))
+    p.add_argument("--out-pdf", metavar="FILE", default="antenna_brochure.pdf",
+                   help=T("ap_out_pdf"))
     p.add_argument("--retry", metavar="N", type=int, default=0,
                    help=T("ap_retry"))
     p.add_argument("--no-interactive", action="store_true",
@@ -5379,6 +5748,23 @@ def main() -> None:
         )
     elif ranked and mode != "nec2":
         print(T("radiation_nec2_only_inline").format(mode))
+
+    if ranked:
+        print(T("pdf_generating"))
+        _rad_png = args.out_radiation if (mode == "nec2" and nec2c_bin
+                                           and os.path.isfile(args.out_radiation)) else None
+        _ok = write_pdf_brochure(
+            best=ranked[0],
+            calc_rows=calc_rows,
+            unun_ratio=export_unun,
+            mode=mode,
+            out_path=args.out_pdf,
+            construction_png=args.out_construction,
+            radiation_png=_rad_png,
+            wire_height_m=_wh_out,
+        )
+        if _ok:
+            print(T("pdf_saved").format(args.out_pdf))
 
     print()
     if verbose:
