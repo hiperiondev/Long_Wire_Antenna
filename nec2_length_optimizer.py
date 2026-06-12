@@ -4913,6 +4913,7 @@ def write_pdf_brochure(
     spec_rows = [
         [T("pdf_spec_wire_len"),  f"{best.wire_len_m:.3f} m"],
         [T("pdf_spec_cp_len"),    f"{best.cp_len_m:.3f} m  ({cp_type_label})"],
+        [T("pdf_spec_cp_type"),   cp_type_label],
         [T("pdf_spec_height"),    f"{wire_height_m:.2f} m"],
         [T("pdf_spec_unun"),      f"{unun_ratio:g} : 1"],
         [T("pdf_spec_bands"),     band_names],
