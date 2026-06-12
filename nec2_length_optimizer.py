@@ -396,9 +396,9 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "  Grid size     : {0} (wire) × (cp) pairs",
         "es": "  Tamaño grilla : {0} pares (hilo) × (CP)",
     },
-    "cp_types": {
-        "en": "  CP types      : {0}",
-        "es": "  Tipos CP      : {0}",
+    "cp_angle_msg": {
+        "en": "  CP angle      : {0:.1f}° from vertical",
+        "es": "  Ángulo CP     : {0:.1f}° desde la vertical",
     },
     # ── sweep progress ───────────────────────────────────────────────────
     "sweep_starting": {
@@ -422,12 +422,12 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "  Barrido NEC2 completado. {0} ejecuciones procesadas.",
     },
     "warn_nec2_failed_cp": {
-        "en": "  ⚠  NEC2 failed for {0} CP at wire={1:.3f} m / cp={2:.3f} m — only {3} orientation scored.",
-        "es": "  ⚠  NEC2 falló para CP {0} en hilo={1:.3f} m / cp={2:.3f} m — solo orientación {3} evaluada.",
+        "en": "  ⚠  NEC2 failed at wire={0:.3f} m / cp={1:.3f} m — candidate scored as failed.",
+        "es": "  ⚠  NEC2 falló en hilo={0:.3f} m / cp={1:.3f} m — candidato marcado como fallido.",
     },
-    "warn_empirical_cp_forced": {
-        "en": "  Note: empirical model ignores CP geometry for VSWR; cp_type forced to 'horizontal' for the cp-avoidance label (CP length avoidance is still evaluated for all bands).",
-        "es": "  Nota: el modelo empírico ignora la geometría del CP para VSWR; cp_type forzado a 'horizontal' (la evaluación de evitación de CP sigue activa para todas las bandas).",
+    "warn_empirical_cp_geometry": {
+        "en": "  Note: empirical VSWR model ignores CP angle/geometry; cp-avoidance scoring still active for all bands.",
+        "es": "  Nota: el modelo VSWR empírico ignora el ángulo/geometría del CP; evaluación de evitación de CP activa para todas las bandas.",
     },
     "sweep_complete": {
         "en": "  Sweep complete.  {0} candidates evaluated.",
@@ -671,17 +671,9 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "Wire height (near → far)",
         "es": "Altura del hilo (cerca → lejos)",
     },
-    "construction_cp_horizontal": {
-        "en": "horizontal",
-        "es": "horizontal",
-    },
-    "construction_cp_vertical": {
-        "en": "vertical",
-        "es": "vertical",
-    },
-    "construction_cp_both": {
-        "en": "horizontal/vertical",
-        "es": "horizontal/vertical",
+    "construction_cp_angle": {
+        "en": "counterpoise ({0}° from vertical)",
+        "es": "contrapeso ({0}° desde la vertical)",
     },
     "construction_bands_title": {
         "en": "Per-band Performance",
@@ -1277,9 +1269,9 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "Counterpoise height above ground (metres). Default: CP height from CSV, or 0.5 m if not in CSV.",
         "es": "Altura del contrapeso sobre el suelo (metros). Por defecto: altura CP del CSV, o 0.5 m si no está en el CSV.",
     },
-    "ap_cp_type": {
-        "en": "Counterpoise orientation(s) to simulate (default: both).",
-        "es": "Orientación(es) del contrapeso a simular (por defecto: ambas).",
+    "ap_cp_angle": {
+        "en": "Counterpoise angle from vertical in degrees (0 = vertical, 90 = horizontal). Required.",
+        "es": "Ángulo del contrapeso desde la vertical en grados (0 = vertical, 90 = horizontal). Obligatorio.",
     },
     "ap_ground_cond": {
         "en": "Ground conductivity S/m (default {0}).",
@@ -1454,7 +1446,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "pdf_geom_horizontal":      {"en": "horizontal (flat, z = constant)", "es": "horizontal (plano, z = constante)"},
     "pdf_spec_wire_len": {"en": "Radiator length", "es": "Longitud del radiador"},
     "pdf_spec_cp_len": {"en": "Counterpoise length", "es": "Longitud del contrapeso"},
-    "pdf_spec_cp_type": {"en": "Counterpoise type", "es": "Tipo de contrapeso"},
+    "pdf_spec_cp_type": {"en": "Counterpoise angle", "es": "Ángulo del contrapeso"},
     "pdf_spec_unun": {"en": "Recommended UnUn ratio", "es": "Relación de UnUn recomendada"},
     "pdf_spec_height": {"en": "Radiator height", "es": "Altura del radiador"},
     "pdf_spec_score": {"en": "Combined score (lower = better)", "es": "Puntaje combinado (menor = mejor)"},
@@ -1524,7 +1516,7 @@ class NEC2Run:
     filepath:   str = ""
     wire_len_m: float = 0.0
     cp_len_m:   float = 0.0
-    cp_type:    str = ""           # "horizontal" | "vertical" | "none"
+    cp_angle_deg: float = -1.0     # degrees from vertical; -1 = unknown
     freqs:      List[FreqPoint] = field(default_factory=list)
 
     def freq_map(self, decimals: int = 4) -> Dict[float, FreqPoint]:
@@ -1592,7 +1584,9 @@ _RE_EFF = re.compile(
     r'(?:RADIATION\s+EFFICIENCY|EFFICIENCY)\s*=\s*([\d.E+\-]+)', re.IGNORECASE)
 _RE_WIRE_CM = re.compile(r'Wire\s+length:\s*([\d.]+)\s*m',             re.IGNORECASE)
 _RE_CP_CM   = re.compile(
-    r'Counterpoise(?:\s*\(vertical\))?\s*:\s*([\d.]+)\s*m',            re.IGNORECASE)
+    r'Counterpoise\s*\(angle=([\d.]+)\s*deg\)',                        re.IGNORECASE)
+_RE_CP_CM_LEN = re.compile(
+    r'Counterpoise\s*\(angle=[\d.]+\s*deg\):\s*([\d.]+)\s*m',       re.IGNORECASE)
 _RE_CP_VERT = re.compile(r'counterpoise\s*\(vertical\)',                re.IGNORECASE)
 
 _RE_RP_SECTION = re.compile(r'[-]{4,}\s*RADIATION PATTERNS\s*[-]{4,}', re.IGNORECASE)
@@ -2140,11 +2134,48 @@ def _segs(length_m: float, highest_freq_mhz: float) -> int:
     return n if n % 2 == 1 else n + 1
 
 
+
+def _cp_geometry(
+    cp_angle_deg: float,
+    cp_len_m: float,
+    wire_height_m: float,
+    cp_height_m: float,
+) -> tuple:
+    """
+    Compute unified counterpoise geometry for any angle θ (0°=vertical, 90°=horizontal).
+
+    Returns (vert_len, horiz_rem, cp_bottom_z, x_end, z_end):
+      - If the straight-line endpoint stays at or above cp_height_m (the floor):
+          vert_len = 0, horiz_rem = 0, x_end / z_end describe the single-segment end.
+          (The wire is drawn as one GW card.)
+      - If it would go below cp_height_m the wire bends:
+          vert_len  = length of the angled first segment (down to the floor)
+          horiz_rem = remaining horizontal length
+          cp_bottom_z = z of the bend point (= cp_height_m)
+    """
+    theta = math.radians(cp_angle_deg)
+    dz = cp_len_m * math.cos(theta)   # downward drop if unconstrained
+    dx = cp_len_m * math.sin(theta)   # horizontal projection if unconstrained
+    z_end_straight = wire_height_m - dz
+
+    if z_end_straight >= cp_height_m - 1e-6:
+        # Straight wire — no bend needed
+        return 0.0, 0.0, wire_height_m - dz, dx, wire_height_m - dz
+    else:
+        # Bent wire: travel at angle θ until z = cp_height_m, then horizontal
+        if abs(math.cos(theta)) < 1e-9:
+            # θ ≈ 90°: wire is purely horizontal, never descends — no bend
+            return 0.0, 0.0, wire_height_m, cp_len_m, wire_height_m
+        avail_drop = wire_height_m - cp_height_m
+        L1 = avail_drop / math.cos(theta)   # length of angled segment
+        L2 = max(0.0, cp_len_m - L1)        # remaining horizontal
+        return L1, L2, cp_height_m, L1 * math.sin(theta), cp_height_m
+
 def write_nec_deck(
     nec_path: str,
     wire_len_m: float,
     cp_len_m: float,
-    cp_type: str,           # "horizontal" | "vertical"
+    cp_angle_deg: float,    # 0 = vertical, 90 = horizontal
     freqs_mhz: List[float],
     wire_height_m: float = DEFAULT_HEIGHT_M,
     wire_slope_end_m: Optional[float] = None,  # None → horizontal (z_far = wire_height_m)
@@ -2196,7 +2227,7 @@ def write_nec_deck(
     with open(nec_path, "w") as fh:
         fh.write(f"CM NEC2 Long Wire Optimizer Deck\n")
         fh.write(f"CM Wire length: {wire_len_m:.3f} m\n")
-        fh.write(f"CM Counterpoise ({cp_type}): {cp_len_m:.3f} m  height: {cp_height_m:.2f} m\n")
+        fh.write(f"CM Counterpoise (angle={cp_angle_deg:.1f} deg): {cp_len_m:.3f} m  height: {cp_height_m:.2f} m\n")
         if cp_height_m >= wire_height_m:
             # CP height at or above antenna height: place CP at antenna height level.
             # This avoids a zero-length or negative-length drop wire.
@@ -2211,43 +2242,32 @@ def write_nec_deck(
                  f"{x_far:.3f} 0.0 {z_far:.4f} "
                  f"{wire_radius_m:.5f}\n")
 
-        if cp_type == "horizontal":
-            drop_len = wire_height_m - cp_height_m
-            if drop_len > 0.01:
-                segs_drop = max(5, _segs(drop_len, highest_f))
-                fh.write(f"GW 2 {segs_drop} "
-                         f"0.0 0.0 {wire_height_m:.3f} "
-                         f"0.0 0.0 {cp_height_m:.3f} "
-                         f"{wire_radius_m:.5f}\n")
-                fh.write(f"GW 3 {segs_cp} "
-                         f"0.0 0.0 {cp_height_m:.3f} "
-                         f"{-cp_len_m:.3f} 0.0 {cp_height_m:.3f} "
-                         f"{wire_radius_m:.5f}\n")
-            else:
-                fh.write(f"GW 2 {segs_cp} "
-                         f"0.0 0.0 {wire_height_m:.3f} "
-                         f"{-cp_len_m:.3f} 0.0 {wire_height_m:.3f} "
-                         f"{wire_radius_m:.5f}\n")
-        else:  # vertical
-            cp_bottom_z = max(cp_height_m, wire_height_m - cp_len_m)
-            vert_len    = max(0.0, wire_height_m - cp_bottom_z)
-            horiz_rem   = max(0.0, cp_len_m - vert_len)
-            if vert_len > 0.01:
-                segs_cp_v = max(5, _segs(vert_len, highest_f))
-                if segs_cp_v % 2 == 0:
-                    segs_cp_v += 1
-                fh.write(f"GW 2 {segs_cp_v} "
-                         f"0.0 0.0 {wire_height_m:.3f} "
-                         f"0.0 0.0 {cp_bottom_z:.3f} "
-                         f"{wire_radius_m:.5f}\n")
+        vert_len, horiz_rem, cp_bottom_z, x_end, z_end = _cp_geometry(
+            cp_angle_deg, cp_len_m, wire_height_m, cp_height_m)
+        if vert_len > 0.01:
+            # Bent wire: angled segment down to floor, then horizontal
+            segs_cp_v = max(5, _segs(vert_len, highest_f))
+            if segs_cp_v % 2 == 0:
+                segs_cp_v += 1
+            fh.write(f"GW 2 {segs_cp_v} "
+                     f"0.0 0.0 {wire_height_m:.3f} "
+                     f"{-x_end:.3f} 0.0 {cp_bottom_z:.3f} "
+                     f"{wire_radius_m:.5f}\n")
             if horiz_rem > 0.01:
                 segs_cp_h = max(3, _segs(horiz_rem, highest_f))
                 if segs_cp_h % 2 == 0:
                     segs_cp_h += 1
                 fh.write(f"GW 3 {segs_cp_h} "
-                         f"0.0 0.0 {cp_bottom_z:.3f} "
-                         f"{-horiz_rem:.3f} 0.0 {cp_bottom_z:.3f} "
+                         f"{-x_end:.3f} 0.0 {cp_bottom_z:.3f} "
+                         f"{-(x_end + horiz_rem):.3f} 0.0 {cp_bottom_z:.3f} "
                          f"{wire_radius_m:.5f}\n")
+        else:
+            # Straight wire: single GW at angle θ
+            segs_cp_s = max(5, _segs(cp_len_m, highest_f))
+            fh.write(f"GW 2 {segs_cp_s} "
+                     f"0.0 0.0 {wire_height_m:.3f} "
+                     f"{-x_end:.3f} 0.0 {z_end:.3f} "
+                     f"{wire_radius_m:.5f}\n")
 
         fh.write(f"GE {ge_flag}\n")
         fh.write(f"GN 2 0 0 0 {ground_diel:.1f} {ground_cond:.4f}\n")
@@ -2293,7 +2313,7 @@ class CandidateResult:
     """Score for one (wire_len, cp_len) candidate pair."""
     wire_len_m: float
     cp_len_m:   float
-    cp_type:    str       # "horizontal" | "vertical" | "both"
+    cp_angle_deg: float   # degrees from vertical (0=vertical, 90=horizontal)
 
     # Per-band VSWR seen by the transmitter (post-UnUn)
     band_vswr: Dict[str, float] = field(default_factory=dict)
@@ -2347,9 +2367,10 @@ def score_candidate(
     cp_len_m: float,
     calc_rows: List[CalcRow],
     unun_ratio: float,
-    run_h: Optional[NEC2Run] = None,
-    run_v: Optional[NEC2Run] = None,
-    cp_type_hint: str = "horizontal",
+    run_h: Optional[NEC2Run] = None,   # kept for API compatibility; treated as run
+    run_v: Optional[NEC2Run] = None,   # kept for API compatibility; treated as run
+    cp_type_hint: str = "",            # deprecated; ignored
+    cp_angle_deg: float = 90.0,
     nec2_strict: bool = False,
 ) -> CandidateResult:
     """
@@ -2368,7 +2389,7 @@ def score_candidate(
         raise ValueError("No active bands in CSV")
 
     res = CandidateResult(wire_len_m=wire_len_m, cp_len_m=cp_len_m,
-                          cp_type=cp_type_hint,
+                          cp_angle_deg=cp_angle_deg,
                           nec2_ok=(run_h is not None or run_v is not None))
 
     vswr_penalties = []
@@ -2383,7 +2404,7 @@ def score_candidate(
         best_X: Optional[float] = None
         imp_src = "empirical"
 
-        for run, src_tag in [(run_h, "NEC2-H"), (run_v, "NEC2-V")]:
+        for run, src_tag in [(run_h, "NEC2"), (run_v, "NEC2")]:
             if run is None:
                 continue
             fmap = run.freq_map()
@@ -2436,10 +2457,8 @@ def score_candidate(
         res.band_R_ant[cr.band]   = round(best_R, 2) if not math.isnan(best_R) else math.nan
         res.band_X_ant[cr.band]   = round(best_X, 2) if not math.isnan(best_X) else math.nan
         res.band_imp_src[cr.band] = imp_src
-        if imp_src == "NEC2-H":
-            res.band_cp_src[cr.band] = "H"
-        elif imp_src == "NEC2-V":
-            res.band_cp_src[cr.band] = "V"
+        if imp_src == "NEC2":
+            res.band_cp_src[cr.band] = "NEC2"
         else:
             res.band_cp_src[cr.band] = "empirical"
 
@@ -2582,7 +2601,7 @@ def empirical_sweep(
     grid: List[Tuple[float, float]],
     calc_rows: List[CalcRow],
     unun_ratio: float,
-    cp_type: str,
+    cp_angle_deg: float,
     wire_slope_end_m: Optional[float] = None,  # None → horizontal
     verbose: bool = False,
 ) -> List[CandidateResult]:
@@ -2597,7 +2616,7 @@ def empirical_sweep(
         if verbose and i % max(1, total // 20) == 0:
             pct = i * 100 // total
             print(T("sweep_empirical_pct").format(pct, i, total, w, c), end="\r")
-        r = score_candidate(w, c, calc_rows, unun_ratio, cp_type_hint=cp_type)
+        r = score_candidate(w, c, calc_rows, unun_ratio, cp_angle_deg=cp_angle_deg)
         r.wire_slope_end_m = wire_slope_end_m
         results.append(r)
     if verbose:
@@ -2618,13 +2637,13 @@ def nec2_sweep(
     cp_height_m: float,
     ground_cond: float,
     ground_diel: float,
-    cp_types: List[str],
+    cp_angle_deg: float,
     wire_slope_end_m: Optional[float] = None,  # None → horizontal wire
     verbose: bool = True,
 ) -> List[CandidateResult]:
     """
-    Full NEC2 sweep.  For each (wire, cp) pair we run nec2c for each
-    cp_type requested, then score with NEC2 impedance data.
+    Full NEC2 sweep.  For each (wire, cp) pair we run nec2c once at the
+    specified cp_angle_deg, then score with NEC2 impedance data.
     """
     active = [r for r in calc_rows if r.active]
     if not active:
@@ -2632,109 +2651,64 @@ def nec2_sweep(
     freqs  = [cr.freq_mhz for cr in calc_rows]   # ALL bands
 
     results: List[CandidateResult] = []
-    total = len(grid) * len(cp_types)
+    total = len(grid)
     done  = 0
 
     with tempfile.TemporaryDirectory(prefix="nec2opt_") as tmpdir:
         for w, c in grid:
-            runs_by_type: Dict[str, Optional[NEC2Run]] = {}
+            done += 1
+            angle_label = f"{cp_angle_deg:.1f}°"
+            if verbose:
+                print(T("sweep_nec2_progress").format(done, total, w, c, angle_label), end="\r")
 
-            for cpt in cp_types:
-                done += 1
-                if verbose:
-                    print(T("sweep_nec2_progress").format(done, total, w, c, cpt), end="\r")
+            tag   = f"w{w:.3f}_c{c:.3f}_a{cp_angle_deg:.0f}"
+            nec_p = os.path.join(tmpdir, tag + ".nec")
+            out_p = os.path.join(tmpdir, tag + ".out")
 
-                tag   = f"w{w:.3f}_c{c:.3f}_{cpt}"
-                nec_p = os.path.join(tmpdir, tag + ".nec")
-                out_p = os.path.join(tmpdir, tag + ".out")
+            write_nec_deck(
+                nec_path=nec_p,
+                wire_len_m=w,
+                cp_len_m=c,
+                cp_angle_deg=cp_angle_deg,
+                freqs_mhz=freqs,
+                wire_height_m=wire_height_m,
+                wire_slope_end_m=wire_slope_end_m,
+                cp_height_m=cp_height_m,
+                ground_cond=ground_cond,
+                ground_diel=ground_diel,
+            )
 
-                write_nec_deck(
-                    nec_path=nec_p,
-                    wire_len_m=w,
-                    cp_len_m=c,
-                    cp_type=cpt,
-                    freqs_mhz=freqs,
-                    wire_height_m=wire_height_m,
+            run: Optional[NEC2Run] = None
+            if run_nec2c(nec2c_bin, nec_p, out_p):
+                try:
+                    _r = parse_nec2_output(out_p, debug=False, explicit_nec_path=nec_p)
+                    if _r is not None and not _r.freq_map():
+                        _r = None
+                    run = _r
+                except Exception:
+                    pass
+
+            if run is None:
+                cand = CandidateResult(
+                    wire_len_m=w, cp_len_m=c, cp_angle_deg=cp_angle_deg,
+                    score_combined=999.0, score_vswr_raw=999.0,
+                    score_vswr=999.0, score_avoidance=0.0,
+                    nec2_ok=False, note="NEC2 failed",
                     wire_slope_end_m=wire_slope_end_m,
-                    cp_height_m=cp_height_m,
-                    ground_cond=ground_cond,
-                    ground_diel=ground_diel,
                 )
-
-                ok = run_nec2c(nec2c_bin, nec_p, out_p)
-                if ok:
-                    try:
-                        run = parse_nec2_output(out_p, debug=False,
-                                                explicit_nec_path=nec_p)
-                        if run is not None and not run.freq_map():
-                            run = None
-                        runs_by_type[cpt] = run
-                    except Exception:
-                        runs_by_type[cpt] = None
-                else:
-                    runs_by_type[cpt] = None
-
-            run_h = runs_by_type.get("horizontal")
-            run_v = runs_by_type.get("vertical")
-
-            def _cp_actual_label(cpt: str, w_h: float, c_h: float, c_len: float) -> str:
-                if cpt != "vertical":
-                    return cpt
-                avail_drop = w_h - c_h
-                return "vertical" if c_len <= avail_drop + 0.01 else "L-shaped"
-
-            if len(cp_types) == 1:
-                actual_label = _cp_actual_label(cp_types[0], wire_height_m, cp_height_m, c)
+                results.append(cand)
+            else:
                 cand = score_candidate(
                     wire_len_m=w,
                     cp_len_m=c,
                     calc_rows=calc_rows,
                     unun_ratio=unun_ratio,
-                    run_h=run_h,
-                    run_v=run_v,
-                    cp_type_hint=actual_label,
+                    run_h=run,
+                    cp_angle_deg=cp_angle_deg,
                     nec2_strict=True,
                 )
                 cand.wire_slope_end_m = wire_slope_end_m
                 results.append(cand)
-            else:
-                candidates_this = []
-                for cpt, r_h, r_v in [
-                    ("horizontal", run_h, None),
-                    ("vertical",   None,  run_v),
-                ]:
-                    if runs_by_type.get(cpt) is None:
-                        sibling = "vertical" if cpt == "horizontal" else "horizontal"
-                        if runs_by_type.get(sibling) is not None:
-                            print("\n" + T("warn_nec2_failed_cp").format(cpt, w, c, sibling), flush=True)
-                        continue
-                    actual_label_dual = _cp_actual_label(cpt, wire_height_m,
-                                                           cp_height_m, c)
-                    c_cand = score_candidate(
-                        wire_len_m=w,
-                        cp_len_m=c,
-                        calc_rows=calc_rows,
-                        unun_ratio=unun_ratio,
-                        run_h=r_h,
-                        run_v=r_v,
-                        cp_type_hint=actual_label_dual,
-                        nec2_strict=True,
-                    )
-                    c_cand.wire_slope_end_m = wire_slope_end_m
-                    candidates_this.append(c_cand)
-
-                if not candidates_this:
-                    cand = CandidateResult(
-                        wire_len_m=w, cp_len_m=c, cp_type="both",
-                        score_combined=999.0, score_vswr_raw=999.0,
-                        score_vswr=999.0, score_avoidance=0.0,
-                        nec2_ok=False, note="NEC2 failed (both orientations)",
-                        wire_slope_end_m=wire_slope_end_m,
-                    )
-                    results.append(cand)
-                else:
-                    best_cand = min(candidates_this, key=lambda r: r.score_combined)
-                    results.append(best_cand)
 
     if verbose:
         print(T("sweep_nec2_done").format(total))
@@ -3065,7 +3039,7 @@ def write_report(
     # ── TOP 20 RANKING ───────────────────────────────────────────────────
     top_n = len(ranked)
     h1(T("report_top_n_header").format(top_n))
-    header = (f"  {'#':>3}  {'Wire(m)':>8}  {'CP(m)':>7}  {'CP type':>10}  "
+    header = (f"  {'#':>3}  {'Wire(m)':>8}  {'CP(m)':>7}  {'CP°':>6}  "
               f"{'Score':>7}  {'meanPen':>9}  {'1.5xWpen':>9}  {'-0.5xAv(a)':>10}  {'-0.1xCPbon':>11}  "
               + "  ".join(f"{b:>7}" for b in bands)
               + "  NEC2")
@@ -3086,7 +3060,7 @@ def write_report(
                                 - 0.5 * r.score_avoidance_active
                                 - r.score_combined)
         lines.append(
-            f"  {rank:3d}  {r.wire_len_m:8.3f}  {r.cp_len_m:7.3f}  {r.cp_type:>10}  "
+            f"  {rank:3d}  {r.wire_len_m:8.3f}  {r.cp_len_m:7.3f}  {r.cp_angle_deg:5.1f}°  "
             f"{r.score_combined:7.3f}  {_mean_vswr_pen:9.3f}  {_worst_pen_weighted:9.3f}  "
             f"{-0.5*r.score_avoidance_active:10.4f}  {_cp_bonus_deduction:11.4f}  "
             f"{band_cols}  {nec_flag}"
@@ -3103,7 +3077,7 @@ def write_report(
         )
         lines.append(
             f"  {rank:3d}  wire={r.wire_len_m:.3f} m  cp={r.cp_len_m:.3f} m"
-            f"  ({r.cp_type})  score={r.score_combined:.3f}"
+            f"  ({r.cp_angle_deg:.1f}°)  score={r.score_combined:.3f}"
             f"  VSWR=[{band_cols}]"
             f"  avoid_active={r.score_avoidance_active:.4f}"
             f"  avoid_all={r.score_avoidance:.4f}"
@@ -3114,7 +3088,7 @@ def write_report(
         best = ranked[0]
         h1(T("report_best_header"))
         ln(T("report_wire_len").format(best.wire_len_m))
-        ln(T("report_cp_len").format(best.cp_len_m, best.cp_type))
+        ln(T("report_cp_len").format(best.cp_len_m, best.cp_angle_deg))
         if best.wire_slope_end_m is not None:
             ln(T("report_wire_geom_sloped_detail").format(wire_height_m, best.wire_slope_end_m))
         else:
@@ -3424,13 +3398,13 @@ def write_best_nec_deck(
     freqs_all    = [cr.freq_mhz for cr in calc_rows]
 
     highest_f = max(freqs_all) if freqs_all else 30.0
-    cp_type   = best.cp_type if best.cp_type != "both" else "horizontal"
+    cp_angle_deg = best.cp_angle_deg
 
     with open(out_path, "w") as fh:
         fh.write("CM ============================================================\n")
         fh.write("CM  NEC2 Best-Antenna Deck — generated by nec2_length_optimizer\n")
         fh.write(f"CM  Wire length : {best.wire_len_m:.3f} m\n")
-        fh.write(f"CM  CP length   : {best.cp_len_m:.3f} m  ({cp_type})\n")
+        fh.write(f"CM  CP length   : {best.cp_len_m:.3f} m  (angle={cp_angle_deg:.1f} deg)\n")
         fh.write(f"CM  CP score    : {best.score_combined:.4f}\n")
         for cr in active:
             b = cr.band
@@ -3460,43 +3434,30 @@ def write_best_nec_deck(
                  f"{_x_far:.3f} 0.0 {_z_far:.4f} "
                  f"{wire_radius_m:.5f}\n")
 
-        if cp_type == "horizontal":
-            drop_len = wire_height_m - cp_height_m
-            if drop_len > 0.01:
-                segs_drop = max(5, _segs(drop_len, highest_f))
-                fh.write(f"GW 2 {segs_drop} "
-                         f"0.0 0.0 {wire_height_m:.3f} "
-                         f"0.0 0.0 {cp_height_m:.3f} "
-                         f"{wire_radius_m:.5f}\n")
-                fh.write(f"GW 3 {segs_cp} "
-                         f"0.0 0.0 {cp_height_m:.3f} "
-                         f"{-best.cp_len_m:.3f} 0.0 {cp_height_m:.3f} "
-                         f"{wire_radius_m:.5f}\n")
-            else:
-                fh.write(f"GW 2 {segs_cp} "
-                         f"0.0 0.0 {wire_height_m:.3f} "
-                         f"{-best.cp_len_m:.3f} 0.0 {wire_height_m:.3f} "
-                         f"{wire_radius_m:.5f}\n")
-        else:
-            cp_bottom_z = max(cp_height_m, wire_height_m - best.cp_len_m)
-            vert_len    = max(0.0, wire_height_m - cp_bottom_z)
-            horiz_rem   = max(0.0, best.cp_len_m - vert_len)
-            if vert_len > 0.01:
-                segs_cp_v   = max(5, _segs(vert_len, highest_f))
-                if segs_cp_v % 2 == 0:
-                    segs_cp_v += 1
-                fh.write(f"GW 2 {segs_cp_v} "
-                         f"0.0 0.0 {wire_height_m:.3f} "
-                         f"0.0 0.0 {cp_bottom_z:.3f} "
-                         f"{wire_radius_m:.5f}\n")
-            if horiz_rem > 0.01:
-                segs_cp_h = max(3, _segs(horiz_rem, highest_f))
+        _bvl, _bhr, _bbot, _bxe, _bze = _cp_geometry(
+            cp_angle_deg, best.cp_len_m, wire_height_m, cp_height_m)
+        if _bvl > 0.01:
+            segs_cp_v = max(5, _segs(_bvl, highest_f))
+            if segs_cp_v % 2 == 0:
+                segs_cp_v += 1
+            fh.write(f"GW 2 {segs_cp_v} "
+                     f"0.0 0.0 {wire_height_m:.3f} "
+                     f"{-_bxe:.3f} 0.0 {_bbot:.3f} "
+                     f"{wire_radius_m:.5f}\n")
+            if _bhr > 0.01:
+                segs_cp_h = max(3, _segs(_bhr, highest_f))
                 if segs_cp_h % 2 == 0:
                     segs_cp_h += 1
                 fh.write(f"GW 3 {segs_cp_h} "
-                         f"0.0 0.0 {cp_bottom_z:.3f} "
-                         f"{-horiz_rem:.3f} 0.0 {cp_bottom_z:.3f} "
+                         f"{-_bxe:.3f} 0.0 {_bbot:.3f} "
+                         f"{-(_bxe + _bhr):.3f} 0.0 {_bbot:.3f} "
                          f"{wire_radius_m:.5f}\n")
+        else:
+            segs_cp_s = max(5, _segs(best.cp_len_m, highest_f))
+            fh.write(f"GW 2 {segs_cp_s} "
+                     f"0.0 0.0 {wire_height_m:.3f} "
+                     f"{-_bxe:.3f} 0.0 {_bze:.3f} "
+                     f"{wire_radius_m:.5f}\n")
 
         fh.write(f"GE {_ge_flag}\n")
         fh.write(f"GN 2 0 0 0 {ground_diel:.1f} {ground_cond:.4f}\n")
@@ -3555,7 +3516,7 @@ def plot_radiation_diagrams(
         print("  No active bands — skipping radiation diagrams.")
         return
 
-    cp_type = best.cp_type if best.cp_type != "both" else "horizontal"
+    cp_angle_deg = best.cp_angle_deg
     freqs_all = [cr.freq_mhz for cr in calc_rows]
 
     d_theta = 90.0  / max(1, n_elevation - 1)
@@ -3594,43 +3555,30 @@ def plot_radiation_diagrams(
                      f"0.0 0.0 {_rad_z_near:.3f} "
                      f"{_rad_x_far:.3f} 0.0 {_rad_z_far:.4f} "
                      f"{WIRE_RADIUS_M:.5f}\n")
-            if cp_type == "horizontal":
-                drop_len = wire_height_m - cp_height_m
-                if drop_len > 0.01:
-                    segs_drop = max(5, _segs(drop_len, highest_f))
-                    fh.write(f"GW 2 {segs_drop} "
-                             f"0.0 0.0 {wire_height_m:.3f} "
-                             f"0.0 0.0 {cp_height_m:.3f} "
-                             f"{WIRE_RADIUS_M:.5f}\n")
-                    fh.write(f"GW 3 {segs_cp} "
-                             f"0.0 0.0 {cp_height_m:.3f} "
-                             f"{-best.cp_len_m:.3f} 0.0 {cp_height_m:.3f} "
-                             f"{WIRE_RADIUS_M:.5f}\n")
-                else:
-                    fh.write(f"GW 2 {segs_cp} "
-                             f"0.0 0.0 {wire_height_m:.3f} "
-                             f"{-best.cp_len_m:.3f} 0.0 {wire_height_m:.3f} "
-                             f"{WIRE_RADIUS_M:.5f}\n")
-            else:
-                cp_bottom_z = max(cp_height_m, wire_height_m - best.cp_len_m)
-                vert_len = max(0.0, wire_height_m - cp_bottom_z)
-                horiz_rem = max(0.0, best.cp_len_m - vert_len)
-                if vert_len > 0.01:
-                    segs_cp_v = max(5, _segs(vert_len, highest_f))
-                    if segs_cp_v % 2 == 0:
-                        segs_cp_v += 1
-                    fh.write(f"GW 2 {segs_cp_v} "
-                             f"0.0 0.0 {wire_height_m:.3f} "
-                             f"0.0 0.0 {cp_bottom_z:.3f} "
-                             f"{WIRE_RADIUS_M:.5f}\n")
-                if horiz_rem > 0.01:
-                    segs_cp_h = max(3, _segs(horiz_rem, highest_f))
+            _rvl, _rhr, _rbot, _rxe, _rze = _cp_geometry(
+                cp_angle_deg, best.cp_len_m, wire_height_m, cp_height_m)
+            if _rvl > 0.01:
+                segs_cp_v = max(5, _segs(_rvl, highest_f))
+                if segs_cp_v % 2 == 0:
+                    segs_cp_v += 1
+                fh.write(f"GW 2 {segs_cp_v} "
+                         f"0.0 0.0 {wire_height_m:.3f} "
+                         f"{-_rxe:.3f} 0.0 {_rbot:.3f} "
+                         f"{WIRE_RADIUS_M:.5f}\n")
+                if _rhr > 0.01:
+                    segs_cp_h = max(3, _segs(_rhr, highest_f))
                     if segs_cp_h % 2 == 0:
                         segs_cp_h += 1
                     fh.write(f"GW 3 {segs_cp_h} "
-                             f"0.0 0.0 {cp_bottom_z:.3f} "
-                             f"{-horiz_rem:.3f} 0.0 {cp_bottom_z:.3f} "
+                             f"{-_rxe:.3f} 0.0 {_rbot:.3f} "
+                             f"{-(_rxe + _rhr):.3f} 0.0 {_rbot:.3f} "
                              f"{WIRE_RADIUS_M:.5f}\n")
+            else:
+                segs_cp_s = max(5, _segs(best.cp_len_m, highest_f))
+                fh.write(f"GW 2 {segs_cp_s} "
+                         f"0.0 0.0 {wire_height_m:.3f} "
+                         f"{-_rxe:.3f} 0.0 {_rze:.3f} "
+                         f"{WIRE_RADIUS_M:.5f}\n")
             fh.write(f"GE {_rad_ge}\n")
             fh.write(f"GN 2 0 0 0 {ground_diel:.1f} {ground_cond:.4f}\n")
             fh.write("EX 0 1 1 0 1.0 0.0\n")
@@ -3948,7 +3896,7 @@ def plot_radiation_diagrams(
     fig_height = max(5.4, cell_h * n_bands + 1.4)
     fig        = plt.figure(figsize=(18, fig_height), facecolor=_BG)
     fig.suptitle(
-        T("plot_radiation_title").format(best.wire_len_m, best.cp_len_m, cp_type),
+        T("plot_radiation_title").format(best.wire_len_m, best.cp_len_m, f"{best.cp_angle_deg:.1f}°"),
         fontsize=13, fontweight="bold", color=_FG, y=1.0
     )
 
@@ -4488,7 +4436,7 @@ def plot_construction_diagram(
     ACCENT2  = "#c97a1a"     # counterpoise / ground system
     GROUND   = "#9aa7b3"
 
-    cp_type   = best.cp_type if best.cp_type != "both" else "horizontal"
+    cp_angle_deg = best.cp_angle_deg
     slope_end = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
 
     wire_len = best.wire_len_m
@@ -4505,16 +4453,12 @@ def plot_construction_diagram(
         z_far = z_near
         x_far = wire_len
 
-    # geometry of the counterpoise/ground wire
-    if cp_type == "vertical":
-        cp_top_z    = z_near
-        cp_bottom_z = max(cp_height_m, z_near - cp_len)
-        vert_len    = max(0.0, cp_top_z - cp_bottom_z)
-        horiz_rem   = max(0.0, cp_len - vert_len)
-    else:
-        cp_top_z = cp_bottom_z = cp_height_m
-        vert_len = max(0.0, z_near - cp_height_m)
-        horiz_rem = cp_len
+    # geometry of the counterpoise/ground wire — unified angle model
+    _cvl, _chr, cp_bottom_z, _cxe, _cze = _cp_geometry(
+        cp_angle_deg, cp_len, z_near, cp_height_m)
+    vert_len  = _cvl
+    horiz_rem = _chr
+    cp_top_z  = z_near
 
     fig = plt.figure(figsize=(13, 9.5), facecolor=BG)
 
@@ -4566,40 +4510,42 @@ def plot_construction_diagram(
     # counterpoise / ground system
     cp_x0 = 0
     cp_label_total = f"{cp_len:.2f} m"
-    if cp_type == "vertical" and vert_len > 0.01:
-        ax.plot([cp_x0, cp_x0], [z_near, cp_top_z], color=ACCENT2,
+    if vert_len > 0.01:
+        # Angled/bent wire: draw angled segment then horizontal remainder
+        ax.plot([cp_x0, -_cxe], [z_near, cp_bottom_z], color=ACCENT2,
                 linewidth=3, zorder=3, linestyle=(0, (1, 0)))
-        ax.plot([cp_x0, -horiz_rem], [cp_bottom_z, cp_bottom_z],
+        ax.plot([-_cxe, -(_cxe + horiz_rem)], [cp_bottom_z, cp_bottom_z],
                 color=ACCENT2, linewidth=3, zorder=3,
                 label=T("construction_cp_label"))
-        ax.scatter([-horiz_rem], [cp_bottom_z], s=55, color=ACCENT2,
+        ax.scatter([-(_cxe + horiz_rem)], [cp_bottom_z], s=55, color=ACCENT2,
                    edgecolors=TEXT, linewidths=1, zorder=5)
-        _dim_line(ax, (cp_x0, cp_bottom_z - 0.6), (-horiz_rem, cp_bottom_z - 0.6),
+        _dim_line(ax, (cp_x0, cp_bottom_z - 0.6), (-(_cxe + horiz_rem), cp_bottom_z - 0.6),
                   f"{T('construction_dim_cp')}\n{cp_label_total}",
                   color=ACCENT2, text_color=TEXT, below=True, bg=BG)
         if vert_len > 0.05:
             ax.text(cp_x0 + 0.15, (z_near + cp_bottom_z) / 2,
-                    f"{vert_len:.2f} m", color=ACCENT2, fontsize=8,
+                    f"{cp_angle_deg:.1f}° / {vert_len:.2f} m", color=ACCENT2, fontsize=8,
                     rotation=90, va="center", ha="left",
                     bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
                               edgecolor="none", alpha=0.85))
     else:
-        ax.plot([cp_x0, -cp_len], [cp_height_m, cp_height_m],
+        # Straight wire at angle
+        ax.plot([cp_x0, -_cxe], [z_near, _cze],
                 color=ACCENT2, linewidth=3, zorder=3,
                 label=T("construction_cp_label"))
-        ax.scatter([cp_x0, -cp_len], [cp_height_m, cp_height_m], s=55,
+        ax.scatter([cp_x0, -_cxe], [z_near, _cze], s=55,
                    color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
-        _dim_line(ax, (cp_x0, cp_height_m - 0.6), (-cp_len, cp_height_m - 0.6),
+        _dim_line(ax, (cp_x0, _cze - 0.6), (-_cxe, _cze - 0.6),
                   f"{T('construction_dim_cp')}\n{cp_label_total}",
                   color=ACCENT2, text_color=TEXT, below=True, bg=BG)
 
     # height annotations
     _vdim_line(ax, -1.1, 0, z_near, f"{T('construction_dim_height')}\n{wire_height_m:.2f} m",
                color="#5b6b7c", text_color=TEXT, bg=BG)
-    if cp_type == "horizontal" or vert_len < 0.01:
-        if abs(cp_height_m - 0) > 0.02 and abs(cp_height_m - z_near) > 0.02:
-            _vdim_line(ax, -cp_len - 0.9, 0, cp_height_m,
-                       f"{cp_height_m:.2f} m", color=ACCENT2, text_color=TEXT,
+    if vert_len < 0.01:
+        if abs(_cze - 0) > 0.02 and abs(_cze - z_near) > 0.02:
+            _vdim_line(ax, -_cxe - 0.9, 0, _cze,
+                       f"{_cze:.2f} m", color=ACCENT2, text_color=TEXT,
                        small=True, bg=BG)
 
     far_height_extra = 0.0
@@ -4775,10 +4721,7 @@ def write_pdf_brochure(
     story = []
 
     # ── HEADER / COVER BAND ───────────────────────────────────────────────
-    cp_type_key = {"horizontal": "pdf_horizontal",
-                    "vertical": "pdf_vertical",
-                    "both": "pdf_both"}.get(best.cp_type, best.cp_type)
-    cp_type_label = T(cp_type_key) if cp_type_key.startswith("pdf_") else best.cp_type
+    cp_type_label = f"{best.cp_angle_deg:.1f}° from vertical"
 
     header_tbl = Table(
         [[Paragraph(T("pdf_brand_title"), style_title),
@@ -4937,7 +4880,7 @@ def write_pdf_brochure(
     # ── 2b. BEST CANDIDATE — DETAILED BREAKDOWN ───────────────────────────
     detail_data = [
         [T("pdf_detail_wire_len"),   f"{best.wire_len_m:.3f} m"],
-        [T("pdf_detail_cp_len"),     f"{best.cp_len_m:.3f} m  ({best.cp_type})"],
+        [T("pdf_detail_cp_len"),     f"{best.cp_len_m:.3f} m  ({best.cp_angle_deg:.1f}° from vertical)"],
     ]
     if best.wire_slope_end_m is not None:
         detail_data.append([T("pdf_detail_geometry"),
@@ -5234,9 +5177,9 @@ def _build_parser() -> argparse.ArgumentParser:
                    ))
     p.add_argument("--cp-height", metavar="M", type=float, default=None,
                    help=T("ap_cp_height"))
-    p.add_argument("--cp-type", choices=["horizontal", "vertical", "both"],
-                   default="both",
-                   help=T("ap_cp_type"))
+    p.add_argument("--cp-angle", metavar="DEG", type=float,
+                   required=True,
+                   help=T("ap_cp_angle"))
     p.add_argument("--ground-cond", metavar="S/M", type=float,
                    default=DEFAULT_GROUND_COND,
                    help=T("ap_ground_cond").format(DEFAULT_GROUND_COND))
@@ -5545,9 +5488,11 @@ def main() -> None:
     grid = build_search_grid(*wire_range, *cp_range)
     print(T("grid_size").format(len(grid)))
 
-    cp_types = (["horizontal", "vertical"] if args.cp_type == "both"
-                else [args.cp_type])
-    print(T("cp_types").format(cp_types))
+    if not (0.0 <= args.cp_angle <= 90.0):
+        print(f"{Fore.RED}ERROR: --cp-angle must be between 0 and 90 degrees (got {args.cp_angle}).{Style.RESET_ALL}")
+        sys.exit(1)
+    cp_angle = args.cp_angle
+    print(T("cp_angle_msg").format(cp_angle))
 
     # ── Locate nec2c ─────────────────────────────────────────────────────
     nec2c_bin: Optional[str] = None
@@ -5594,19 +5539,17 @@ def main() -> None:
                 cp_height_m=args.cp_height,
                 ground_cond=args.ground_cond,
                 ground_diel=args.ground_diel,
-                cp_types=cp_types,
+                cp_angle_deg=cp_angle,
                 wire_slope_end_m=_slope,
                 verbose=verbose,
             )
         else:
-            _emp_cp = args.cp_type if args.cp_type != "both" else "horizontal"
-            if args.cp_type == "both":
-                print(f"  {Fore.YELLOW}" + T("warn_empirical_cp_forced") + f"{Style.RESET_ALL}")
+            print(f"  {Fore.YELLOW}" + T("warn_empirical_cp_geometry") + f"{Style.RESET_ALL}")
             _res = empirical_sweep(
                 grid=_grid,
                 calc_rows=calc_rows,
                 unun_ratio=unun_ratio,
-                cp_type=_emp_cp,
+                cp_angle_deg=cp_angle,
                 wire_slope_end_m=_slope,
                 verbose=verbose,
             )
@@ -5734,7 +5677,7 @@ def main() -> None:
         best = ranked[0]
         print(f"\n  {Fore.GREEN}" + T("best_candidate") + f"{Style.RESET_ALL}"
               f"  wire = {best.wire_len_m:.3f} m   cp = {best.cp_len_m:.3f} m"
-              f"   ({best.cp_type})")
+              f"   ({best.cp_angle_deg:.1f}°)")
         print(T("combined_score").format(best.score_combined))
         print(T("vswr_penalty").format(best.score_vswr))
         print(T("avoidance_mean").format(best.score_avoidance))
@@ -5796,34 +5739,29 @@ def main() -> None:
             _wh  = args.wire_height  if args.wire_height  is not None else DEFAULT_HEIGHT_M
             _cph = args.cp_height    if args.cp_height    is not None else 0.5
             with tempfile.TemporaryDirectory(prefix="nec2opt_unun_") as _td:
-                for cpt, _attr in [("horizontal", "best_run_h"),
-                                    ("vertical",   "best_run_v")]:
-                    _nec = os.path.join(_td, f"best_{cpt}.nec")
-                    _out = os.path.join(_td, f"best_{cpt}.out")
-                    write_nec_deck(
-                        nec_path=_nec,
-                        wire_len_m=best.wire_len_m,
-                        cp_len_m=best.cp_len_m,
-                        cp_type=cpt,
-                        freqs_mhz=all_freqs,
-                        wire_height_m=_wh,
-                        wire_slope_end_m=_slope,
-                        cp_height_m=_cph,
-                        ground_cond=args.ground_cond,
-                        ground_diel=args.ground_diel,
-                    )
-                    if run_nec2c(nec2c_bin, _nec, _out):
-                        try:
-                            _run = parse_nec2_output(_out, debug=False,
-                                                     explicit_nec_path=_nec)
-                            if _run is not None and not _run.freq_map():
-                                _run = None
-                            if cpt == "horizontal":
-                                best_run_h = _run
-                            else:
-                                best_run_v = _run
-                        except Exception:
-                            pass
+                _nec = os.path.join(_td, "best_antenna.nec")
+                _out = os.path.join(_td, "best_antenna.out")
+                write_nec_deck(
+                    nec_path=_nec,
+                    wire_len_m=best.wire_len_m,
+                    cp_len_m=best.cp_len_m,
+                    cp_angle_deg=cp_angle,
+                    freqs_mhz=all_freqs,
+                    wire_height_m=_wh,
+                    wire_slope_end_m=_slope,
+                    cp_height_m=_cph,
+                    ground_cond=args.ground_cond,
+                    ground_diel=args.ground_diel,
+                )
+                if run_nec2c(nec2c_bin, _nec, _out):
+                    try:
+                        _run = parse_nec2_output(_out, debug=False,
+                                                 explicit_nec_path=_nec)
+                        if _run is not None and not _run.freq_map():
+                            _run = None
+                        best_run_h = _run
+                    except Exception:
+                        pass
 
         print(T("optimising_unun"))
         unun_result = find_best_unun(
@@ -6156,10 +6094,9 @@ def _launch_gui() -> None:
             "wire_height_hint":   "Antenna wire height above ground  (default 8 m)",
             "cp_height_hint":     "Counterpoise height above ground  (default 0.5 m)",
             "wire_slope_end_hint": "Far-end height for sloped wire  (0 = ground; leave blank for horizontal)",
-            "cp_orient_lf":       "Counterpoise Orientation",
-            "both_cp":            "Both (simulate horizontal & vertical)",
-            "horizontal_cp":      "Horizontal only",
-            "vertical_cp":        "Vertical only",
+            "cp_orient_lf":       "Counterpoise Angle",
+            "cp_angle_lbl":       "Angle (0° = vertical, 90° = horizontal):",
+            "cp_angle_hint":      "Angle in degrees. 0 = straight down, 90 = flat horizontal.",
             "ground_lf":          "Ground Parameters",
             "conductivity":       "Conductivity (σ):",
             "cond_unit":          "S/m   (0.005 = average ground)",
@@ -6294,10 +6231,9 @@ def _launch_gui() -> None:
             "wire_height_hint":   "Altura del hilo de antena sobre el suelo  (por defecto 8 m)",
             "cp_height_hint":     "Altura del contrapeso sobre el suelo  (por defecto 0,5 m)",
             "wire_slope_end_hint": "Altura del extremo lejano para hilo inclinado  (0 = suelo; dejar vacío para hilo horizontal)",
-            "cp_orient_lf":       "Orientación del Contrapeso",
-            "both_cp":            "Ambos (simular horizontal y vertical)",
-            "horizontal_cp":      "Sólo horizontal",
-            "vertical_cp":        "Sólo vertical",
+            "cp_orient_lf":       "Ángulo del Contrapeso",
+            "cp_angle_lbl":       "Ángulo (0° = vertical, 90° = horizontal):",
+            "cp_angle_hint":      "Ángulo en grados. 0 = hacia abajo, 90 = horizontal plano.",
             "ground_lf":          "Parámetros del Suelo",
             "conductivity":       "Conductividad (σ):",
             "cond_unit":          "S/m   (0,005 = suelo promedio)",
@@ -6935,18 +6871,20 @@ def _launch_gui() -> None:
             cp_lf = ttk.LabelFrame(t, padding=8)
             cp_lf.pack(fill="x", pady=(0, 8))
             self._reg(cp_lf, "cp_orient_lf")
-            self._cp_type_var = tk.StringVar(value="both")
+            self._cp_angle_var = tk.DoubleVar(value=90.0)
             cpf = ttk.Frame(cp_lf)
             cpf.pack(anchor="w")
-            self._rb_both = ttk.Radiobutton(cpf, variable=self._cp_type_var, value="both")
-            self._rb_both.pack(side="left", padx=(0, 16))
-            self._reg(self._rb_both, "both_cp")
-            self._rb_horiz = ttk.Radiobutton(cpf, variable=self._cp_type_var, value="horizontal")
-            self._rb_horiz.pack(side="left", padx=(0, 16))
-            self._reg(self._rb_horiz, "horizontal_cp")
-            self._rb_vert = ttk.Radiobutton(cpf, variable=self._cp_type_var, value="vertical")
-            self._rb_vert.pack(side="left")
-            self._reg(self._rb_vert, "vertical_cp")
+            cp_angle_lbl = ttk.Label(cpf)
+            cp_angle_lbl.pack(side="left", padx=(0, 6))
+            self._reg(cp_angle_lbl, "cp_angle_lbl")
+            self._cp_angle_spin = ttk.Spinbox(
+                cpf, from_=0.0, to=90.0, increment=1.0,
+                textvariable=self._cp_angle_var, width=6)
+            self._cp_angle_spin.pack(side="left", padx=(0, 6))
+            ttk.Label(cpf, text="°", style="Muted.TLabel").pack(side="left")
+            cp_angle_hint_lbl = ttk.Label(cpf, foreground=_ACCENT)
+            cp_angle_hint_lbl.pack(side="left", padx=(8, 0))
+            self._reg(cp_angle_hint_lbl, "cp_angle_hint")
 
             gnd_lf = ttk.LabelFrame(t, padding=8)
             gnd_lf.pack(fill="x", pady=(0, 8))
@@ -7215,7 +7153,7 @@ def _launch_gui() -> None:
             cph = self._cp_height_var.get().strip()
             if cph:
                 cmd += ["--cp-height", cph]
-            cmd += ["--cp-type", self._cp_type_var.get()]
+            cmd += ["--cp-angle", str(self._cp_angle_var.get())]
             gc = self._ground_cond_var.get().strip()
             if gc:
                 cmd += ["--ground-cond", gc]
