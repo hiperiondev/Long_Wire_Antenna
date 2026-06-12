@@ -611,6 +611,10 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "Counterpoise length",
         "es": "Longitud del contrapeso",
     },
+    "construction_dim_cp_reach": {
+        "en": "CP reach from mast",
+        "es": "Alcance CP desde mástil",
+    },
     "construction_dim_height": {
         "en": "Support height",
         "es": "Altura de soporte",
@@ -4510,6 +4514,8 @@ def plot_construction_diagram(
     # counterpoise / ground system
     cp_x0 = 0
     cp_label_total = f"{cp_len:.2f} m"
+    _cp_label_obj = None   # set in each branch; used for renderer-aware xlim expansion
+    _cp_reach_label_obj = None
     if vert_len > 0.01:
         # Angled/bent wire: draw angled segment then horizontal remainder
         ax.plot([cp_x0, -_cxe], [z_near, cp_bottom_z], color=ACCENT2,
@@ -4519,15 +4525,40 @@ def plot_construction_diagram(
                 label=T("construction_cp_label"))
         ax.scatter([-(_cxe + horiz_rem)], [cp_bottom_z], s=55, color=ACCENT2,
                    edgecolors=TEXT, linewidths=1, zorder=5)
-        _dim_line(ax, (cp_x0, cp_bottom_z - 0.6), (-(_cxe + horiz_rem), cp_bottom_z - 0.6),
+        # CP length label: dim line drawn entirely to the left of the mast.
+        # Start just left of x=0 so the right tick and label don't sit on top
+        # of the support-height vdim annotation (which lives at x≈-1.1).
+        _cp_label_x_end = -(_cxe + horiz_rem)
+        _cp_label_z_end = cp_bottom_z
+        _cp_dim_x_start = -0.05   # just left of mast, clear of height label
+        # Draw the CP dimension line (ticks only, no inline label) then place
+        # the label above the CP wire at near-ground height.
+        # Using z ≈ cp_bottom_z + 0.5 keeps the label well below the
+        # support-height text (which sits at z ≈ z_near/2) and well inside
+        # the plot box, regardless of CP length.
+        _dim_line(ax, (_cp_dim_x_start, z_near + 1.0), (_cp_label_x_end, _cp_label_z_end + 1.0),
                   f"{T('construction_dim_cp')}\n{cp_label_total}",
-                  color=ACCENT2, text_color=TEXT, below=True, bg=BG)
+                  color=ACCENT2, text_color=TEXT, bg=BG, show_label=False)
+        # Place CP label near the far end of the CP wire (leftmost point),
+        # well away from the mast so it cannot overlap the support-height label.
+        _cp_txt_x = _cp_label_x_end - 0.1   # just past the far endpoint
+        _cp_label_obj = ax.text(_cp_txt_x, cp_bottom_z + 0.5,
+                f"{T('construction_dim_cp')}\n{cp_label_total}",
+                color=TEXT, fontsize=8.5, ha="right", va="center",
+                fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
+                          edgecolor=ACCENT2, alpha=0.9, linewidth=0.8))
         if vert_len > 0.05:
             ax.text(cp_x0 + 0.15, (z_near + cp_bottom_z) / 2,
-                    f"{cp_angle_deg:.1f}° / {vert_len:.2f} m", color=ACCENT2, fontsize=8,
+                    f"{cp_angle_deg:.1f}°", color=ACCENT2, fontsize=8,
                     rotation=90, va="center", ha="left",
                     bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
                               edgecolor="none", alpha=0.85))
+        # Bottom ground-level reach: horizontal distance from mast to CP end
+        _cp_reach_x = _cxe + horiz_rem
+        _cp_reach_label_obj = _dim_line(ax, (0, -0.55), (-_cp_reach_x, -0.55),
+                  f"{T('construction_dim_cp_reach')}\n{_cp_reach_x:.2f} m",
+                  color=ACCENT2, text_color=TEXT, below=True, bg=BG)
     else:
         # Straight wire at angle
         ax.plot([cp_x0, -_cxe], [z_near, _cze],
@@ -4535,18 +4566,108 @@ def plot_construction_diagram(
                 label=T("construction_cp_label"))
         ax.scatter([cp_x0, -_cxe], [z_near, _cze], s=55,
                    color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
-        _dim_line(ax, (cp_x0, _cze - 0.6), (-_cxe, _cze - 0.6),
+        # Draw the CP dimension line with its label placed near the far end
+        # (text_frac close to 1.0), at z_near + 1.0 height — well above the
+        # ground-level "CP reach from mast" label and the small height-offset
+        # label, so it cannot overlap either.
+        # Draw the CP dimension line (ticks only, no inline label) then place
+        # the label at the top-left, near the feedpoint height — clear of the
+        # ground-level "CP reach from mast" label, the small height-offset
+        # label (at x ≈ -_cxe-0.9, near ground), and (after the nudge below)
+        # the support-height label.
+        _dim_line(ax, (-0.05, z_near + 1.0), (-_cxe, _cze + 1.0),
                   f"{T('construction_dim_cp')}\n{cp_label_total}",
+                  color=ACCENT2, text_color=TEXT, bg=BG, show_label=False)
+        _cp_label_obj = ax.text(-_cxe - 0.1, z_near + 0.35,
+                f"{T('construction_dim_cp')}\n{cp_label_total}",
+                color=TEXT, fontsize=8.5, ha="right", va="center",
+                fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
+                          edgecolor=ACCENT2, alpha=0.9, linewidth=0.8))
+        # Bottom ground-level reach: horizontal distance from mast to CP end
+        _cp_reach_label_obj = _dim_line(ax, (0, -0.55), (-_cxe, -0.55),
+                  f"{T('construction_dim_cp_reach')}\n{_cxe:.2f} m",
                   color=ACCENT2, text_color=TEXT, below=True, bg=BG)
 
     # height annotations
-    _vdim_line(ax, -1.1, 0, z_near, f"{T('construction_dim_height')}\n{wire_height_m:.2f} m",
-               color="#5b6b7c", text_color=TEXT, bg=BG)
+    _height_label_obj = _vdim_line(ax, -1.1, 0, z_near,
+                                   f"{T('construction_dim_height')}\n{wire_height_m:.2f} m",
+                                   color="#5b6b7c", text_color=TEXT, bg=BG)
+
+    _small_vdim_label_obj = None
     if vert_len < 0.01:
         if abs(_cze - 0) > 0.02 and abs(_cze - z_near) > 0.02:
-            _vdim_line(ax, -_cxe - 0.9, 0, _cze,
+            _small_vdim_label_obj = _vdim_line(ax, -_cxe - 0.9, 0, _cze,
                        f"{_cze:.2f} m", color=ACCENT2, text_color=TEXT,
                        small=True, bg=BG)
+
+    # ── Renderer-aware anti-overlap: if the CP label still overlaps the
+    #    support-height label after repositioning, nudge it further left
+    #    (up to 12 × 0.3 data-unit steps ≈ 3.6 m) until clear.
+    if _cp_label_obj is not None and _height_label_obj is not None:
+        try:
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+            def _bboxes_overlap(a, b):
+                return (a.x0 < b.x1 and a.x1 > b.x0 and
+                        a.y0 < b.y1 and a.y1 > b.y0)
+            for _nudge_i in range(12):
+                _cp_bb = _cp_label_obj.get_window_extent(renderer=renderer)
+                _ht_bb = _height_label_obj.get_window_extent(renderer=renderer)
+                if not _bboxes_overlap(_cp_bb, _ht_bb):
+                    break
+                _cx, _cy = _cp_label_obj.get_position()
+                _cp_label_obj.set_position((_cx - 0.3, _cy))
+                if _nudge_i < 11:
+                    fig.canvas.draw()
+        except Exception:
+            pass  # renderer unavailable — keep original positions
+
+    # ── Anti-overlap: CP length label vs CP reach label (below) ──
+    # The CP length label can sit low enough (near-ground CP wires) to
+    # overlap the "CP reach from mast" label on the x-axis below it.
+    # Nudge the CP length label upward until clear.
+    if _cp_label_obj is not None and _cp_reach_label_obj is not None:
+        try:
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+            def _bboxes_overlap2(a, b):
+                return (a.x0 < b.x1 and a.x1 > b.x0 and
+                        a.y0 < b.y1 and a.y1 > b.y0)
+            for _nudge_j in range(12):
+                _cp_bb = _cp_label_obj.get_window_extent(renderer=renderer)
+                _rc_bb = _cp_reach_label_obj.get_window_extent(renderer=renderer)
+                if not _bboxes_overlap2(_cp_bb, _rc_bb):
+                    break
+                _cx, _cy = _cp_label_obj.get_position()
+                _cp_label_obj.set_position((_cx, _cy + 0.3))
+                if _nudge_j < 11:
+                    fig.canvas.draw()
+        except Exception:
+            pass
+
+    # ── Anti-overlap: CP length label vs small "Δheight" vdim label ──
+    # When the CP wire is nearly horizontal and offset from the mast/ground,
+    # a small vertical-dimension label (e.g. "1.28 m") may sit directly below
+    # the CP length label. Nudge the CP length label upward until clear.
+    if _cp_label_obj is not None and _small_vdim_label_obj is not None:
+        try:
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+            def _bboxes_overlap3(a, b):
+                return (a.x0 < b.x1 and a.x1 > b.x0 and
+                        a.y0 < b.y1 and a.y1 > b.y0)
+            for _nudge_k in range(12):
+                _cp_bb = _cp_label_obj.get_window_extent(renderer=renderer)
+                _sv_bb = _small_vdim_label_obj.get_window_extent(renderer=renderer)
+                if not _bboxes_overlap3(_cp_bb, _sv_bb):
+                    break
+                _cx, _cy = _cp_label_obj.get_position()
+                _cp_label_obj.set_position((_cx, _cy + 0.3))
+                if _nudge_k < 11:
+                    fig.canvas.draw()
+        except Exception:
+            pass
 
     far_height_extra = 0.0
     if abs(z_far - z_near) > 0.05:
@@ -4579,9 +4700,30 @@ def plot_construction_diagram(
 
     extra_right = max(2.6 if slope_end is not None else 0.0,
                        far_height_extra + 0.3)
-    extra_below = 0.7 if slope_end is not None else 0.0
+    extra_below = 0.7   # always needed: CP reach dimension line at y=-0.55
+
+    # ── Measure the rendered CP label and widen the left margin to fit it ──
+    # The CP label (_cp_label_obj) is placed inside the axes data range but its
+    # bbox can still extend past the initial xlim when the CP is long.  We do a
+    # preliminary draw, measure the label extent in data units, then tighten the
+    # xlim so the label never clips against the axes frame.
     ax.set_xlim(-max(cp_len, horiz_rem) - 1.8, max_x + extra_right)
     ax.set_ylim(-0.9 - extra_below, max_z)
+
+    # Renderer-aware left-margin adjustment for the CP label
+    try:
+        if _cp_label_obj is not None:
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+            _cp_bbox_px = _cp_label_obj.get_window_extent(renderer=renderer)
+            _cp_bbox_data = ax.transData.inverted().transform(_cp_bbox_px)
+            _cp_label_left = _cp_bbox_data[0][0]   # leftmost data-x of the label box
+            current_xlim_left = ax.get_xlim()[0]
+            if _cp_label_left < current_xlim_left + 0.15:
+                cp_left_extra = (current_xlim_left + 0.15) - _cp_label_left
+                ax.set_xlim(current_xlim_left - cp_left_extra, max_x + extra_right)
+    except Exception:
+        pass  # if renderer is unavailable just keep the original xlim
     ax.set_xlabel(T("construction_xlabel"), color=SUBTEXT, fontsize=9)
     ax.set_ylabel(T("construction_ylabel"), color=SUBTEXT, fontsize=9)
     ax.set_aspect("equal", adjustable="box")
@@ -4597,8 +4739,13 @@ def plot_construction_diagram(
     print(T("construction_saved").format(out_png))
 
 
-def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False, bg="#ffffff"):
-    """Draw a horizontal dimension line with end ticks and a centred label."""
+def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False, bg="#ffffff",
+              text_frac: float = 0.5, show_label: bool = True):
+    """Draw a dimension line with end ticks and an optional label.
+
+    text_frac   – 0.0 = label at p0, 1.0 = label at p1 (default 0.5, midpoint).
+    show_label  – set False to suppress the text box entirely (place it yourself).
+    """
     x0, y0 = p0
     x1, y1 = p1
     ax.plot([x0, x1], [y0, y1], color=color, linewidth=1, linestyle="--",
@@ -4606,17 +4753,23 @@ def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False, bg="#ff
     tick = 0.18
     ax.plot([x0, x0], [y0 - tick, y0 + tick], color=color, linewidth=1, alpha=0.8)
     ax.plot([x1, x1], [y1 - tick, y1 + tick], color=color, linewidth=1, alpha=0.8)
-    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
-    offset = -0.32 if below else 0.32
-    ax.text(mx, my + offset, label, color=text_color, fontsize=8.5,
-            ha="center", va="center" if not below else "top",
-            fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor=bg,
-                      edgecolor=color, alpha=0.9, linewidth=0.8))
+    if show_label:
+        mx = x0 + (x1 - x0) * text_frac
+        my = y0 + (y1 - y0) * text_frac
+        offset = -0.32 if below else 0.32
+        return ax.text(mx, my + offset, label, color=text_color, fontsize=8.5,
+                ha="center", va="center" if not below else "top",
+                fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor=bg,
+                          edgecolor=color, alpha=0.9, linewidth=0.8))
+    return None
 
 
 def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False, bg="#ffffff", right: bool = False):
-    """Draw a vertical dimension line with end ticks and a side label."""
+    """Draw a vertical dimension line with end ticks and a side label.
+
+    Returns the matplotlib Text artist so callers can measure or reposition it.
+    """
     ax.plot([x, x], [z0, z1], color=color, linewidth=1, linestyle="--",
             alpha=0.8, zorder=3)
     tick = 0.12
@@ -4624,10 +4777,11 @@ def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False, bg=
     ax.plot([x - tick, x + tick], [z1, z1], color=color, linewidth=1, alpha=0.8)
     fontsize = 7.5 if small else 8.5
     label_x = x + 0.15 if right else x - 0.15
-    ax.text(label_x, (z0 + z1) / 2, label, color=text_color, fontsize=fontsize,
+    _txt = ax.text(label_x, (z0 + z1) / 2, label, color=text_color, fontsize=fontsize,
             ha="left" if right else "right", va="center", fontweight="bold", rotation=90,
             bbox=dict(boxstyle="round,pad=0.2", facecolor=bg,
                       edgecolor=color, alpha=0.9, linewidth=0.8))
+    return _txt
 
 
 # ═══════════════════════════════════════════════════════════════════════════
