@@ -1341,6 +1341,28 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "Interface language: en (English) or es (Español). Default: auto-detect from system locale.",
         "es": "Idioma de la interfaz: en (English) o es (Español). Por defecto: detección automática del locale del sistema.",
     },
+    "err_unknown_args": {
+        "en": "  ERROR: unrecognized arguments: {0}",
+        "es": "  ERROR: argumentos no reconocidos: {0}",
+    },
+    "ap_gui": {
+        "en": "Open the graphical user interface (all other flags become optional).",
+        "es": "Abre la interfaz gráfica de usuario (todos los demás parámetros se vuelven opcionales).",
+    },
+    "ap_best_unun": {
+        "en": (
+            "After finding the best antenna geometry, re-evaluate it using the "
+            "recommended best UnUn ratio (as determined by the UnUn analysis). "
+            "All outputs (report, CSV, plots, NEC deck) will use the recommended "
+            "ratio instead of the one supplied via --unun or the CSV."
+        ),
+        "es": (
+            "Tras encontrar la mejor geometría de antena, la reevalúa usando la "
+            "relación UnUn estándar recomendada (determinada por el análisis UnUn). "
+            "Todos los resultados (informe, CSV, gráficos, archivo NEC) usarán la "
+            "relación recomendada en lugar de la proporcionada con --unun o el CSV."
+        ),
+    },
     # ── hardcoded strings in main() ──────────────────────────────────────
     "radiation_nec2_only_inline": {
         "en": "  ℹ  Radiation diagrams require NEC2 mode (current mode: {0}) — skipped.",
@@ -5247,7 +5269,9 @@ def _build_parser() -> argparse.ArgumentParser:
                    choices=["", "en", "es"],
                    help=T("ap_lang"))
     p.add_argument("--gui", action="store_true",
-                   help="Open the graphical user interface (all other flags become optional).")
+                   help=T("ap_gui"))
+    p.add_argument("--best-unun", action="store_true",
+                   help=T("ap_best_unun"))
     return p
 
 
@@ -5279,6 +5303,10 @@ def main() -> None:
 
     parser = _build_parser()
     args, _unknown = parser.parse_known_args()
+    if _unknown:
+        parser.print_usage(sys.stderr)
+        print(f"{Fore.RED}" + T("err_unknown_args").format(" ".join(_unknown)) + f"{Style.RESET_ALL}")
+        sys.exit(2)
     # Language already initialised above; honour an explicit flag in the full parse too.
     _init_lang(getattr(args, "lang", ""))
     verbose = not args.quiet
@@ -5834,6 +5862,81 @@ def main() -> None:
             print(f"    {b:>8}  {cur_v:9.2f}  {opt_n_str}  {opt_v_str}")
         print()
 
+    # ── --best-unun: re-evaluate best geometry with recommended UnUn ────────
+    if getattr(args, "best_unun", False) and ranked and unun_result is not None:
+        _recommended = unun_result.best_standard_ratio
+        if abs(_recommended - unun_ratio) > 0.5:
+            print(f"\n  {Fore.CYAN}--best-unun: re-evaluating best geometry "
+                  f"with recommended {_recommended:.0f}:1 UnUn …{Style.RESET_ALL}")
+            # Update every calc_row with the new ratio so scoring uses it
+            for _cr in calc_rows:
+                _cr.unun_ratio = _recommended
+            # Re-score ALL results under the new ratio reusing stored antenna-side
+            # impedances — NEC2 runs are not repeated; only the UnUn divisor changes.
+            _active_rows = [_cr for _cr in calc_rows if _cr.active]
+            results_rescored = []
+            for _c in results:
+                import copy as _copy
+                _new = _copy.copy(_c)
+                # Rebuild per-band Tx-side impedance and VSWR under new ratio
+                _new.band_vswr    = {}
+                _new.band_R_tx    = {}
+                _new.band_X_tx    = {}
+                _vswr_penalties_r = []
+                for _ar in _active_rows:
+                    _R = _c.band_R_ant.get(_ar.band)
+                    _X = _c.band_X_ant.get(_ar.band)
+                    if _R is None or _X is None or math.isnan(_R) or math.isnan(_X):
+                        _v = 999.0
+                        _new.band_R_tx[_ar.band] = 0.0
+                        _new.band_X_tx[_ar.band] = 0.0
+                    else:
+                        _v = _vswr_for_ratio(_R, _X, _recommended)
+                        _new.band_R_tx[_ar.band] = round(_R / _recommended, 3)
+                        _new.band_X_tx[_ar.band] = round(_X / _recommended, 3)
+                    _new.band_vswr[_ar.band] = round(_v, 3)
+                    _vswr_penalties_r.append(_vswr_score_single(_v))
+                # Rebuild aggregate scores
+                _n = len(_vswr_penalties_r)
+                _mean = sum(_vswr_penalties_r) / _n if _n else 999.0
+                _worst = max(_vswr_penalties_r) if _vswr_penalties_r else 999.0
+                _new.score_vswr     = _mean
+                _new.score_vswr_raw = _mean + 1.5 * _worst
+                # avoidance scores are geometry-only — unchanged
+                _cp_avoid_scores = []
+                for _ar in _active_rows:
+                    _lq = C_MHZ / (4.0 * _ar.freq_mhz)
+                    _cp_ratio = _c.cp_len_m / _lq
+                    _mod2 = _cp_ratio % 2.0
+                    _dist = abs(_mod2 - 1.0)
+                    _cp_avoid_scores.append(0.25 * math.cos(math.pi * _dist / 2.0) ** 2)
+                _cp_avoid_mean = (sum(_cp_avoid_scores) / len(_cp_avoid_scores)
+                                  if _cp_avoid_scores else 0.0)
+                _new.score_combined = (_mean
+                                       + 1.5 * _worst
+                                       - 0.5 * _new.score_avoidance_active
+                                       - 0.1 * _cp_avoid_mean)
+                results_rescored.append(_new)
+            ranked = rank_results(results_rescored)
+            _pareto_rescored = pareto_front(results_rescored)
+            pareto_ranked = sorted(_pareto_rescored, key=lambda r: r.score_combined)
+            unun_ratio = _recommended
+            best = ranked[0]
+            # Re-run UnUn analysis with the new ratio so outputs are consistent
+            unun_result = find_best_unun(
+                best=best,
+                calc_rows=calc_rows,
+                current_unun=unun_ratio,
+                run_h=best_run_h,
+                run_v=best_run_v,
+                nec2_strict=(mode == "nec2"),
+            )
+            print(f"  {Fore.GREEN}--best-unun: done — using {_recommended:.0f}:1 "
+                  f"(best score {best.score_combined:.4f}){Style.RESET_ALL}")
+        else:
+            print(f"\n  {Fore.GREEN}--best-unun: current {unun_ratio:.0f}:1 is already "
+                  f"the recommended standard ratio — no change needed.{Style.RESET_ALL}")
+
     # ── Write outputs ────────────────────────────────────────────────────
     print(T("writing_outputs"))
 
@@ -6086,6 +6189,7 @@ def _launch_gui() -> None:
             "stop_btn":           "■  Stop",
             "show_report_btn":    "📄  Show Report",
             "show_radiation_btn": "📡  Show Radiation Pattern",
+            "show_pdf_btn":       "📑  Show Final Report (PDF)",
             "idle":               "Idle",
             "console_lf":         "Console Output",
             "clear_btn":          "Clear",
@@ -6121,8 +6225,11 @@ def _launch_gui() -> None:
             "hint_out_txt":       "ranked results text report",
             "hint_out_png":       "score heat-map + VSWR bar charts",
             "hint_out_csv":       "best candidate in CSV format",
-            "hint_out_nec":       "NEC2 input deck for best geometry",
-            "hint_out_rad":       "radiation pattern PNG (NEC2 only)",
+            "hint_out_nec":          "NEC2 input deck for best geometry",
+            "hint_out_rad":          "radiation pattern PNG (NEC2 only)",
+            "hint_out_construction": "antenna construction diagram PNG",
+            "hint_out_pdf":          "PDF brochure with full results (requires reportlab)",
+            "best_unun_flag":        "best-unun  (re-score outputs using the recommended UnUn ratio)",
             "lang_switch":        "ES",
         },
         "es": {
@@ -6220,6 +6327,7 @@ def _launch_gui() -> None:
             "stop_btn":           "■  Detener",
             "show_report_btn":    "📄  Ver Informe",
             "show_radiation_btn": "📡  Ver Patrón de Radiación",
+            "show_pdf_btn":       "📑  Ver Informe Final (PDF)",
             "idle":               "Inactivo",
             "console_lf":         "Salida de Consola",
             "clear_btn":          "Limpiar",
@@ -6255,8 +6363,11 @@ def _launch_gui() -> None:
             "hint_out_txt":       "informe de texto con resultados ordenados",
             "hint_out_png":       "mapa de calor de puntuación + gráficos VSWR",
             "hint_out_csv":       "mejor candidato en formato CSV",
-            "hint_out_nec":       "archivo de entrada NEC2 para mejor geometría",
-            "hint_out_rad":       "PNG de patrón de radiación (solo NEC2)",
+            "hint_out_nec":          "archivo de entrada NEC2 para mejor geometría",
+            "hint_out_rad":          "PNG de patrón de radiación (solo NEC2)",
+            "hint_out_construction": "PNG del diagrama de construcción de la antena",
+            "hint_out_pdf":          "folleto PDF con resultados completos (requiere reportlab)",
+            "best_unun_flag":        "best-unun  (re-evaluar salidas con la relación UnUn recomendada)",
             "lang_switch":        "EN",
         },
     }
@@ -6883,12 +6994,16 @@ def _launch_gui() -> None:
             self._reg(misc_lf, "misc_lf")
             self._quiet_var       = tk.BooleanVar(value=True)
             self._no_interact_var = tk.BooleanVar(value=True)
+            self._best_unun_var   = tk.BooleanVar(value=False)
             self._cb_quiet = ttk.Checkbutton(misc_lf, variable=self._quiet_var)
             self._cb_quiet.pack(anchor="w")
             self._reg(self._cb_quiet, "quiet_flag")
             self._cb_no_interact = ttk.Checkbutton(misc_lf, variable=self._no_interact_var)
             self._cb_no_interact.pack(anchor="w")
             self._reg(self._cb_no_interact, "no_interact")
+            self._cb_best_unun = ttk.Checkbutton(misc_lf, variable=self._best_unun_var)
+            self._cb_best_unun.pack(anchor="w")
+            self._reg(self._cb_best_unun, "best_unun_flag")
 
         # ── Tab: Output Files ─────────────────────────────────────────────
 
@@ -6915,17 +7030,21 @@ def _launch_gui() -> None:
             of_lf = ttk.LabelFrame(t, padding=8)
             of_lf.pack(fill="x", pady=(0, 8))
             self._reg(of_lf, "outfiles_lf")
-            self._out_txt_var = tk.StringVar(value="optimizer_report.txt")
-            self._out_png_var = tk.StringVar(value="optimizer_plot.png")
-            self._out_csv_var = tk.StringVar(value="optimizer_best.csv")
-            self._out_nec_var = tk.StringVar(value="best_antenna.nec")
-            self._out_rad_var = tk.StringVar(value="radiation_diagrams.png")
+            self._out_txt_var          = tk.StringVar(value="optimizer_report.txt")
+            self._out_png_var          = tk.StringVar(value="optimizer_plot.png")
+            self._out_csv_var          = tk.StringVar(value="optimizer_best.csv")
+            self._out_nec_var          = tk.StringVar(value="best_antenna.nec")
+            self._out_rad_var          = tk.StringVar(value="radiation_diagrams.png")
+            self._out_construction_var = tk.StringVar(value="antenna_construction.png")
+            self._out_pdf_var          = tk.StringVar(value="antenna_brochure.pdf")
             for row_i, (flag, var, hk) in enumerate([
-                ("out-txt:",       self._out_txt_var, "hint_out_txt"),
-                ("out-png:",       self._out_png_var, "hint_out_png"),
-                ("out-csv:",       self._out_csv_var, "hint_out_csv"),
-                ("out-nec:",       self._out_nec_var, "hint_out_nec"),
-                ("out-radiation:", self._out_rad_var, "hint_out_rad"),
+                ("out-txt:",          self._out_txt_var,          "hint_out_txt"),
+                ("out-png:",          self._out_png_var,          "hint_out_png"),
+                ("out-csv:",          self._out_csv_var,          "hint_out_csv"),
+                ("out-nec:",          self._out_nec_var,          "hint_out_nec"),
+                ("out-radiation:",    self._out_rad_var,          "hint_out_rad"),
+                ("out-construction:", self._out_construction_var, "hint_out_construction"),
+                ("out-pdf:",          self._out_pdf_var,          "hint_out_pdf"),
             ]):
                 ttk.Label(of_lf, text=flag).grid(row=row_i, column=0, sticky="w", pady=3)
                 ttk.Entry(of_lf, textvariable=var, width=30).grid(
@@ -6968,6 +7087,10 @@ def _launch_gui() -> None:
                                                    command=self._show_radiation, state="disabled")
             self._show_radiation_btn.pack(side="left", padx=(6, 0))
             self._reg(self._show_radiation_btn, "show_radiation_btn")
+            self._show_pdf_btn = ttk.Button(btn_frame, style="InfoBtn.TButton",
+                                             command=self._show_pdf, state="disabled")
+            self._show_pdf_btn.pack(side="left", padx=(6, 0))
+            self._reg(self._show_pdf_btn, "show_pdf_btn")
             self._status_lbl = ttk.Label(btn_frame, foreground=_FG2)
             self._status_lbl.pack(side="left", padx=16)
             self._status_key: str = "idle"
@@ -7100,11 +7223,13 @@ def _launch_gui() -> None:
             if gd:
                 cmd += ["--ground-diel", gd]
             for flag, var in (
-                ("--out-txt",       self._out_txt_var),
-                ("--out-png",       self._out_png_var),
-                ("--out-csv",       self._out_csv_var),
-                ("--out-nec",       self._out_nec_var),
-                ("--out-radiation", self._out_rad_var),
+                ("--out-txt",          self._out_txt_var),
+                ("--out-png",          self._out_png_var),
+                ("--out-csv",          self._out_csv_var),
+                ("--out-nec",          self._out_nec_var),
+                ("--out-radiation",    self._out_rad_var),
+                ("--out-construction", self._out_construction_var),
+                ("--out-pdf",          self._out_pdf_var),
             ):
                 v = var.get().strip()
                 if v:
@@ -7113,6 +7238,8 @@ def _launch_gui() -> None:
                 cmd += ["--quiet"]
             if self._no_interact_var.get():
                 cmd += ["--no-interactive"]
+            if self._best_unun_var.get():
+                cmd += ["--best-unun"]
             opt_lang = self._optlang_var.get().strip()
             if opt_lang and opt_lang != "auto":
                 cmd += ["--lang", opt_lang]
@@ -7192,6 +7319,7 @@ def _launch_gui() -> None:
             self._stop_btn.config(state="normal")
             self._show_report_btn.config(state="disabled")
             self._show_radiation_btn.config(state="disabled")
+            self._show_pdf_btn.config(state="disabled")
             self._progress.start(15)
             self._set_status_key("running", _ACCENT)
             self._thread = _threading.Thread(
@@ -7231,12 +7359,16 @@ def _launch_gui() -> None:
                 outdir = self._outdir_var.get().strip() or os.getcwd()
                 txt_name = self._out_txt_var.get().strip()
                 rad_name = self._out_rad_var.get().strip()
+                pdf_name = self._out_pdf_var.get().strip()
                 report  = os.path.join(outdir, txt_name) if txt_name else None
                 radfile = os.path.join(outdir, rad_name) if rad_name else None
+                pdffile = os.path.join(outdir, pdf_name) if pdf_name else None
                 if report and os.path.isfile(report):
                     self._show_report_btn.config(state="normal")
                 if radfile and os.path.isfile(radfile):
                     self._show_radiation_btn.config(state="normal")
+                if pdffile and os.path.isfile(pdffile):
+                    self._show_pdf_btn.config(state="normal")
 
         def _stop(self):
             self._stopped = True
@@ -7264,6 +7396,13 @@ def _launch_gui() -> None:
             radfile  = os.path.join(outdir, rad_name) if rad_name else None
             if radfile and os.path.isfile(radfile):
                 self._open_file(radfile)
+
+        def _show_pdf(self):
+            outdir   = self._outdir_var.get().strip() or os.getcwd()
+            pdf_name = self._out_pdf_var.get().strip()
+            pdffile  = os.path.join(outdir, pdf_name) if pdf_name else None
+            if pdffile and os.path.isfile(pdffile):
+                self._open_file(pdffile)
 
         @staticmethod
         def _open_file(path: str):
