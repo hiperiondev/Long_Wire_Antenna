@@ -1988,7 +1988,10 @@ DEFAULT_GROUND_COND = 0.005 # S/m  (average ground)
 DEFAULT_GROUND_DIEL = 13.0  # relative permittivity
 SEGS_PER_HALF_WAVE = 21     # NEC2 segments per half wavelength
 
-# NEC2C search paths (searched in order after PATH)
+# NEC2 engine search paths (searched in order after PATH)
+# Two families are supported, auto-detected from the binary's filename:
+#   • nec2c  (classic, Linux/macOS)   → invoked as:  nec2c -i IN -o OUT
+#   • onec   (OpenNEC, Linux/macOS/Windows) → invoked as: onec -o OUT IN
 NEC2C_SEARCH_PATHS = [
     "/usr/bin/nec2c",
     "/usr/local/bin/nec2c",
@@ -1996,9 +1999,34 @@ NEC2C_SEARCH_PATHS = [
     "/opt/homebrew/bin/nec2c",
     "/usr/bin/nec2c-mpich",
     "/usr/local/bin/nec2c-mpich",
+    "/usr/bin/onec",
+    "/usr/local/bin/onec",
+    "/opt/onec/bin/onec",
+    "/opt/homebrew/bin/onec",
+    # Common Windows install locations (OpenNEC / scoop)
+    r"C:\Program Files\OpenNEC\onec.exe",
+    r"C:\Program Files (x86)\OpenNEC\onec.exe",
+    os.path.expanduser(r"~\scoop\apps\onec\current\onec.exe"),
+    os.path.expanduser(r"~\scoop\shims\onec.exe"),
 ]
 
-NEC2C_NAMES = ["nec2c", "nec2c-mpich"]   # tried on PATH
+# Names tried on PATH, in priority order. On Windows shutil.which() will
+# also match the ".exe" variants automatically via PATHEXT.
+NEC2C_NAMES = ["nec2c", "nec2c-mpich", "onec"]
+
+
+def _nec2_engine_kind(binary_path: str) -> str:
+    """
+    Identify which NEC2 engine 'binary_path' refers to, based on its
+    filename. Used to select the correct command-line syntax.
+
+    Returns "onec" for OpenNEC (onec / onec.exe), otherwise "nec2c"
+    (covers nec2c, nec2c-mpich, xnec2c and similar classic builds).
+    """
+    name = os.path.basename(binary_path).lower()
+    if name.startswith("onec"):
+        return "onec"
+    return "nec2c"
 
 # ── Amateur-radio band → ITU centre frequency (MHz) ──────────────────────
 BAND_CENTRE_FREQ_MHZ: Dict[str, float] = {
@@ -2107,12 +2135,17 @@ def find_nec2c(explicit: Optional[str] = None,
             return r
 
     if interactive:
-        print(f"\n{Fore.YELLOW}  nec2c binary not found automatically.{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}  nec2c/onec binary not found automatically.{Style.RESET_ALL}")
         print("  Options:")
-        print("    • Install:  sudo apt install nec2c   (Debian/Ubuntu)")
-        print("    •           brew install nec2c        (macOS / Homebrew)")
-        print("    • Re-run with:  --nec2c /full/path/to/nec2c")
-        print("    • Set env var:  export NEC2C=/full/path/to/nec2c")
+        print("    • Install nec2c:  sudo apt install nec2c   (Debian/Ubuntu)")
+        print("    •                 brew install nec2c        (macOS / Homebrew)")
+        print("    • Install OpenNEC (onec):")
+        print("        brew tap maurymarkowitz/tap https://github.com/maurymarkowitz/homebrew-tap")
+        print("        brew install maurymarkowitz/tap/onec   (macOS / Linux)")
+        print("        scoop bucket add maurymarkowitz https://github.com/maurymarkowitz/scoop-bucket")
+        print("        scoop install onec                     (Windows)")
+        print("    • Re-run with:  --nec2c /full/path/to/nec2c  or  --nec2c C:\\path\\to\\onec.exe")
+        print("    • Set env var:  export NEC2C=/full/path/to/nec2c  (or set NEC2C=...  on Windows)")
         ans = input(f"\n{Fore.CYAN}" + T("nec2c_prompt") + f"{Style.RESET_ALL}").strip()
         if ans:
             r = _check(ans)
@@ -2293,12 +2326,22 @@ def write_nec_deck(
 def run_nec2c(binary: str, nec_path: str, out_path: str,
               timeout: int = 60) -> bool:
     """
-    Run nec2c:  nec2c -i INPUT -o OUTPUT
+    Run the NEC2 engine, auto-adapting the command-line syntax:
+
+      • nec2c (classic):  nec2c -i INPUT -o OUTPUT
+      • onec  (OpenNEC):  onec -o OUTPUT INPUT
+
     Returns True on success, False on failure.
     """
+    kind = _nec2_engine_kind(binary)
+    if kind == "onec":
+        cmd = [binary, "-o", out_path, nec_path]
+    else:
+        cmd = [binary, "-i", nec_path, "-o", out_path]
+
     try:
         result = subprocess.run(
-            [binary, "-i", nec_path, "-o", out_path],
+            cmd,
             capture_output=True, text=True, timeout=timeout,
         )
         if result.returncode != 0:

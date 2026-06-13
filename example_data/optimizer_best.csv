@@ -1,4 +1,0 @@
-band,freq_mhz,active,lambda_half_m,lambda_qtr_m,wire_len_m,L_over_lhalf,R_wire_ohm,X_wire_ohm,vswr_no_cp,vswr_with_cp,Z_eff_ohm,Zcp_ohm,unun_ratio,avoidance_score,quality_rating,cp_len_m,cp_height_m,num_radials
-40m,7.1,YES,21.1121,10.5561,38.25,1.8118,268.45,261.75,58.157,2.428,374.94,,9.0,0.25,★★★ EXCELLENT,9.5,0.5,1
-20m,14.175,YES,10.5747,5.2873,38.25,3.6171,556.39,290.62,232.361,1.839,627.72,,9.0,0.2343,★★★ EXCELLENT,9.5,0.5,1
-10m,28.5,YES,5.2595,2.6298,38.25,7.2725,485.62,365.17,141.056,2.151,607.6,,9.0,0.25,★★★ EXCELLENT,9.5,0.5,1
