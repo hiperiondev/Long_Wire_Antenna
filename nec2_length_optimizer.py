@@ -3511,7 +3511,7 @@ def write_best_nec_deck(
         fh.write("EX 0 1 1 0 1.0 0.0\n")
 
         d_theta = 90.0  / max(1, n_elevation - 1)
-        d_phi   = 360.0 / max(1, n_azimuth)       # Bug 1 fix: n points span 0..360-d_phi
+        d_phi   = 360.0 / max(1, n_azimuth)
 
         # Simulate ALL bands so inactive-band impedance data is also available
         # in the output deck.  RP pattern cards are written only for active bands
@@ -3579,7 +3579,7 @@ def plot_radiation_diagrams(
     freqs_all = [cr.freq_mhz for cr in calc_rows]
 
     d_theta = 90.0  / max(1, n_elevation - 1)
-    d_phi   = 360.0 / max(1, n_azimuth)           # Bug 1 fix: n points span 0..360-d_phi
+    d_phi   = 360.0 / max(1, n_azimuth)
     elevations_deg = [i * d_theta for i in range(n_elevation)]
     azimuths_deg   = [i * d_phi   for i in range(n_azimuth)]   # last point = 360-d_phi
 
@@ -3717,7 +3717,7 @@ def plot_radiation_diagrams(
                     and "REQUESTED" not in line.upper()
                     and not stripped.startswith("CM")
                     and not stripped.startswith("*")):
-                in_rp = False           # Bug 2 fix: stop collecting for previous block immediately
+                in_rp = False
                 _rp_block_idx += 1
                 if _rp_block_idx < len(_active_freqs):
                     _cur_freq_ord = _active_freqs[_rp_block_idx]
@@ -3733,7 +3733,7 @@ def plot_radiation_diagrams(
                         parsed_patterns[_cur_freq_ord] = []
                     in_rp = True
                 else:
-                    in_rp = False   # Bug 2 fix: also reset here for out-of-range blocks
+                    in_rp = False
                 continue
 
             if in_rp and _cur_freq_ord is not None:
@@ -3745,26 +3745,7 @@ def plot_radiation_diagrams(
                         total_db = float(m.group(5))
                         bucket = parsed_patterns[_cur_freq_ord]
                         bucket.append((theta, phi, total_db))   # Bug 3 fix: removed broken dedupe guard
-                        # Bug 4 fix (North-spike / "quarter-disk" artifact):
-                        # nec2c prints an "ANTENNA INPUT PARAMETERS" line and a
-                        # "CURRENTS AND LOCATION" table (SEG/TAG/X/Y/Z/... columns)
-                        # immediately AFTER each RP block and BEFORE the next
-                        # "RADIATION PATTERNS" header. Those rows happen to start
-                        # with 5 numbers too (e.g. "SEG TAG X Y Z ..."), so
-                        # _rp_row_re matches them — SEG# becomes a bogus "theta"
-                        # (1..N_segments), TAG# becomes a bogus "phi" (≈1 or 2,
-                        # i.e. right next to North), and the Z-coordinate
-                        # (0..~1.8) becomes a bogus "dBi" value, comparable in
-                        # magnitude to the real gain. This pollutes the pattern
-                        # near phi≈0-2° across many theta angles — producing the
-                        # sharp North-pointing spike in the 2-D azimuth plot and
-                        # a thin flat "wall" (quarter-disk) artifact in the 3-D
-                        # plot for every band except the LAST one (which has no
-                        # trailing table before EOF/EN).
-                        # Fix: each RP block has exactly n_elevation*n_azimuth
-                        # rows (known from the RP card); stop collecting for
-                        # this frequency as soon as that many rows are parsed,
-                        # ignoring anything else until the next RP header.
+
                         if len(bucket) >= _expected_rows:
                             in_rp = False
                     except ValueError:
