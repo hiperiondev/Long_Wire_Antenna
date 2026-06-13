@@ -4519,340 +4519,145 @@ def plot_results(
 # CONSTRUCTION DIAGRAM
 # ═══════════════════════════════════════════════════════════════════════════
 
-def plot_construction_diagram(
-    best: "CandidateResult",
-    calc_rows: List[CalcRow],
-    unun_ratio: float,
-    out_png: str,
-    wire_height_m: float = DEFAULT_HEIGHT_M,
-    cp_height_m: float = 0.5,
-    wire_slope_end_m: Optional[float] = None,
-    wire_radius_mm: float = 1.0,
-) -> None:
+# ═══════════════════════════════════════════════════════════════════════════
+# CONSTRUCTION DIAGRAM  —  label-placement engine + drawing helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+class _LabelPlacer:
+    """Collect all Text artists, then resolve overlaps and clamp to axes limits.
+
+    Algorithm
+    ---------
+    1. Force-directed repulsion (grid of candidate positions derived from the
+       original anchor, ranked by distance from anchor).
+    2. After converging, hard-clamp every label inside the axes data bbox so
+       no part of any label box ever touches the frame.
+
+    This is language-agnostic: Spanish labels are typically longer than English
+    ones; the renderer measures each actual pixel extent.
     """
-    Render a clean, modern, human-readable PNG showing the physical layout
-    of the winning antenna (radiator + counterpoise/radials), annotated with
-    every dimension needed for construction, plus a per-band summary table.
-    """
-    if not HAS_MPL:
-        print(T("matplotlib_missing"))
-        return
 
-    # ── palette (white background, print-friendly) ─────────────────────────
-    BG       = "#ffffff"
-    PANEL    = "#ffffff"
-    GRID     = "#d8dee5"
-    TEXT     = "#1a2330"
-    SUBTEXT  = "#5a6b7a"
-    ACCENT   = "#1f7fb8"     # radiator wire
-    ACCENT2  = "#c97a1a"     # counterpoise / ground system
-    GROUND   = "#9aa7b3"
+    # Gap (data units) that must remain clear around every label box
+    _PAD = 0.08
 
-    cp_angle_deg = best.cp_angle_deg
-    slope_end = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
+    def __init__(self):
+        self._labels: list = []   # list of (Text artist, priority)
+        # priority: lower = moved last (anchored items have priority=0)
 
-    wire_len = best.wire_len_m
-    cp_len   = best.cp_len_m
+    def register(self, artist, priority: int = 5) -> None:
+        """Register a Text artist for overlap resolution."""
+        if artist is not None:
+            self._labels.append((artist, priority))
 
-    # geometry of the radiator (mirrors write_nec_deck logic)
-    z_near = wire_height_m
-    if slope_end is not None:
-        z_far = max(float(slope_end), wire_radius_mm / 1000.0)
-        rise  = z_near - z_far
-        rise  = min(rise, wire_len)
-        x_far = math.sqrt(max(0.0, wire_len ** 2 - rise ** 2))
-    else:
-        z_far = z_near
-        x_far = wire_len
+    # ------------------------------------------------------------------
+    def resolve(self, fig, ax, margin: float = 0.15) -> None:
+        """Run the full resolve + clamp pass.
 
-    # geometry of the counterpoise/ground wire — unified angle model
-    _cvl, _chr, cp_bottom_z, _cxe, _cze = _cp_geometry(
-        cp_angle_deg, cp_len, z_near, cp_height_m)
-    vert_len  = _cvl
-    horiz_rem = _chr
-    cp_top_z  = z_near
-
-    fig = plt.figure(figsize=(13, 9.5), facecolor=BG)
-
-    gs = gridspec.GridSpec(1, 1, figure=fig,
-                            left=0.07, right=0.97,
-                            top=0.97, bottom=0.07)
-
-    # ── side-view schematic ─────────────────────────────────────────────
-    ax = fig.add_subplot(gs[0, 0])
-    ax.set_facecolor(PANEL)
-
-    max_x = max(wire_len, x_far, cp_len) + 1.5
-    max_z = max(wire_height_m, z_near, z_far, cp_top_z) + 1.9
-
-    # ground line
-    ax.axhline(0, color=GROUND, linewidth=2.5, zorder=1)
-    ax.fill_between([-1.5, max_x], -0.4, 0, color=GROUND, alpha=0.35, zorder=0)
-    ax.text(-1.3, -0.22, T("construction_ground_label"), color=SUBTEXT,
-            fontsize=8.5, va="center", ha="left")
-
-    # mast / support pole at feedpoint
-    ax.plot([0, 0], [0, z_near], color="#5b6b7c", linewidth=4, zorder=2,
-            solid_capstyle="round")
-
-    # feedpoint marker
-    ax.scatter([0], [z_near], s=90, color=ACCENT, edgecolors=TEXT,
-               linewidths=1.2, zorder=5)
-    ax.annotate(T("construction_feedpoint"), xy=(0, z_near),
-                xytext=(-8, 12), textcoords="offset points",
-                fontsize=8.5, color=TEXT, ha="right", fontweight="bold")
-
-    # radiator wire (radiator/long wire)
-    ax.plot([0, x_far], [z_near, z_far], color=ACCENT, linewidth=3.2,
-            zorder=4, solid_capstyle="round",
-            label=T("construction_radiator_label"))
-    ax.scatter([x_far], [z_far], s=60, color=ACCENT, edgecolors=TEXT,
-               linewidths=1, zorder=5)
-
-    # radiator end support if sloped
-    if abs(z_far) > 0.05:
-        ax.plot([x_far, x_far], [0, z_far], color="#5b6b7c", linewidth=3,
-                zorder=2, linestyle=(0, (4, 3)))
-
-    # dimension line: radiator length
-    _dim_line(ax, (0, z_near + 1.0), (x_far, z_far + 1.0),
-              f"{T('construction_dim_radiator')}\n{wire_len:.2f} m",
-              color=ACCENT, text_color=TEXT, bg=BG)
-
-    # counterpoise / ground system
-    cp_x0 = 0
-    cp_label_total = f"{cp_len:.2f} m"
-    _cp_label_obj = None   # set in each branch; used for renderer-aware xlim expansion
-    _cp_reach_label_obj = None
-    if vert_len > 0.01:
-        # Angled/bent wire: draw angled segment then horizontal remainder
-        ax.plot([cp_x0, -_cxe], [z_near, cp_bottom_z], color=ACCENT2,
-                linewidth=3, zorder=3, linestyle=(0, (1, 0)))
-        ax.plot([-_cxe, -(_cxe + horiz_rem)], [cp_bottom_z, cp_bottom_z],
-                color=ACCENT2, linewidth=3, zorder=3,
-                label=T("construction_cp_label"))
-        ax.scatter([-(_cxe + horiz_rem)], [cp_bottom_z], s=55, color=ACCENT2,
-                   edgecolors=TEXT, linewidths=1, zorder=5)
-        # CP length label: dim line drawn entirely to the left of the mast.
-        # Start just left of x=0 so the right tick and label don't sit on top
-        # of the support-height vdim annotation (which lives at x≈-1.1).
-        _cp_label_x_end = -(_cxe + horiz_rem)
-        _cp_label_z_end = cp_bottom_z
-        _cp_dim_x_start = -0.05   # just left of mast, clear of height label
-        # Draw the CP dimension line (ticks only, no inline label) then place
-        # the label above the CP wire at near-ground height.
-        # Using z ≈ cp_bottom_z + 0.5 keeps the label well below the
-        # support-height text (which sits at z ≈ z_near/2) and well inside
-        # the plot box, regardless of CP length.
-        _dim_line(ax, (_cp_dim_x_start, z_near + 1.0), (_cp_label_x_end, _cp_label_z_end + 1.0),
-                  f"{T('construction_dim_cp')}\n{cp_label_total}",
-                  color=ACCENT2, text_color=TEXT, bg=BG, show_label=False)
-        # Place CP label near the far end of the CP wire (leftmost point),
-        # well away from the mast so it cannot overlap the support-height label.
-        _cp_txt_x = _cp_label_x_end - 0.1   # just past the far endpoint
-        _cp_label_obj = ax.text(_cp_txt_x, cp_bottom_z + 0.5,
-                f"{T('construction_dim_cp')}\n{cp_label_total}",
-                color=TEXT, fontsize=8.5, ha="right", va="center",
-                fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
-                          edgecolor=ACCENT2, alpha=0.9, linewidth=0.8))
-        if vert_len > 0.05:
-            ax.text(cp_x0 + 0.15, (z_near + cp_bottom_z) / 2,
-                    f"{cp_angle_deg:.1f}°", color=ACCENT2, fontsize=8,
-                    rotation=90, va="center", ha="left",
-                    bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
-                              edgecolor="none", alpha=0.85))
-        # Bottom ground-level reach: horizontal distance from mast to CP end
-        _cp_reach_x = _cxe + horiz_rem
-        _cp_reach_label_obj = _dim_line(ax, (0, -0.55), (-_cp_reach_x, -0.55),
-                  f"{T('construction_dim_cp_reach')}\n{_cp_reach_x:.2f} m",
-                  color=ACCENT2, text_color=TEXT, below=True, bg=BG)
-    else:
-        # Straight wire at angle
-        ax.plot([cp_x0, -_cxe], [z_near, _cze],
-                color=ACCENT2, linewidth=3, zorder=3,
-                label=T("construction_cp_label"))
-        ax.scatter([cp_x0, -_cxe], [z_near, _cze], s=55,
-                   color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
-        # Draw the CP dimension line with its label placed near the far end
-        # (text_frac close to 1.0), at z_near + 1.0 height — well above the
-        # ground-level "CP reach from mast" label and the small height-offset
-        # label, so it cannot overlap either.
-        # Draw the CP dimension line (ticks only, no inline label) then place
-        # the label at the top-left, near the feedpoint height — clear of the
-        # ground-level "CP reach from mast" label, the small height-offset
-        # label (at x ≈ -_cxe-0.9, near ground), and (after the nudge below)
-        # the support-height label.
-        _dim_line(ax, (-0.05, z_near + 1.0), (-_cxe, _cze + 1.0),
-                  f"{T('construction_dim_cp')}\n{cp_label_total}",
-                  color=ACCENT2, text_color=TEXT, bg=BG, show_label=False)
-        _cp_label_obj = ax.text(-_cxe - 0.1, z_near + 0.35,
-                f"{T('construction_dim_cp')}\n{cp_label_total}",
-                color=TEXT, fontsize=8.5, ha="right", va="center",
-                fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
-                          edgecolor=ACCENT2, alpha=0.9, linewidth=0.8))
-        # Bottom ground-level reach: horizontal distance from mast to CP end
-        _cp_reach_label_obj = _dim_line(ax, (0, -0.55), (-_cxe, -0.55),
-                  f"{T('construction_dim_cp_reach')}\n{_cxe:.2f} m",
-                  color=ACCENT2, text_color=TEXT, below=True, bg=BG)
-
-    # height annotations
-    _height_label_obj = _vdim_line(ax, -1.1, 0, z_near,
-                                   f"{T('construction_dim_height')}\n{wire_height_m:.2f} m",
-                                   color="#5b6b7c", text_color=TEXT, bg=BG)
-
-    _small_vdim_label_obj = None
-    if vert_len < 0.01:
-        if abs(_cze - 0) > 0.02 and abs(_cze - z_near) > 0.02:
-            _small_vdim_label_obj = _vdim_line(ax, -_cxe - 0.9, 0, _cze,
-                       f"{_cze:.2f} m", color=ACCENT2, text_color=TEXT,
-                       small=True, bg=BG)
-
-    # ── Renderer-aware anti-overlap: if the CP label still overlaps the
-    #    support-height label after repositioning, nudge it further left
-    #    (up to 12 × 0.3 data-unit steps ≈ 3.6 m) until clear.
-    if _cp_label_obj is not None and _height_label_obj is not None:
+        margin  – extra data-unit clearance to keep labels away from the
+                  axes frame (in addition to self._PAD).
+        """
+        if not self._labels:
+            return
         try:
             fig.canvas.draw()
             renderer = fig.canvas.get_renderer()
-            def _bboxes_overlap(a, b):
-                return (a.x0 < b.x1 and a.x1 > b.x0 and
-                        a.y0 < b.y1 and a.y1 > b.y0)
-            for _nudge_i in range(12):
-                _cp_bb = _cp_label_obj.get_window_extent(renderer=renderer)
-                _ht_bb = _height_label_obj.get_window_extent(renderer=renderer)
-                if not _bboxes_overlap(_cp_bb, _ht_bb):
-                    break
-                _cx, _cy = _cp_label_obj.get_position()
-                _cp_label_obj.set_position((_cx - 0.3, _cy))
-                if _nudge_i < 11:
-                    fig.canvas.draw()
         except Exception:
-            pass  # renderer unavailable — keep original positions
+            return   # headless / unavailable renderer — skip
 
-    # ── Anti-overlap: CP length label vs CP reach label (below) ──
-    # The CP length label can sit low enough (near-ground CP wires) to
-    # overlap the "CP reach from mast" label on the x-axis below it.
-    # Nudge the CP length label upward until clear.
-    if _cp_label_obj is not None and _cp_reach_label_obj is not None:
-        try:
-            fig.canvas.draw()
-            renderer = fig.canvas.get_renderer()
-            def _bboxes_overlap2(a, b):
-                return (a.x0 < b.x1 and a.x1 > b.x0 and
-                        a.y0 < b.y1 and a.y1 > b.y0)
-            for _nudge_j in range(12):
-                _cp_bb = _cp_label_obj.get_window_extent(renderer=renderer)
-                _rc_bb = _cp_reach_label_obj.get_window_extent(renderer=renderer)
-                if not _bboxes_overlap2(_cp_bb, _rc_bb):
-                    break
-                _cx, _cy = _cp_label_obj.get_position()
-                _cp_label_obj.set_position((_cx, _cy + 0.3))
-                if _nudge_j < 11:
+        trans_inv = ax.transData.inverted()
+        xl0, xl1 = ax.get_xlim()
+        yl0, yl1 = ax.get_ylim()
+
+        def _bbox_data(artist):
+            """Return (x0,y0,x1,y1) in data coordinates."""
+            bb = artist.get_window_extent(renderer=renderer)
+            p0 = trans_inv.transform((bb.x0, bb.y0))
+            p1 = trans_inv.transform((bb.x1, bb.y1))
+            return (min(p0[0], p1[0]), min(p0[1], p1[1]),
+                    max(p0[0], p1[0]), max(p0[1], p1[1]))
+
+        def _overlap(a, b):
+            pad = self._PAD
+            return (a[0] - pad < b[2] + pad and a[2] + pad > b[0] - pad and
+                    a[1] - pad < b[3] + pad and a[3] + pad > b[1] - pad)
+
+        def _clamp_artist(artist):
+            """Move artist so its bbox stays fully inside the axes limits."""
+            x0d, y0d, x1d, y1d = _bbox_data(artist)
+            w = x1d - x0d
+            h = y1d - y0d
+            cx, cy = artist.get_position()
+            # offset from centre to bbox origin (depends on ha/va)
+            ox = cx - x0d   # how much centre is to the right of bbox left
+            oy = cy - y0d   # how much centre is above bbox bottom
+
+            inner_xl0 = xl0 + margin
+            inner_xl1 = xl1 - margin
+            inner_yl0 = yl0 + margin
+            inner_yl1 = yl1 - margin
+
+            # clamp bbox left/right/bottom/top
+            new_x0 = max(inner_xl0, min(x0d, inner_xl1 - w))
+            new_y0 = max(inner_yl0, min(y0d, inner_yl1 - h))
+            new_cx = new_x0 + ox
+            new_cy = new_y0 + oy
+            if abs(new_cx - cx) > 1e-9 or abs(new_cy - cy) > 1e-9:
+                artist.set_position((new_cx, new_cy))
+            return _bbox_data(artist)
+
+        # Sort by priority (low priority = pinned / moved last)
+        sorted_labels = sorted(self._labels, key=lambda t: -t[1])
+
+        # Iterative repulsion: up to 60 passes
+        for _pass in range(60):
+            moved = False
+            bboxes = [_bbox_data(a) for a, _ in sorted_labels]
+            for i, (ai, pi) in enumerate(sorted_labels):
+                for j, (aj, pj) in enumerate(sorted_labels):
+                    if i >= j:
+                        continue
+                    if not _overlap(bboxes[i], bboxes[j]):
+                        continue
+                    # Push the lower-priority one (higher priority number)
+                    mover_idx = i if pi >= pj else j
+                    mover = sorted_labels[mover_idx][0]
+                    bi = bboxes[i]
+                    bj = bboxes[j]
+                    # overlap extents
+                    ox = min(bi[2], bj[2]) - max(bi[0], bj[0]) + self._PAD
+                    oy = min(bi[3], bj[3]) - max(bi[1], bj[1]) + self._PAD
+                    # push in the direction of least overlap
+                    cx_m, cy_m = mover.get_position()
+                    # direction: mover relative to the other
+                    other_idx = j if mover_idx == i else i
+                    bo = bboxes[other_idx]
+                    bm = bboxes[mover_idx]
+                    sign_x = 1 if (bm[0] + bm[2]) / 2 >= (bo[0] + bo[2]) / 2 else -1
+                    sign_y = 1 if (bm[1] + bm[3]) / 2 >= (bo[1] + bo[3]) / 2 else -1
+                    if ox <= oy:
+                        mover.set_position((cx_m + sign_x * ox, cy_m))
+                    else:
+                        mover.set_position((cx_m, cy_m + sign_y * oy))
                     fig.canvas.draw()
-        except Exception:
-            pass
+                    bboxes[mover_idx] = _bbox_data(mover)
+                    moved = True
+            if not moved:
+                break
 
-    # ── Anti-overlap: CP length label vs small "Δheight" vdim label ──
-    # When the CP wire is nearly horizontal and offset from the mast/ground,
-    # a small vertical-dimension label (e.g. "1.28 m") may sit directly below
-    # the CP length label. Nudge the CP length label upward until clear.
-    if _cp_label_obj is not None and _small_vdim_label_obj is not None:
-        try:
-            fig.canvas.draw()
-            renderer = fig.canvas.get_renderer()
-            def _bboxes_overlap3(a, b):
-                return (a.x0 < b.x1 and a.x1 > b.x0 and
-                        a.y0 < b.y1 and a.y1 > b.y0)
-            for _nudge_k in range(12):
-                _cp_bb = _cp_label_obj.get_window_extent(renderer=renderer)
-                _sv_bb = _small_vdim_label_obj.get_window_extent(renderer=renderer)
-                if not _bboxes_overlap3(_cp_bb, _sv_bb):
-                    break
-                _cx, _cy = _cp_label_obj.get_position()
-                _cp_label_obj.set_position((_cx, _cy + 0.3))
-                if _nudge_k < 11:
-                    fig.canvas.draw()
-        except Exception:
-            pass
-
-    far_height_extra = 0.0
-    if abs(z_far - z_near) > 0.05:
-        ax.plot([x_far, x_far + 0.7], [z_far, z_far], color=ACCENT,
-                linewidth=1, linestyle="--", alpha=0.8, zorder=3)
-        far_label_text = ax.text(
-            x_far + 0.85, z_far,
-            f"{T('construction_dim_far_height')}\n{z_far:.2f} m",
-            color=TEXT, fontsize=8.5, ha="left", va="center",
-            fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
-                      edgecolor=ACCENT, alpha=0.9, linewidth=0.8))
-
-        # Measure the rendered label width and convert to data units so the
-        # axes can be widened enough to fit it regardless of language/length.
+        # Final clamp: every label must stay inside the axes frame
         fig.canvas.draw()
-        renderer = fig.canvas.get_renderer()
-        bbox_px = far_label_text.get_window_extent(renderer=renderer)
-        bbox_data = ax.transData.inverted().transform(bbox_px)
-        label_width_data = bbox_data[1][0] - bbox_data[0][0]
-        far_height_extra = (x_far + 0.85 + label_width_data) - x_far
-
-    # sloped antenna: support distance (mast-to-anchor along the ground)
-    if slope_end is not None:
-        # Far-end anchor support distance (horizontal run from feed mast base
-        # to the far-end anchor point on the ground)
-        _dim_line(ax, (0, -0.55), (x_far, -0.55),
-                  f"{T('construction_dim_far_support')}\n{x_far:.2f} m",
-                  color=ACCENT, text_color=TEXT, below=True, bg=BG)
-
-    extra_right = max(2.6 if slope_end is not None else 0.0,
-                       far_height_extra + 0.3)
-    extra_below = 0.7   # always needed: CP reach dimension line at y=-0.55
-
-    # ── Measure the rendered CP label and widen the left margin to fit it ──
-    # The CP label (_cp_label_obj) is placed inside the axes data range but its
-    # bbox can still extend past the initial xlim when the CP is long.  We do a
-    # preliminary draw, measure the label extent in data units, then tighten the
-    # xlim so the label never clips against the axes frame.
-    ax.set_xlim(-max(cp_len, horiz_rem) - 1.8, max_x + extra_right)
-    ax.set_ylim(-0.9 - extra_below, max_z)
-
-    # Renderer-aware left-margin adjustment for the CP label
-    try:
-        if _cp_label_obj is not None:
-            fig.canvas.draw()
-            renderer = fig.canvas.get_renderer()
-            _cp_bbox_px = _cp_label_obj.get_window_extent(renderer=renderer)
-            _cp_bbox_data = ax.transData.inverted().transform(_cp_bbox_px)
-            _cp_label_left = _cp_bbox_data[0][0]   # leftmost data-x of the label box
-            current_xlim_left = ax.get_xlim()[0]
-            if _cp_label_left < current_xlim_left + 0.15:
-                cp_left_extra = (current_xlim_left + 0.15) - _cp_label_left
-                ax.set_xlim(current_xlim_left - cp_left_extra, max_x + extra_right)
-    except Exception:
-        pass  # if renderer is unavailable just keep the original xlim
-    ax.set_xlabel(T("construction_xlabel"), color=SUBTEXT, fontsize=9)
-    ax.set_ylabel(T("construction_ylabel"), color=SUBTEXT, fontsize=9)
-    ax.set_aspect("equal", adjustable="box")
-    ax.tick_params(colors=SUBTEXT, labelsize=8)
-    for spine in ax.spines.values():
-        spine.set_color(GRID)
-    ax.grid(True, color=GRID, linewidth=0.6, alpha=0.6)
-    leg = ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85,
-                     facecolor=PANEL, edgecolor=GRID, labelcolor=TEXT)
-
-    plt.savefig(out_png, dpi=170, bbox_inches="tight", facecolor=BG)
-    plt.close()
-    print(T("construction_saved").format(out_png))
+        for artist, _ in sorted_labels:
+            _clamp_artist(artist)
+        fig.canvas.draw()
 
 
-def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False, bg="#ffffff",
-              text_frac: float = 0.5, show_label: bool = True):
-    """Draw a dimension line with end ticks and an optional label.
+def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False,
+              bg="#ffffff", text_frac: float = 0.5, show_label: bool = True):
+    """Draw a dimension line with end ticks and an optional centred label.
 
-    text_frac   – 0.0 = label at p0, 1.0 = label at p1 (default 0.5, midpoint).
-    show_label  – set False to suppress the text box entirely (place it yourself).
+    Returns the Text artist (or None when show_label=False).
+    text_frac  – 0.0 = label at p0, 1.0 = label at p1 (default 0.5).
+    show_label – False: draw ticks/line only; caller places the label.
     """
     x0, y0 = p0
     x1, y1 = p1
@@ -4873,10 +4678,11 @@ def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False, bg="#ff
     return None
 
 
-def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False, bg="#ffffff", right: bool = False):
-    """Draw a vertical dimension line with end ticks and a side label.
+def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False,
+               bg="#ffffff", right: bool = False):
+    """Draw a vertical dimension line with end ticks and a rotated side label.
 
-    Returns the matplotlib Text artist so callers can measure or reposition it.
+    Returns the Text artist.
     """
     ax.plot([x, x], [z0, z1], color=color, linewidth=1, linestyle="--",
             alpha=0.8, zorder=3)
@@ -4885,11 +4691,301 @@ def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False, bg=
     ax.plot([x - tick, x + tick], [z1, z1], color=color, linewidth=1, alpha=0.8)
     fontsize = 7.5 if small else 8.5
     label_x = x + 0.15 if right else x - 0.15
-    _txt = ax.text(label_x, (z0 + z1) / 2, label, color=text_color, fontsize=fontsize,
-            ha="left" if right else "right", va="center", fontweight="bold", rotation=90,
-            bbox=dict(boxstyle="round,pad=0.2", facecolor=bg,
-                      edgecolor=color, alpha=0.9, linewidth=0.8))
-    return _txt
+    return ax.text(label_x, (z0 + z1) / 2, label, color=text_color,
+                   fontsize=fontsize, ha="left" if right else "right",
+                   va="center", fontweight="bold", rotation=90,
+                   bbox=dict(boxstyle="round,pad=0.2", facecolor=bg,
+                             edgecolor=color, alpha=0.9, linewidth=0.8))
+
+
+def plot_construction_diagram(
+    best: "CandidateResult",
+    calc_rows: List[CalcRow],
+    unun_ratio: float,
+    out_png: str,
+    wire_height_m: float = DEFAULT_HEIGHT_M,
+    cp_height_m: float = 0.5,
+    wire_slope_end_m: Optional[float] = None,
+    wire_radius_mm: float = 1.0,
+) -> None:
+    """
+    Render a clean, modern, human-readable PNG showing the physical layout
+    of the winning antenna (radiator + counterpoise/radials), annotated with
+    every dimension needed for construction, plus a per-band summary table.
+
+    All labels are kept inside the graphic box and resolved for overlaps
+    regardless of language (Spanish labels are longer than English ones).
+    """
+    if not HAS_MPL:
+        print(T("matplotlib_missing"))
+        return
+
+    # ── palette ───────────────────────────────────────────────────────────
+    BG      = "#ffffff"
+    PANEL   = "#ffffff"
+    GRID    = "#d8dee5"
+    TEXT    = "#1a2330"
+    SUBTEXT = "#5a6b7a"
+    ACCENT  = "#1f7fb8"   # radiator
+    ACCENT2 = "#c97a1a"   # counterpoise
+    GROUND  = "#9aa7b3"
+
+    cp_angle_deg = best.cp_angle_deg
+    slope_end = wire_slope_end_m if wire_slope_end_m is not None else best.wire_slope_end_m
+
+    wire_len = best.wire_len_m
+    cp_len   = best.cp_len_m
+
+    # ── radiator geometry ─────────────────────────────────────────────────
+    z_near = wire_height_m
+    if slope_end is not None:
+        z_far = max(float(slope_end), wire_radius_mm / 1000.0)
+        rise  = min(z_near - z_far, wire_len)
+        x_far = math.sqrt(max(0.0, wire_len ** 2 - rise ** 2))
+    else:
+        z_far = z_near
+        x_far = wire_len
+
+    # ── counterpoise geometry ─────────────────────────────────────────────
+    _cvl, _chr, cp_bottom_z, _cxe, _cze = _cp_geometry(
+        cp_angle_deg, cp_len, z_near, cp_height_m)
+    vert_len  = _cvl
+    horiz_rem = _chr
+
+    # ── axes limits — computed from geometry alone, with fixed margins ────
+    # Margins are generous enough to accommodate any label in either language.
+    # The label placer will clamp artists inside these limits afterwards.
+    LEFT_MARGIN  = max(cp_len, horiz_rem, _cxe) + 3.5
+    RIGHT_MARGIN = max(x_far, wire_len) + 3.0
+    TOP_MARGIN   = max(wire_height_m, z_near) + 2.5
+    BOT_MARGIN   = 1.6   # room for below-ground dim lines
+
+    xl0 = -LEFT_MARGIN
+    xl1 =  RIGHT_MARGIN
+    yl0 = -BOT_MARGIN
+    yl1 =  TOP_MARGIN
+
+    fig = plt.figure(figsize=(13, 9.5), facecolor=BG)
+    gs  = gridspec.GridSpec(1, 1, figure=fig,
+                             left=0.07, right=0.97,
+                             top=0.97, bottom=0.07)
+    ax  = fig.add_subplot(gs[0, 0])
+    ax.set_facecolor(PANEL)
+
+    # Set limits early so the label placer can work in stable data coordinates
+    ax.set_xlim(xl0, xl1)
+    ax.set_ylim(yl0, yl1)
+    ax.set_aspect("equal", adjustable="box")
+
+    # ── label placer ──────────────────────────────────────────────────────
+    placer = _LabelPlacer()
+
+    # ── ground ────────────────────────────────────────────────────────────
+    ax.axhline(0, color=GROUND, linewidth=2.5, zorder=1)
+    ax.fill_between([xl0, xl1], -0.4, 0, color=GROUND, alpha=0.35, zorder=0)
+    # Ground label: pinned, low priority so it moves last
+    t_ground = ax.text(xl0 + 0.2, -0.22, T("construction_ground_label"),
+                       color=SUBTEXT, fontsize=8.5, va="center", ha="left")
+    placer.register(t_ground, priority=1)
+
+    # ── feed mast ─────────────────────────────────────────────────────────
+    ax.plot([0, 0], [0, z_near], color="#5b6b7c", linewidth=4, zorder=2,
+            solid_capstyle="round")
+
+    # feedpoint dot + label
+    ax.scatter([0], [z_near], s=90, color=ACCENT, edgecolors=TEXT,
+               linewidths=1.2, zorder=5)
+    t_feed = ax.text(-0.25, z_near + 0.22, T("construction_feedpoint"),
+                     fontsize=8.5, color=TEXT, ha="right", fontweight="bold")
+    placer.register(t_feed, priority=4)
+
+    # ── radiator wire ─────────────────────────────────────────────────────
+    ax.plot([0, x_far], [z_near, z_far], color=ACCENT, linewidth=3.2,
+            zorder=4, solid_capstyle="round",
+            label=T("construction_radiator_label"))
+    ax.scatter([x_far], [z_far], s=60, color=ACCENT, edgecolors=TEXT,
+               linewidths=1, zorder=5)
+
+    # optional far-end support pole
+    if abs(z_far) > 0.05:
+        ax.plot([x_far, x_far], [0, z_far], color="#5b6b7c", linewidth=3,
+                zorder=2, linestyle=(0, (4, 3)))
+
+    # ── radiator length label: parallel to wire, above it, centred ────────
+    # Normal = 90° CCW from wire direction, always flipped to point upward.
+    _rad_dx = x_far
+    _rad_dz = z_far - z_near
+    _rad_seg = math.sqrt(_rad_dx ** 2 + _rad_dz ** 2) or 1.0
+    _nx = -_rad_dz / _rad_seg
+    _nz =  _rad_dx / _rad_seg
+    if _nz < 0:
+        _nx, _nz = -_nx, -_nz
+    # Gap large enough that the label bbox bottom edge clears the thick wire
+    _label_gap = 0.85
+    _rad_mid_x = x_far / 2 + _nx * _label_gap
+    _rad_mid_z = (z_near + z_far) / 2 + _nz * _label_gap
+    # Clamp rotation to (-90, 90] so text always reads left-to-right
+    _rad_angle_deg = math.degrees(math.atan2(_rad_dz, _rad_dx))
+    if _rad_angle_deg > 90:
+        _rad_angle_deg -= 180
+    elif _rad_angle_deg < -90:
+        _rad_angle_deg += 180
+    t_rad = ax.text(_rad_mid_x, _rad_mid_z,
+                    f"{T('construction_dim_radiator')}\n{wire_len:.2f} m",
+                    color=TEXT, fontsize=8.5, ha="center", va="center",
+                    fontweight="bold",
+                    rotation=_rad_angle_deg,
+                    rotation_mode="anchor",
+                    bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
+                              edgecolor=ACCENT, alpha=0.9, linewidth=0.8))
+    placer.register(t_rad, priority=6)
+
+    # ── counterpoise / ground system ──────────────────────────────────────
+    cp_x0 = 0
+    cp_label_total = f"{cp_len:.2f} m"
+
+    # Helper: place a label above (perpendicular offset from) a line segment.
+    # Returns the Text artist.
+    def _wire_label(ax, x0, z0, x1, z1, text, color, bg,
+                    gap=0.55, fontsize=8.5):
+        """Place text centred above the segment (x0,z0)→(x1,z1).
+
+        'Above' means in the direction of the upward-pointing perpendicular.
+        Rotation is clamped to (-90, 90] so text always reads left-to-right.
+        """
+        dx = x1 - x0; dz = z1 - z0
+        seg_len = math.sqrt(dx ** 2 + dz ** 2) or 1.0
+        # 90° CCW normal: (-dz, dx)/len
+        nx = -dz / seg_len; nz = dx / seg_len
+        if nz < 0:          # always point upward
+            nx, nz = -nx, -nz
+        mx = (x0 + x1) / 2 + nx * gap
+        mz = (z0 + z1) / 2 + nz * gap
+        # Raw wire angle in (-180, 180]
+        angle = math.degrees(math.atan2(dz, dx))
+        # Clamp so text reads left-to-right (never upside-down)
+        if angle > 90:
+            angle -= 180
+        elif angle < -90:
+            angle += 180
+        return ax.text(mx, mz, text, color=TEXT, fontsize=fontsize,
+                       ha="center", va="center", fontweight="bold",
+                       rotation=angle, rotation_mode="anchor",
+                       bbox=dict(boxstyle="round,pad=0.25", facecolor=bg,
+                                 edgecolor=color, alpha=0.9, linewidth=0.8))
+
+    if vert_len > 0.01:
+        # Bent wire: angled segment down then horizontal remainder
+        ax.plot([cp_x0, -_cxe], [z_near, cp_bottom_z],
+                color=ACCENT2, linewidth=3, zorder=3, linestyle=(0, (1, 0)))
+        ax.plot([-_cxe, -(_cxe + horiz_rem)], [cp_bottom_z, cp_bottom_z],
+                color=ACCENT2, linewidth=3, zorder=3,
+                label=T("construction_cp_label"))
+        ax.scatter([-(_cxe + horiz_rem)], [cp_bottom_z],
+                   s=55, color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
+
+        # CP length label: above the horizontal segment (or angled if no horiz)
+        if horiz_rem > 0.05:
+            # Above the horizontal segment
+            t_cp = _wire_label(ax, -_cxe, cp_bottom_z, -(_cxe + horiz_rem), cp_bottom_z,
+                               f"{T('construction_dim_cp')}\n{cp_label_total}",
+                               ACCENT2, BG, gap=0.5)
+        else:
+            # Above the angled segment
+            t_cp = _wire_label(ax, cp_x0, z_near, -_cxe, cp_bottom_z,
+                               f"{T('construction_dim_cp')}\n{cp_label_total}",
+                               ACCENT2, BG, gap=0.5)
+        placer.register(t_cp, priority=7)
+
+        # Angle annotation on the angled segment
+        if vert_len > 0.05:
+            t_ang = ax.text(cp_x0 + 0.15, (z_near + cp_bottom_z) / 2,
+                            f"{cp_angle_deg:.1f}°", color=ACCENT2, fontsize=8,
+                            rotation=90, va="center", ha="left",
+                            bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
+                                      edgecolor="none", alpha=0.85))
+            placer.register(t_ang, priority=3)
+
+        # Ground-level reach dim line
+        _cp_reach_x = _cxe + horiz_rem
+        t_reach = _dim_line(ax, (0, -0.9), (-_cp_reach_x, -0.9),
+                            f"{T('construction_dim_cp_reach')}\n{_cp_reach_x:.2f} m",
+                            color=ACCENT2, text_color=TEXT, below=True, bg=BG)
+        placer.register(t_reach, priority=5)
+
+    else:
+        # Straight wire at angle
+        ax.plot([cp_x0, -_cxe], [z_near, _cze],
+                color=ACCENT2, linewidth=3, zorder=3,
+                label=T("construction_cp_label"))
+        ax.scatter([cp_x0, -_cxe], [z_near, _cze],
+                   s=55, color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
+
+        # CP label above the wire segment
+        t_cp = _wire_label(ax, cp_x0, z_near, -_cxe, _cze,
+                           f"{T('construction_dim_cp')}\n{cp_label_total}",
+                           ACCENT2, BG, gap=0.5)
+        placer.register(t_cp, priority=7)
+
+        # Ground-level reach dim line
+        t_reach = _dim_line(ax, (0, -0.9), (-_cxe, -0.9),
+                            f"{T('construction_dim_cp_reach')}\n{_cxe:.2f} m",
+                            color=ACCENT2, text_color=TEXT, below=True, bg=BG)
+        placer.register(t_reach, priority=5)
+
+    # ── height annotations ────────────────────────────────────────────────
+    t_ht = _vdim_line(ax, -1.1, 0, z_near,
+                      f"{T('construction_dim_height')}\n{wire_height_m:.2f} m",
+                      color="#5b6b7c", text_color=TEXT, bg=BG)
+    placer.register(t_ht, priority=4)
+
+    # Small CP height offset label (straight-wire CP only)
+    if vert_len < 0.01 and abs(_cze - 0) > 0.02 and abs(_cze - z_near) > 0.02:
+        t_cpht = _vdim_line(ax, -_cxe - 0.9, 0, _cze,
+                            f"{_cze:.2f} m", color=ACCENT2, text_color=TEXT,
+                            small=True, bg=BG)
+        placer.register(t_cpht, priority=3)
+
+    # ── far-end height label (sloped radiator) ────────────────────────────
+    # Place label above and to the right of the far endpoint so it never
+    # overlaps the wire or the endpoint dot.
+    # A short diagonal leader runs from the dot to the label anchor.
+    if abs(z_far - z_near) > 0.05:
+        _ldr_x = x_far + 0.5   # leader endpoint: slightly right of dot
+        _ldr_z = z_far + 0.5   # and above it — clear of the wire
+        ax.plot([x_far, _ldr_x], [z_far, _ldr_z],
+                color=ACCENT, linewidth=1, linestyle="--", alpha=0.8, zorder=3)
+        t_fh = ax.text(_ldr_x + 0.1, _ldr_z,
+                       f"{T('construction_dim_far_height')}\n{z_far:.2f} m",
+                       color=TEXT, fontsize=8.5, ha="left", va="bottom",
+                       fontweight="bold",
+                       bbox=dict(boxstyle="round,pad=0.25", facecolor=BG,
+                                 edgecolor=ACCENT, alpha=0.9, linewidth=0.8))
+        placer.register(t_fh, priority=6)
+
+    # ── sloped: horizontal support distance ───────────────────────────────
+    if slope_end is not None:
+        t_supp = _dim_line(ax, (0, -0.9), (x_far, -0.9),
+                           f"{T('construction_dim_far_support')}\n{x_far:.2f} m",
+                           color=ACCENT, text_color=TEXT, below=True, bg=BG)
+        placer.register(t_supp, priority=5)
+
+    # ── axes decoration ───────────────────────────────────────────────────
+    ax.set_xlabel(T("construction_xlabel"), color=SUBTEXT, fontsize=9)
+    ax.set_ylabel(T("construction_ylabel"), color=SUBTEXT, fontsize=9)
+    ax.tick_params(colors=SUBTEXT, labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_color(GRID)
+    ax.grid(True, color=GRID, linewidth=0.6, alpha=0.6)
+    ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85,
+              facecolor=PANEL, edgecolor=GRID, labelcolor=TEXT)
+
+    # ── resolve all label overlaps and clamp inside the axes box ─────────
+    placer.resolve(fig, ax, margin=0.18)
+
+    plt.savefig(out_png, dpi=170, bbox_inches="tight", facecolor=BG)
+    plt.close()
+    print(T("construction_saved").format(out_png))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
