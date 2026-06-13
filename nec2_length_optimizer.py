@@ -3493,6 +3493,18 @@ def write_best_nec_deck(
 # MATPLOTLIB PLOTS
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _np_interp1(x: float, xs: list, ys: list) -> float:
+    """Simple 1-D linear interpolation (xs assumed sorted ascending)."""
+    for i in range(len(xs) - 1):
+        x0, x1 = xs[i], xs[i + 1]
+        if x0 <= x <= x1:
+            if x1 == x0:
+                return ys[i]
+            t = (x - x0) / (x1 - x0)
+            return ys[i] + t * (ys[i + 1] - ys[i])
+    return ys[-1]
+
+
 def plot_radiation_diagrams(
     best: "CandidateResult",
     calc_rows: List[CalcRow],
@@ -3646,6 +3658,7 @@ def plot_radiation_diagrams(
         )
 
         in_rp = False
+        _expected_rows = max(1, n_elevation * n_azimuth)
 
         for line in raw.splitlines():
             fm = _freq_re.search(line)
@@ -3689,6 +3702,28 @@ def plot_radiation_diagrams(
                         total_db = float(m.group(5))
                         bucket = parsed_patterns[_cur_freq_ord]
                         bucket.append((theta, phi, total_db))   # Bug 3 fix: removed broken dedupe guard
+                        # Bug 4 fix (North-spike / "quarter-disk" artifact):
+                        # nec2c prints an "ANTENNA INPUT PARAMETERS" line and a
+                        # "CURRENTS AND LOCATION" table (SEG/TAG/X/Y/Z/... columns)
+                        # immediately AFTER each RP block and BEFORE the next
+                        # "RADIATION PATTERNS" header. Those rows happen to start
+                        # with 5 numbers too (e.g. "SEG TAG X Y Z ..."), so
+                        # _rp_row_re matches them — SEG# becomes a bogus "theta"
+                        # (1..N_segments), TAG# becomes a bogus "phi" (≈1 or 2,
+                        # i.e. right next to North), and the Z-coordinate
+                        # (0..~1.8) becomes a bogus "dBi" value, comparable in
+                        # magnitude to the real gain. This pollutes the pattern
+                        # near phi≈0-2° across many theta angles — producing the
+                        # sharp North-pointing spike in the 2-D azimuth plot and
+                        # a thin flat "wall" (quarter-disk) artifact in the 3-D
+                        # plot for every band except the LAST one (which has no
+                        # trailing table before EOF/EN).
+                        # Fix: each RP block has exactly n_elevation*n_azimuth
+                        # rows (known from the RP card); stop collecting for
+                        # this frequency as soon as that many rows are parsed,
+                        # ignoring anything else until the next RP header.
+                        if len(bucket) >= _expected_rows:
+                            in_rp = False
                     except ValueError:
                         pass
 
@@ -3714,21 +3749,6 @@ def plot_radiation_diagrams(
                 all_db  = [db for (_, _, db) in rows]
                 max_db  = max(all_db)
 
-                # ── Azimuth: max-gain envelope per phi ──────────────────────
-                # For each azimuth angle φ keep the highest gain found at ANY
-                # elevation θ.  This is the standard antenna-pattern convention
-                # and correctly reveals directional patterns (e.g. the two
-                # broadside lobes of a 1.76λ wire on 20 m).  The old approach
-                # took a single horizontal slice at the θ of the global-max
-                # point; when that maximum fell near zenith (θ_nec ≈ 0–1°)
-                # the cut looked omnidirectional and hid real directionality.
-                _az_env: dict = {}   # phi_deg (rounded 2 dp) → max dBi
-                for (_t3, _p3, _db3) in rows:
-                    _pk = round(_p3, 2)
-                    if _pk not in _az_env or _db3 > _az_env[_pk]:
-                        _az_env[_pk] = _db3
-                az_data = sorted(_az_env.items(), key=lambda x: x[0])
-
                 # TOA: θ of the global-max gain point (first occurrence in
                 # parse order, i.e. lowest θ that matches within 0.1 dB)
                 best_theta = None
@@ -3736,6 +3756,46 @@ def plot_radiation_diagrams(
                     if abs(_db3 - max_db) < 0.1:
                         best_theta = _t3
                         break
+
+                # ── Azimuth: horizontal cut at the TOA elevation ────────────
+                # The azimuth pattern must be taken at a FIXED elevation angle
+                # (the take-off angle, theta = best_theta), not as a
+                # max-over-all-theta envelope (which collapses toward the
+                # near-omnidirectional zenith response and hides real
+                # low-angle directionality).
+                #
+                # FIX (spike at phi≈0/N on 40m & 20m): the previous
+                # nearest-theta-per-phi approach picked, for each phi
+                # independently, whichever theta row in the NEC2 grid was
+                # closest to theta_cut. Because the grid is not perfectly
+                # regular, most phi values snapped to theta = theta_cut±dtheta
+                # while one or two phi values (near phi=0) happened to have
+                # an exact grid theta closer to theta_cut, picking a
+                # different (and much higher-gain) row -> a 1-bin spike.
+                # Fix: for every phi, LINEARLY INTERPOLATE gain (in dB)
+                # between the two theta rows that bracket theta_cut, so the
+                # azimuth cut is at a single consistent elevation for all phi.
+                _theta_cut = best_theta if best_theta is not None else 90.0
+                _by_phi: dict = {}   # phi_deg (rounded 2 dp) -> list of (theta, db)
+                for (_t3, _p3, _db3) in rows:
+                    _pk = round(_p3, 2)
+                    _by_phi.setdefault(_pk, []).append((_t3, _db3))
+
+                az_data = []
+                for _pk, _tdb in _by_phi.items():
+                    _tdb.sort(key=lambda x: x[0])
+                    _ths = [x[0] for x in _tdb]
+                    _dbs = [x[1] for x in _tdb]
+                    if len(_ths) == 1:
+                        _val = _dbs[0]
+                    elif _theta_cut <= _ths[0]:
+                        _val = _dbs[0]
+                    elif _theta_cut >= _ths[-1]:
+                        _val = _dbs[-1]
+                    else:
+                        _val = float(_np_interp1(_theta_cut, _ths, _dbs))
+                    az_data.append((_pk, _val))
+                az_data.sort(key=lambda x: x[0])
             else:
                 max_db     = -999.0
                 az_data    = []
@@ -3829,8 +3889,18 @@ def plot_radiation_diagrams(
             r_vals = []
 
         # ── Concentric dB rings ───────────────────────────────────────
-        _ring_theta = _np.linspace(
-            math.radians(theta_min), math.radians(theta_max), 361)
+        # For a full 360° azimuth plot the ring must be a closed circle:
+        # linspace(0, 2π, 361) ends exactly at 2π which matplotlib
+        # renders as an open arc leaving a visible spoke/seam at North.
+        # Fix: for azimuth (theta_max==360) use 362 points with the last
+        # point equal to the first (0 rad) so the ring polygon is closed.
+        if theta_max == 360:
+            _ring_theta = _np.append(
+                _np.linspace(0.0, 2 * math.pi, 361, endpoint=False),
+                0.0)  # explicit closure back to 0 rad
+        else:
+            _ring_theta = _np.linspace(
+                math.radians(theta_min), math.radians(theta_max), 361)
         for ring_i in range(1, _DB_RINGS + 1):
             r_ring = ring_i * _DB_STEPS
             ax.plot(_ring_theta, [r_ring] * len(_ring_theta),
@@ -3857,8 +3927,20 @@ def plot_radiation_diagrams(
 
         # ── Lobe ──────────────────────────────────────────────────────
         if r_vals:
-            ax.fill(angles_rad, r_vals, color=fill_c, alpha=0.20, zorder=2)
-            ax.plot(angles_rad, r_vals, color=stroke,  linewidth=2.0, zorder=4)
+            # For a full 360° azimuth plot, explicitly close the lobe polygon
+            # so ax.plot does not draw a straight chord from the last sample
+            # (phi ≈ 360°−dφ or exactly 2π) back to the first (phi = 0°),
+            # which on polar axes appears as a sharp spike at North.
+            # Guard against double-closing: only append if the last angle is
+            # not already within floating-point tolerance of the first.
+            if theta_max == 360 and abs(angles_rad[-1] - angles_rad[0]) > 1e-6:
+                _angles_c = list(angles_rad) + [angles_rad[0]]
+                _r_vals_c = list(r_vals)     + [r_vals[0]]
+            else:
+                _angles_c = angles_rad
+                _r_vals_c = r_vals
+            ax.fill(_angles_c, _r_vals_c, color=fill_c, alpha=0.20, zorder=2)
+            ax.plot(_angles_c, _r_vals_c, color=stroke,  linewidth=2.0, zorder=4)
 
         # ── TOA marker ────────────────────────────────────────────────
         if toa_rad is not None and r_vals:
@@ -3873,8 +3955,14 @@ def plot_radiation_diagrams(
         ax.set_rticks([])
         ax.yaxis.set_visible(False)
         ax.set_theta_direction(-1)
-        ax.set_thetamin(theta_min)
-        ax.set_thetamax(theta_max)
+        # For a full 360° azimuth plot do NOT call set_thetamin/set_thetamax.
+        # Those activate matplotlib's "wedge mode" which renders visible axis
+        # border lines at BOTH 0° and 360°; since they are co-located at North
+        # they overlap and produce the thick spike at the top of the diagram.
+        # A default full-circle polar axes already covers 0–360° with no border.
+        if theta_max != 360:
+            ax.set_thetamin(theta_min)
+            ax.set_thetamax(theta_max)
 
         if tick_degs is not None and tick_labels is not None:
             ax.set_xticks([math.radians(a) for a in tick_degs])
@@ -4106,38 +4194,16 @@ def plot_radiation_diagrams(
                 _P  = _np.append(_P, 360.0)
                 _DB = _np.concatenate([_DB, _DB[:, :1]], axis=1)
 
-            # ── Trim degenerate pole rows from BOTH ends ──────────────────
-            # TWO separate artifacts were caused by keeping the extreme rows:
-            #
-            # 1. ZENITH POLE (theta=0°, the "upper red quarter-disk"):
-            #    At theta=0°, sin(0)=0 so X=Y=0 for ALL phi values.
-            #    Every face between the theta=0 row and theta=dθ row is a
-            #    degenerate wedge whose two "top" corners both sit at exactly
-            #    (0, 0, R).  All 72 such wedges share the same apex vertex;
-            #    their centroids project to nearly identical depths so the
-            #    painter sort orders them randomly.  Viewed from above (high
-            #    camera elevation) they render as a solid filled fan = the
-            #    red quarter-disk cap on 40m/20m.
-            #
-            # 2. HORIZON (theta=90°, the "green half-disk"):
-            #    At theta=90°, cos(90°)=0 so Z=0 for ALL phi values.
-            #    The last strip of faces lies flat at Z=0, spanning 0→360°
-            #    phi, forming a complete horizontal ring/disc coloured by the
-            #    horizon gain value (often green in turbo for ~-15 dB).
-            #
-            # Fix: trim both ends before building the surface mesh.
-            # Use 4×dθ at the apex (more aggressive than the old 2×dθ) to
-            # fully eliminate near-singular wedge geometry on high-TOA patterns
-            # (40m, 20m) where many phi rows converge near the peak-gain
-            # direction.  4×dθ ≈ 5° at typical NEC2 resolution — negligible
-            # visual impact on the pattern shape.
+            # ── Trim ONLY the exact horizon row (theta=90°) ───────────────
+            # At theta=90°, cos(90°)=0 → Z=0 for all phi, making the bottom
+            # ring a flat disc at ground level. Keep it trimmed as before.
+            # Do NOT trim zenith rows — instead we handle them with an apex fan.
             _dtheta = (_thetas_set[1] - _thetas_set[0]
                        if len(_thetas_set) > 1 else 1.25)
-            _pole_trim     = 4.0 * _dtheta   # trim apex rows up to this angle (was 2×)
-            _horizon_trim  = 90.0 - 2.0 * _dtheta  # trim near-horizon rows
-            _keep_mask = (_T > _pole_trim) & (_T < _horizon_trim)
+            _horizon_trim  = 90.0 - 0.5 * _dtheta   # trim only the theta=90° row
+            _keep_mask = _T < _horizon_trim
             if _keep_mask.sum() < 2:          # safety: always keep ≥2 rows
-                _keep_mask = (_T > _T[0]) & (_T < _T[-1])
+                _keep_mask = _T < _T[-1]
             _T  = _T[_keep_mask]
             _DB = _DB[_keep_mask, :]
 
@@ -4269,10 +4335,52 @@ def plot_radiation_diagrams(
                              _DB[_fi+1, _fj+1] + _DB[_fi,   _fj+1]) / 4.0
                     _all_colors.append(_cmap(_norm(_db_f)))
 
-            # Sort back-to-front: largest depth (furthest) drawn first.
+            # ── Zenith apex cap: triangles from single apex to first ring ──
+            # ROOT CAUSE of the "quarter-disk" on 40m/20m:
+            # When zenith rows (theta≈0) were TRIMMED, the open top rim was a
+            # circle at theta=pole_trim facing the camera. Back-face culling
+            # could not hide it because those faces ARE front-facing from above.
+            # They rendered as a solid filled disk cap.
+            #
+            # CORRECT FIX: do NOT trim zenith rows. Keep theta=0 in the mesh.
+            # The pole-averaging above already collapses all DB values at
+            # theta=0 to a single mean → all (X,Y,Z) at theta=0 converge to
+            # a single apex point (0,0,R_apex).  Instead of quad faces from
+            # theta=0 to theta=dtheta (which are degenerate wedges all sharing
+            # the same two "top" vertices), build an explicit fan of TRIANGLES
+            # from the apex point to successive vertex pairs on the theta=dtheta
+            # ring. Triangle fans have well-defined per-face normals and their
+            # centroids are spread across 3D space, so depth sorting works
+            # perfectly with no disk artifact.
+            # Step 1: remove the degenerate quads in row 0 (already in _all_verts
+            # but they were built from the unchanged _X/_Y/_Z which now has
+            # theta=0 collapsed). We rebuild only the apex triangles instead.
+            # The quad loop above starts at _fi=0 so it already added row-0 quads;
+            # we discard those and replace with apex triangles.
+            if _nt >= 2:
+                # Discard the first _np2-1 entries (row-0 degenerate quads)
+                _all_verts  = _all_verts[_np2-1:]
+                _all_depths = _all_depths[_np2-1:]
+                _all_colors = _all_colors[_np2-1:]
+                # Build apex fan
+                _apex = _np.array([_X[0, :].mean(), _Y[0, :].mean(), _Z[0, :].mean()])
+                _apex_db = float(_DB[0, :].mean())
+                for _fj in range(_np2 - 1):
+                    _tri = _np.array([
+                        _apex,
+                        [_X[1, _fj],   _Y[1, _fj],   _Z[1, _fj]  ],
+                        [_X[1, _fj+1], _Y[1, _fj+1], _Z[1, _fj+1]],
+                    ])
+                    _all_verts.append(_tri)
+                    _all_depths.append(float(_np.dot(_tri.mean(axis=0), _cam_in)))
+                    _db_tri = (_apex_db + _DB[1, _fj] + _DB[1, _fj+1]) / 3.0
+                    _all_colors.append(_cmap(_norm(_db_tri)))
+
+            # Sort all faces (body quads + apex triangles) back-to-front:
+            # largest depth (furthest from camera) drawn first.
             _so = _np.argsort(-_np.array(_all_depths))
             _surf_poly = _P3C(
-                [_all_verts[_k] for _k in _so],
+                [_all_verts[_k]  for _k in _so],
                 facecolors=[_all_colors[_k] for _k in _so],
                 linewidths=0, edgecolors="none",
             )
