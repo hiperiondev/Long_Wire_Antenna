@@ -1735,6 +1735,12 @@ def parse_nec2_output(filepath: str, debug: bool = False,
     with open(filepath, 'r', errors='replace') as fh:
         text = fh.read()
 
+    # Normalize line endings: some NEC2 engines (e.g. OpenNEC/onec on
+    # Windows) emit CRLF, others (nec2c on Linux) emit LF.  Stripping the
+    # carriage return keeps every regex below behaving identically
+    # regardless of which engine/platform produced the .out file.
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+
     run._has_rp_card = bool(
         re.search(r'DATA\s+CARD[^\n]*\bRP\b', text, re.IGNORECASE) or
         re.search(r'^\s*RP\b',                text, re.IGNORECASE | re.MULTILINE)
@@ -1853,6 +1859,30 @@ def parse_nec2_output(filepath: str, debug: bool = False,
 
         fp.vswr50 = fp.compute_vswr50()
         run.freqs.append(fp)
+
+    # ── Sanity check: same (R, X) reused across multiple distinct
+    #    frequencies almost certainly means the per-frequency blocks were
+    #    not correctly split (the parser extracted the same impedance line
+    #    for every FR/RP block).  Different antenna lengths/frequencies
+    #    practically never produce identical impedance to 2 decimals, so
+    #    treat any such duplicates as a parse failure rather than letting
+    #    them silently masquerade as valid NEC2 results.
+    if len(run.freqs) > 1:
+        seen: Dict[Tuple[float, float], List[int]] = {}
+        for i, fp in enumerate(run.freqs):
+            seen.setdefault((round(fp.R_ohm, 2), round(fp.X_ohm, 2)), []).append(i)
+        for (r_val, x_val), idxs in seen.items():
+            if len(idxs) > 1 and not (r_val == 0.0 and x_val == 0.0):
+                freqs_involved = {run.freqs[i].freq_mhz for i in idxs}
+                if len(freqs_involved) > 1:
+                    for i in idxs:
+                        run.freqs[i].R_ohm = float('nan')
+                        run.freqs[i].X_ohm = float('nan')
+                        run.freqs[i].vswr50 = 999.0
+                    if debug:
+                        print(f"  DEBUG: duplicate impedance ({r_val}, {x_val}) "
+                              f"found across frequencies {sorted(freqs_involved)} "
+                              f"— marking as parse failure (NEC2-MISS).")
 
     return run
 
