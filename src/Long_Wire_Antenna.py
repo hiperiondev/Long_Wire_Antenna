@@ -15096,18 +15096,25 @@ def _launch_gui() -> None:
                 return
             if not d:
                 return
+            is_air = d.get("core_type") == "air"
+            draw_fn = unun_solenoid_png if is_air else unun_toroid_png
+            default_name = "unun_solenoid.png" if is_air else "unun_toroid.png"
             path = filedialog.asksaveasfilename(
                 title=title, defaultextension=".png",
                 initialdir=self._outdir_var.get().strip() or os.getcwd(),
-                initialfile="unun_toroid.png",
+                initialfile=default_name,
                 filetypes=[("PNG image", "*.png"), ("All files", "*")])
             if not path:
                 return
             try:
-                unun_toroid_png(d, path, lang=self._ui_lang, dpi=200)
-                messagebox.showinfo(title, self.t("ut_dia_saved", file=path))
+                out = draw_fn(d, path, lang=self._ui_lang, dpi=200)
             except Exception as e:
                 messagebox.showerror(title, str(e))
+                return
+            if not out:
+                messagebox.showerror(title, self.t("ut_dia_err", e=self.t("ut_dia_none")))
+                return
+            messagebox.showinfo(title, self.t("ut_dia_saved", file=out))
 
         # ── Transmatch page ───────────────────────────────────────────────
 
