@@ -324,6 +324,23 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "de R y no describe la deriva de X.  Usar --converge para medirla."),
         "it": '  X_ant è stampata SENZA incertezza: la percentuale sopra è un modello di R e non descrive la deriva di X.  Eseguire --converge per misurarla.',
     },
+    "report_source_offset_note": {
+        "en": ("  Source position: EX 0 1 1 0 excites the CENTRE of segment 1 of wire 1, "
+               "i.e. half a segment ({0:.2f} electrical degrees at {1} seg/half wave) away "
+               "from the radiator/counterpoise junction, not in the feed gap itself.  "
+               "Segment lengths are matched on both sides of the junction, but this "
+               "residual offset remains and biases X_ant slightly."),
+        "es": ("  Posición de la fuente: EX 0 1 1 0 excita el CENTRO del segmento 1 del hilo 1, "
+               "es decir a media longitud de segmento ({0:.2f} grados eléctricos con {1} "
+               "seg/media onda) de la unión radiador/contrapeso, no en el hueco de "
+               "alimentación.  Las longitudes de segmento se igualan a ambos lados de la "
+               "unión, pero queda esa asimetría residual, que sesga ligeramente X_ant."),
+        "it": ("  Posizione della sorgente: EX 0 1 1 0 eccita il CENTRO del segmento 1 del filo 1, "
+               "cioè a mezza lunghezza di segmento ({0:.2f} gradi elettrici con {1} seg/mezza "
+               "onda) dalla giunzione radiatore/contrappeso, non nel gap di alimentazione.  Le "
+               "lunghezze dei segmenti sono pareggiate ai due lati della giunzione, ma questa "
+               "asimmetria residua rimane e altera leggermente X_ant."),
+    },
     "report_converge_section": {
         "en": "SEGMENTATION CONVERGENCE CHECK",
         "es": "COMPROBACIÓN DE CONVERGENCIA DE SEGMENTACIÓN",
@@ -1172,6 +1189,25 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "Candidates not dominated on both VSWR-penalty and avoidance score.",
         "es": "Candidatos no dominados en penalización ROS y puntuación de evitación.",
         "it": 'Candidati non dominati sia nella penalità ROS sia nel punteggio di evitamento.',
+    },
+    "report_pareto_collapsed": {
+        "en": ("  {0} front members collapse into {1} distinct trade-offs "
+               "({2} exact ties hidden).  A tie on BOTH axes is non-dominated by "
+               "definition; in empirical mode the impedance does not depend on the "
+               "counterpoise, so every CP length ties by construction."),
+        "es": ("  {0} miembros del frente se colapsan en {1} compromisos distintos "
+               "({2} empates exactos ocultos).  Un empate en AMBOS ejes es no dominado "
+               "por definición; en modo empírico la impedancia no depende del "
+               "contrapeso, así que todos los contrapesos empatan por construcción."),
+        "it": ("  {0} membri del fronte si riducono a {1} compromessi distinti "
+               "({2} pareggi esatti nascosti).  Un pareggio su ENTRAMBI gli assi è non "
+               "dominato per definizione; in modalità empirica l'impedenza non dipende "
+               "dal contrappeso, quindi ogni lunghezza di CP pareggia per costruzione."),
+    },
+    "report_pareto_tie": {
+        "en": "+{0} tied: wire {1} · cp {2}",
+        "es": "+{0} empatados: hilo {1} · cp {2}",
+        "it": "+{0} pari merito: filo {1} · cp {2}",
     },
     "report_best_header": {
         "en": "BEST CANDIDATE — DETAILED BREAKDOWN",
@@ -3067,6 +3103,16 @@ TRANSMATCH_SRF_MARGIN = 1.5   # SRF must exceed 1.5 x f_max
 # X_winding is not much larger than |Z_antenna| the tap is loaded by the coil
 # rather than transforming through it; below this ratio the row is flagged.
 TRANSMATCH_SHUNT_RATIO_MIN = 10.0
+# A single SHUNT reactance cancels the susceptance of the transformed load, so
+# it leaves the port looking at (R'^2 + X'^2)/R' instead of R'.  That is only a
+# match while X' stays small; above this residual SWR the shunt branch must be
+# presented as "reactance cancellation", not as an alternative to the series
+# branch (whose SWR figures the tap table publishes).
+TRANSMATCH_SHUNT_SWR_MAX = 1.5
+
+# Shortest radiator the search is allowed to consider, in metres.  Also the
+# clamp applied when the wire window is derived from --wire-len ± --margin.
+WIRE_LEN_FLOOR_M = 1.0
 
 DEFAULT_HEIGHT_M = 8.0      # antenna height above ground (radiator + counterpoise)
 AUTO_UNUN_SEED = 9.0        # seed ratio for the first sweep; the optimiser
@@ -5370,6 +5416,21 @@ def rank_results(results: List[CandidateResult]) -> List[CandidateResult]:
     return sorted(results, key=lambda r: (not r.nec2_ok, r.score_combined))
 
 
+def _fmt_len_set(vals: List[float], max_items: int = 6) -> str:
+    """Compact "1.000 / 1.500 / … (n values, 1.000–9.000 m)" for tied rows.
+
+    Used by the Pareto listing to summarise the geometries collapsed into one
+    line without printing seventeen near-identical rows.
+    """
+    if not vals:
+        return "—"
+    if len(vals) == 1:
+        return f"{vals[0]:.3f} m"
+    if len(vals) <= max_items:
+        return " / ".join(f"{v:.3f}" for v in vals) + " m"
+    return (f"{len(vals)} values, {vals[0]:.3f}–{vals[-1]:.3f} m")
+
+
 def pareto_front(results: List[CandidateResult]) -> List[CandidateResult]:
     """
     Return Pareto-optimal candidates: those not dominated on
@@ -5816,7 +5877,38 @@ def write_report(
     if _mixed_spw_pareto:
         ln("WARNING: Pareto rows below were not all published at the same "
            "segmentation density — see the trailing 'spw=' tag on each row.")
-    for rank, r in enumerate(pareto_ranked, 1):
+    # ── Collapse exact ties ──────────────────────────────────────────────
+    # A tie on BOTH Pareto axes is non-dominated by definition, so the raw
+    # front is padded with candidates that are mathematically distinct and
+    # informationally identical.  In empirical mode the impedance does not
+    # depend on the counterpoise at all, so every CP length ties by
+    # construction and the front degenerates into wires × counterpoises (a
+    # measured run produced 102 rows that were 6 wires × 17 CPs).  Rows are
+    # therefore grouped by their exact (vswr_penalty, avoidance) pair: one
+    # line per group, with the tied geometries summarised after it.  The
+    # returned `pareto` list itself is untouched — this is presentation only,
+    # and the scatter plot still shows every point.
+    _TIE_Q = 1e-9
+    _groups: List[Tuple[Tuple[float, float], List[CandidateResult]]] = []
+    _seen: Dict[Tuple[int, int], int] = {}
+    for r in pareto_ranked:
+        _key = (int(round(r.score_vswr_raw / _TIE_Q)),
+                int(round(r.score_avoidance_active / _TIE_Q)))
+        _pos = _seen.get(_key)
+        if _pos is None:
+            _seen[_key] = len(_groups)
+            _groups.append(((r.score_vswr_raw, r.score_avoidance_active), [r]))
+        else:
+            _groups[_pos][1].append(r)
+
+    _collapsed = sum(len(g) - 1 for _, g in _groups)
+    if _collapsed:
+        ln(T("report_pareto_collapsed").format(len(pareto_ranked),
+                                               len(_groups), _collapsed))
+        lines.append("")
+
+    for rank, (_axes, _tied) in enumerate(_groups, 1):
+        r = _tied[0]           # representative = best combined score in group
         band_cols = "  ".join(
             f"{r.band_vswr.get(b, 999):7.2f}" for b in bands
         )
@@ -5830,6 +5922,12 @@ def write_report(
             f"  avoid_all={r.score_avoidance:.4f}"
             f"{_spw_tag}"
         )
+        if len(_tied) > 1:
+            _tw = sorted({round(t.wire_len_m, 3) for t in _tied})
+            _tc = sorted({round(t.cp_len_m, 3) for t in _tied})
+            ln("      " + T("report_pareto_tie").format(
+                len(_tied) - 1,
+                _fmt_len_set(_tw), _fmt_len_set(_tc)))
 
     # ── BEST CANDIDATE DETAIL ────────────────────────────────────────────
     if ranked:
@@ -5960,6 +6058,12 @@ def write_report(
                 ln(T("report_imp_precision_note_x").format(_unc_tab_x))
             else:
                 ln(T("report_imp_precision_note_x_none"))
+            # The deck feeds the centre of segment 1, which is half a segment
+            # away from the junction the rest of the pipeline works so hard to
+            # keep symmetric.  Half a segment is (lambda/2)/spw / 2 = lambda/(4·spw),
+            # i.e. 90/spw electrical degrees, independent of the band.
+            ln(T("report_source_offset_note").format(
+                (90.0 / _spw_tab) if _spw_tab else float("nan"), _spw_tab))
         ln(f"  {'Band':>8}  {'freq MHz':>9}  "
            f"{'R_ant Ω':>14}  {'X_ant Ω':>14}  {'|Z_ant|Ω':>10}  "
            f"{'R_tx Ω':>8}  {'X_tx Ω':>8}  {'|Z_tx|Ω':>9}  "
@@ -6125,7 +6229,18 @@ def export_best_csv(
 
     Column notes:
       vswr_no_cp   — antenna-side VSWR (no UnUn, ALWAYS the empirical formula,
-                     no CP correction — regardless of R_wire_source)
+                     no CP correction — regardless of R_wire_source).  Kept
+                     empirical on purpose: it is the "bare wire before the
+                     transformer" reference, and on an NEC2 row the stored
+                     impedance already includes the counterpoise, so deriving
+                     it from R_wire_ohm would silently change what the column
+                     means.  Because that makes a single row mix provenances,
+                     the mixture is now stated IN the row rather than only in
+                     this docstring — see vswr_no_cp_source.
+      vswr_no_cp_source — provenance of vswr_no_cp.  Always "empirical"; emitted
+                     as a column so a reader (or the UnUn/Transmatch loader)
+                     can compare it against R_wire_source per row instead of
+                     having to know this convention.
       vswr_with_cp — Tx-side VSWR after UnUn (best stored impedance or empirical fallback)
       R_wire_ohm / X_wire_ohm — antenna-side impedance (NEC2 if available, else
                      empirical — see R_wire_source for which one this row used)
@@ -6140,7 +6255,8 @@ def export_best_csv(
         "band", "freq_mhz", "active", "lambda_half_m", "lambda_qtr_m",
         "wire_len_m", "L_over_lhalf", "R_wire_ohm", "X_wire_ohm",
         "R_wire_source",
-        "vswr_no_cp", "vswr_with_cp", "Z_eff_ohm", "Zcp_ohm",
+        "vswr_no_cp", "vswr_no_cp_source",
+        "vswr_with_cp", "Z_eff_ohm", "Zcp_ohm",
         "unun_ratio", "avoidance_score", "quality_rating",
         "cp_len_m", "cp_height_m", "num_radials",
     ]
@@ -6229,6 +6345,10 @@ def export_best_csv(
                 "X_wire_ohm":     round(X, 2),
                 "R_wire_source":  r_wire_source,
                 "vswr_no_cp":     round(vswr_no, 3),
+                # Constant by construction (see the docstring).  Written per
+                # row so an "R_wire_source=nec2 / vswr_no_cp_source=empirical"
+                # row is self-describing instead of looking like one number.
+                "vswr_no_cp_source": "empirical",
                 "vswr_with_cp":   _recompute_vswr(R, X, unun_ratio)
                                   if cr.active else "",
                 "Z_eff_ohm":      round(math.hypot(R, X), 2),
@@ -9432,6 +9552,31 @@ def transmatch_design(taps: List[Dict[str, object]],
         b = (x_p / denom) if denom else 0.0
         sh_l_uh = (-1.0 / (w * b)) * 1e6 if b < 0 else None
         sh_c_pf = (b / w) * 1e12 if b > 0 else None
+        # ── What the shunt element ACTUALLY leaves at the port ────────────
+        # A single shunt reactance across a SERIES load r_p + j·x_p cancels the
+        # susceptance, not the reactance: the port is left looking at the
+        # parallel-equivalent resistance
+        #
+        #     R_sh = (r_p² + x_p²) / r_p = r_p · (1 + (x_p/r_p)²)
+        #
+        # and NOT at r_p.  Since r_p ≈ z0 by construction, the residual is
+        # z0·(1 + Q²) with Q = x_p/r_p, i.e. the match only lands on z0 when
+        # x_p is small compared with r_p.  The previous code published the
+        # shunt L/C next to `swr`/`swr_5pct`, both of which are computed for
+        # SERIES compensation, with nothing to say the shunt branch does not
+        # reach them.  The real figure is computed here so the report can show
+        # it instead of implying the two branches are equivalent.
+        if denom > 0 and r_p > 0:
+            sh_r_eff = denom / r_p
+            _gsh = _gamma_from_z(sh_r_eff, 0.0, z0)
+            sh_swr = (1.0 + _gsh) / (1.0 - _gsh) if _gsh < 1 else 999.0
+        else:
+            sh_r_eff = float("nan")
+            sh_swr = float("nan")
+        # The shunt branch is only a genuine match while the residual SWR stays
+        # inside the same band the series branch is judged by.
+        sh_matches = bool(math.isfinite(sh_swr)
+                          and sh_swr <= TRANSMATCH_SHUNT_SWR_MAX)
 
         x5 = 0.05 * x_p                 # residual after 95 % compensation
         g5 = _gamma_from_z(r_p, x5, z0)
@@ -9471,6 +9616,7 @@ def transmatch_design(taps: List[Dict[str, object]],
             "x_transformed": x_p,
             "ser_l_uh": ser_l_uh, "ser_c_pf": ser_c_pf,
             "sh_l_uh": sh_l_uh, "sh_c_pf": sh_c_pf,
+            "sh_r_eff": sh_r_eff, "sh_swr": sh_swr, "sh_matches": sh_matches,
             "ser_l_nh": (round(ser_l_uh * 1000.0) if ser_l_uh else None),
             "ser_c_e24": (e24_snap(ser_c_pf) if ser_c_pf else None),
             "sh_l_nh": (round(sh_l_uh * 1000.0) if sh_l_uh else None),
@@ -9525,6 +9671,10 @@ def transmatch_design(taps: List[Dict[str, object]],
     x_wind_total = (2.0 * math.pi * f_max * 1e6 * l_uh * 1e-6
                     if (f_max > 0 and math.isfinite(l_uh)) else float("nan"))
     shunt_warn_bands = [str(r["band"]) for r in rows if not r["wind_ok"]]
+    # Bands where the SHUNT compensation branch cancels the reactance but does
+    # not land on z0 (see TRANSMATCH_SHUNT_SWR_MAX).  Reported separately from
+    # shunt_warn_bands, which is about the WINDING loading the port.
+    shunt_comp_warn_bands = [str(r["band"]) for r in rows if not r["sh_matches"]]
     coil_ok = bool(l_ok and srf_ok and not shunt_warn_bands)
 
     return {
@@ -9554,6 +9704,8 @@ def transmatch_design(taps: List[Dict[str, object]],
             "bands_above_srf": bands_above_srf,
             "x_wind_total_ohm": x_wind_total,
             "shunt_warn_bands": shunt_warn_bands,
+            "shunt_comp_warn_bands": shunt_comp_warn_bands,
+            "shunt_comp_swr_max": TRANSMATCH_SHUNT_SWR_MAX,
             "shunt_ratio_min": TRANSMATCH_SHUNT_RATIO_MIN,
             "coil_ok": coil_ok,
         },
@@ -10463,9 +10615,31 @@ def main() -> None:
             and args.wire_min > args.wire_max:
         _bad.append(f"--wire-min ({args.wire_min}) must be ≤ --wire-max ({args.wire_max})")
 
+    # The 1.0 m clamp below only applies to the AUTO-derived window
+    # (--wire-len ± --margin); an explicit --wire-min bypassed it entirely.
+    # In NEC2 mode a zero-length radiator at least fails loudly (nec2c errors
+    # out and the candidate is discarded), but the empirical branch evaluates
+    # a 0 m antenna without a murmur: ratio_l = 0 → cos² = 1 → R = 4000 Ω,
+    # X = 0, i.e. a perfectly well-behaved-looking row for an antenna that
+    # does not exist.  Both bounds are therefore floored here.
+    for _name, _val in (("--wire-min", args.wire_min),
+                        ("--wire-max", args.wire_max)):
+        if _val is not None and _val < WIRE_LEN_FLOOR_M:
+            _bad.append(
+                f"{_name} must be ≥ {WIRE_LEN_FLOOR_M} m (got {_val}); a radiator "
+                f"shorter than that is not a physical antenna and the empirical "
+                f"model would still score it"
+            )
+
     if args.cp_min is not None and args.cp_max is not None \
             and args.cp_min > args.cp_max:
         _bad.append(f"--cp-min ({args.cp_min}) must be ≤ --cp-max ({args.cp_max})")
+
+    # A counterpoise MAY legitimately be absent (--no-counterpoise collapses
+    # the axis to 0 m), so 0 is allowed here — but a negative length is not.
+    for _name, _val in (("--cp-min", args.cp_min), ("--cp-max", args.cp_max)):
+        if _val is not None and _val < 0:
+            _bad.append(f"{_name} must be ≥ 0 m (got {_val})")
 
     if args.height is not None and args.height <= _HEIGHT_HARD_FLOOR_M:
         _bad.append(
@@ -10608,7 +10782,7 @@ def main() -> None:
         ref_wire = args.wire_len
         print(T("search_margin").format(_MARGIN, "--wire-len", ref_wire))
         if args.wire_min is None:
-            args.wire_min = max(1.0, round(ref_wire - _MARGIN, 3))
+            args.wire_min = max(WIRE_LEN_FLOOR_M, round(ref_wire - _MARGIN, 3))
             print(T("wire_min").format(args.wire_min))
         if args.wire_max is None:
             args.wire_max = round(ref_wire + _MARGIN, 3)
@@ -11118,6 +11292,22 @@ def main() -> None:
         out: List[CandidateResult] = []
         for _c in cands:
             _new = _copy.copy(_c)
+            # copy.copy() is SHALLOW: every dict/list field is still the very
+            # object the source candidate holds.  The three rebuilt below were
+            # replaced wholesale, but band_R_ant, band_X_ant, band_imp_src,
+            # band_cp_src, band_gain_max, band_toa and band_gain_toa stayed
+            # aliased.  That is inert today only because nothing mutates them
+            # afterwards and the source list is dropped — a single in-place
+            # update anywhere downstream would silently corrupt the candidate
+            # this one was copied from (and, transitively, every re-score in
+            # the same chain).  Detach them all up front, by introspection, so
+            # a field added to CandidateResult later is covered automatically
+            # instead of inheriting the bug.
+            for _fname, _fval in list(vars(_new).items()):
+                if isinstance(_fval, dict):
+                    setattr(_new, _fname, dict(_fval))
+                elif isinstance(_fval, list):
+                    setattr(_new, _fname, list(_fval))
             _new.band_vswr = {}
             _new.band_R_tx = {}
             _new.band_X_tx = {}
@@ -12331,7 +12521,9 @@ def _launch_gui() -> None:
             "utt_serc":           "Series C E24 (pF)",
             "utt_shl":            "Shunt L (nH)",
             "utt_shc":            "Shunt C E24 (pF)",
-            "utt_swr5":           "SWR (5 % resid.)",
+            "utt_shr":            "R after shunt (Ω)",
+            "utt_shswr":          "SWR shunt (real)",
+            "utt_swr5":           "SWR series (5 % resid.)",
             # Coil summary labels
             "utk_pitch":          "Winding pitch (mm/turn)",
             "utk_n":              "Total turns N",
@@ -12364,6 +12556,10 @@ def _launch_gui() -> None:
             "utk_shunt_bad":      ("! WINDING LOADING: the turns below the tap shunt the antenna "
                                    "port with less than {r}x |Z| on {b}; the transformed values "
                                    "for those bands are optimistic."),
+            "utk_shunt_comp_bad": ("! SHUNT BRANCH: a single shunt L/C cancels the susceptance, not "
+                                   "the reactance: it leaves the port at (R'^2+X'^2)/R', which is "
+                                   "SWR > {s} on {b}. Treat those shunt values as reactance "
+                                   "cancellation, not as a match — use the series branch."),
             "utk_above":          ("Note: {n} turns hang above the highest tap, open-circuit. "
                                    "They form a coupled stub that this model does not include."),
             "lang_switch":        "ES",
@@ -12723,7 +12919,9 @@ def _launch_gui() -> None:
             "utt_serc":           "C serie E24 (pF)",
             "utt_shl":            "L paralelo (nH)",
             "utt_shc":            "C paralelo E24 (pF)",
-            "utt_swr5":           "ROE (5 % resid.)",
+            "utt_shr":            "R tras paralelo (Ω)",
+            "utt_shswr":          "ROE paralelo (real)",
+            "utt_swr5":           "ROE serie (5 % resid.)",
             # Resumen de la bobina
             "utk_pitch":          "Paso del bobinado (mm/espira)",
             "utk_n":              "Espiras totales N",
@@ -12753,6 +12951,10 @@ def _launch_gui() -> None:
             "utk_shunt_bad":      ("! CARGA DEL BOBINADO: las espiras por debajo de la toma ponen "
                                    "en paralelo con el puerto de antena menos de {r}x |Z| en {b}; "
                                    "los valores transformados de esas bandas son optimistas."),
+            "utk_shunt_comp_bad": ("! RAMA PARALELO: un solo L/C en paralelo cancela la susceptancia, "
+                                   "no la reactancia: deja el puerto en (R'^2+X'^2)/R', lo que da "
+                                   "ROE > {s} en {b}. Esos valores de paralelo son cancelación de "
+                                   "reactancia, NO adaptación — use la rama serie."),
             "utk_above":          ("Nota: {n} espiras quedan por encima de la toma más alta, al "
                                    "aire. Forman un stub acoplado que este modelo no incluye."),
             "utk_wire":           "Longitud total de hilo",
@@ -13087,7 +13289,9 @@ def _launch_gui() -> None:
             "utt_serc": 'C serie E24 (pF)',
             "utt_shl": 'L derivazione (nH)',
             "utt_shc": 'C derivazione E24 (pF)',
-            "utt_swr5": 'ROS (5 % resid.)',
+            "utt_shr": 'R dopo derivazione (Ω)',
+            "utt_shswr": 'ROS derivazione (reale)',
+            "utt_swr5": 'ROS serie (5 % resid.)',
             "utk_pitch": 'Passo avvolgimento (mm/spira)',
             "utk_n": 'Spire totali N',
             "utk_len": 'Lunghezza avvolgimento',
@@ -13111,6 +13315,7 @@ def _launch_gui() -> None:
             "utk_srf_bad": "! AUTORISONANZA: la SRF di {srf} MHz è inferiore a {need} MHz. Sopra la SRF l'avvolgimento non è più un autotrasformatore e il modello di presa R/n^2 non è valido. Bande interessate: {b}. Usare un supporto più grande, una spaziatura maggiore o una bobina separata per banda.",
             "utk_srf_floor": "! Non è stato possibile applicare il limite di autorisonanza: l'induttanza di porta e il margine della presa richiedono già {n} spire. Questo supporto non può coprire queste bande con una sola bobina.",
             "utk_shunt_bad": "! CARICO DELL'AVVOLGIMENTO: le spire sotto la presa derivano la porta dell'antenna con meno di {r}x |Z| su {b}; i valori trasformati per quelle bande sono ottimistici.",
+            "utk_shunt_comp_bad": "! RAMO IN DERIVAZIONE: un solo L/C in derivazione cancella la suscettanza, non la reattanza: lascia la porta a (R'^2+X'^2)/R', cioè ROS > {s} su {b}. Quei valori sono cancellazione di reattanza, NON adattamento — usare il ramo serie.",
             "utk_above": 'Nota: {n} spire pendono sopra la presa più alta, a circuito aperto. Formano uno stub accoppiato che questo modello non include.',
             "lang_switch": 'EN',
             "footer_author": "Autore: Emiliano Gonzalez (LU3VEA) — lu3vea@gmail.com",
@@ -15510,8 +15715,10 @@ def _launch_gui() -> None:
             self._tm_ctree = self._ut_make_tree(
                 comp_lf,
                 ["utc_band", "utc_freq", "utc_r", "utc_x", "utt_xp",
-                 "utt_serl", "utt_serc", "utt_shl", "utt_shc", "utt_swr5"],
-                [70, 80, 90, 90, 90, 110, 120, 110, 120, 110], height=8)
+                 "utt_serl", "utt_serc", "utt_shl", "utt_shc",
+                 "utt_shr", "utt_shswr", "utt_swr5"],
+                [70, 80, 90, 90, 90, 110, 120, 110, 120,
+                 120, 120, 130], height=8)
 
             coil_lf = ttk.LabelFrame(t, padding=6)
             coil_lf.pack(fill="x", pady=(0, 8))
@@ -15985,6 +16192,7 @@ def _launch_gui() -> None:
                     f(r["x_transformed"], 2),
                     f(r["ser_l_nh"], 0), f(r["ser_c_e24"], 0),
                     f(r["sh_l_nh"], 0), f(r["sh_c_e24"], 0),
+                    f(r["sh_r_eff"], 1), f(r["sh_swr"], 3),
                     f(r["swr_5pct"], 3)))
 
             lines = [
@@ -16035,6 +16243,13 @@ def _launch_gui() -> None:
                     "utk_shunt_bad",
                     r=f"{coil['shunt_ratio_min']:g}",
                     b=", ".join(coil["shunt_warn_bands"])) + "\n")
+            # Reactance cancellation is not a match: say so next to the shunt
+            # L/C column rather than let it sit beside the series-branch SWR.
+            if coil.get("shunt_comp_warn_bands"):
+                lines.append("\n  " + self.t(
+                    "utk_shunt_comp_bad",
+                    s=f"{coil['shunt_comp_swr_max']:g}",
+                    b=", ".join(coil["shunt_comp_warn_bands"])) + "\n")
             # The SMALLEST n_above belongs to the highest tap: that is how much
             # winding is left hanging open above every tap.
             _n_above_top = min((int(r.get("n_above") or 0) for r in res["taps"]),
