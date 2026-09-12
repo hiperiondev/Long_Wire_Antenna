@@ -2021,6 +2021,22 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "pdf_col_r_tx":  {"en": "R_tx (Ω)",  "es": "R_tx (Ω)", "it": 'R_tx (Ω)'},
     "pdf_col_x_tx":  {"en": "X_tx (Ω)",  "es": "X_tx (Ω)", "it": 'X_tx (Ω)'},
     "pdf_col_source": {"en": "Source", "es": "Fuente", "it": 'Fonte'},
+    "pdf_imp_precision_note": {
+        "en": ("R_ant, X_ant rounded to segmentation uncertainty "
+               "({0} seg/half wave, ~{1:.0f}% of R{2}). R_tx, X_tx are the "
+               "transformed values and carry the same relative uncertainty."),
+        "es": ("R_ant, X_ant redondeados a la incertidumbre de segmentación "
+               "({0} seg/media onda, ~{1:.0f}% de R{2}). R_tx, X_tx son los "
+               "valores transformados y llevan la misma incertidumbre relativa."),
+        "it": ('R_ant, X_ant arrotondati all\u2019incertezza di segmentazione '
+               '({0} seg/mezza onda, ~{1:.0f}% di R{2}). R_tx, X_tx sono i '
+               'valori trasformati e presentano la stessa incertezza relativa.'),
+    },
+    "pdf_imp_precision_x_measured": {
+        "en": "; X_ant \u00b1{0:.1f} \u03a9 measured",
+        "es": "; X_ant \u00b1{0:.1f} \u03a9 medido",
+        "it": '; X_ant \u00b1{0:.1f} \u03a9 misurato',
+    },
     "pdf_col_theta":  {"en": "θ (°)", "es": "θ (°)", "it": 'θ (°)'},
     "pdf_col_ratio":  {"en": "Ratio", "es": "Relación", "it": 'Rapporto'},
     "pdf_col_score":  {"en": "Score", "es": "Puntuación", "it": 'Punteggio'},
@@ -7805,6 +7821,8 @@ def write_pdf_brochure(
     use_counterpoise: bool = True,
     no_cp_return: str = DEFAULT_NO_CP_RETURN,
     cp_stub_len_m: float = DEFAULT_CP_STUB_LEN_M,
+    segs_final: Optional[int] = None,
+    conv_report: Optional["ConvergenceReport"] = None,
 ) -> bool:
     """
     Render a modern, commercial-brochure-style PDF datasheet summarising the
@@ -8030,17 +8048,41 @@ def write_pdf_brochure(
 
     # NEC2 / impedance details
     if any(b in best.band_R_ant for b in (cr.band for cr in active)):
+        # Same rounding-to-uncertainty rule as the text report's per-band
+        # table (see fmt_imp_with_unc / imp_uncertainties): printing R_ant to
+        # five significant figures when the segmentation error is ~3% of R
+        # is false precision, and the PDF is the document most likely to be
+        # printed and taken to the bench. R_tx/X_tx are the UnUn-transformed
+        # values, so they carry the same relative uncertainty as R_ant/X_ant
+        # even though we don't recompute a separate absolute figure for them
+        # here — matching the text report, which also leaves them bare.
+        _spw_tab = (best.segs_per_half_wave or segs_final or SEGS_PER_HALF_WAVE)
+        _unc_tab = (conv_report.r_uncertainty_pct() if conv_report is not None
+                    else estimated_imp_uncertainty_pct(_spw_tab))
+        _unc_tab_x = (conv_report.x_uncertainty_ohm() if conv_report is not None
+                      else None)
         imp_data = [[T("pdf_col_band"), T("pdf_col_r_ant"), T("pdf_col_x_ant"),
                      T("pdf_col_r_tx"), T("pdf_col_x_tx"), T("pdf_col_source")]]
         for cr in active:
             b = cr.band
+            R_a = best.band_R_ant.get(b, 0.0)
+            X_a = best.band_X_ant.get(b, 0.0)
+            src = best.band_imp_src.get(b, "?")
+            if mode == "nec2" and src.startswith("NEC2"):
+                _u = abs(R_a) * _unc_tab / 100.0
+                Ra_s = fmt_imp_with_unc(R_a, _u)
+                # _unc_tab_x is None when --converge did not run: X is then
+                # printed bare rather than carrying the R uncertainty.
+                Xa_s = fmt_imp_with_unc(X_a, _unc_tab_x, signed=True)
+            else:
+                Ra_s, Xa_s = f"{R_a:.1f}", f"{X_a:+.1f}"
             imp_data.append([
                 b,
-                f"{best.band_R_ant.get(b, 0.0):.1f}",
-                f"{best.band_X_ant.get(b, 0.0):+.1f}",
+                Ra_s,
+                Xa_s,
                 f"{best.band_R_tx.get(b, 0.0):.2f}",
                 f"{best.band_X_tx.get(b, 0.0):+.2f}",
-                best.band_imp_src.get(b, "?"),
+                src,
             ])
         imp_table = Table(imp_data, colWidths=[22 * mm, 28 * mm, 28 * mm, 28 * mm, 28 * mm, 36 * mm])
         imp_table.setStyle(TableStyle([
@@ -8057,6 +8099,12 @@ def write_pdf_brochure(
             ("FONTSIZE", (0, 0), (-1, -1), 8),
         ]))
         story.append(KeepTogether([Paragraph(T("report_per_band_imp"), style_h2), imp_table]))
+        if mode == "nec2":
+            _x_note = (T("pdf_imp_precision_x_measured").format(_unc_tab_x)
+                       if _unc_tab_x is not None else "")
+            story.append(Paragraph(
+                T("pdf_imp_precision_note").format(_spw_tab, _unc_tab, _x_note),
+                style_small))
         story.append(Spacer(1, 6 * mm))
 
     # ── 2b. BEST CANDIDATE — DETAILED BREAKDOWN ───────────────────────────
@@ -11656,6 +11704,8 @@ def main() -> None:
             use_counterpoise=use_counterpoise,
             no_cp_return=args.no_cp_return,
             cp_stub_len_m=args.cp_stub_len,
+            segs_final=segs_final,
+            conv_report=conv_report,
         )
         if _ok:
             print(T("pdf_saved").format(args.out_pdf))
