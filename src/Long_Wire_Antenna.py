@@ -6305,88 +6305,36 @@ def plot_radiation_diagrams(
             print("  ⚠  NEC2 output contains no RADIATION PATTERN section.")
             return
 
-        parsed_patterns: Dict[float, list] = {}
+        # Delegate to parse_nec2_output() instead of re-parsing the RP table
+        # with a second, independent regex here. The previous local parser
+        # hard-coded "TOTAL is column 5" (m.group(5)), which only holds under
+        # nec2c's XNDA X=1 layout. That happened to be safe *in this
+        # function* because the deck above is always written with
+        # "RP 0 ... 1000 ..." (XNDA=1000 -> X=1), but it was a latent trap:
+        # any future change to the RP card here, or any path that reuses this
+        # parsing logic against a user-supplied .out file, would silently
+        # bind "TOTAL" to the wrong column instead of failing loudly.
+        # parse_nec2_output() / _rp_total_gain_offset() already solve this
+        # correctly by reading the column position from each block's own
+        # printed header (falling back to the classic layout only when no
+        # header is present at all), and it splits the file into per-FR-card
+        # blocks the same way nec2c actually emits them. Reuse that single
+        # source of truth rather than re-deriving (and re-risking) the same
+        # logic a second time.
+        try:
+            _rp_run = parse_nec2_output(out_path_nec)
+        except Exception as e:
+            print(f"  ⚠  Failed to parse NEC2 radiation output: {e}")
+            return
 
         _active_freqs = [cr.freq_mhz for cr in active]
-        _rp_block_idx    = -1
-        _cur_freq_ord: Optional[float] = None
-        _cur_freq_ban: Optional[float] = None
-
-        # Use _RE_FREQ6 (defined near the other frequency patterns) since
-        # that's the pattern that actually matches nec2c's
-        # "FREQUENCY : ... MHz" banner. The previous local pattern here
-        # (FREQUENCY = ... MHZ) never matched real nec2c output, silently
-        # leaving _cur_freq_ban unset and making the banner-vs-order
-        # cross-check below dead code.
-        _freq_re = _RE_FREQ6
-        # Each column is a proper signed floating-point number, optionally in
-        # scientific notation.  The old pattern ([\d.E+\-]+) was a character
-        # class that matched arbitrary sequences of digits, dots, E, +, and -
-        # — it could not represent a signed number correctly and would also
-        # match separator lines like "----" (caught only by the later
-        # ValueError).  The pattern below uses a proper numeric grammar:
-        #   [-+]?          optional sign
-        #   (?:\d+\.?\d*   integer-part with optional decimal, OR
-        #      |\.\d+)     leading-dot decimal
-        #   (?:[Ee][+\-]?\d+)?  optional exponent
-        _SFLOAT = r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[Ee][+\-]?\d+)?'
-        _rp_row_re = re.compile(
-            rf'^\s*({_SFLOAT})\s+({_SFLOAT})'
-            rf'\s+({_SFLOAT})\s+({_SFLOAT})'
-            rf'\s+({_SFLOAT})',
-            re.MULTILINE,
-        )
-
-        in_rp = False
-        _expected_rows = max(1, n_elevation * n_azimuth)
-
-        for line in raw.splitlines():
-            fm = _freq_re.search(line)
-            if fm:
-                try:
-                    _cur_freq_ban = float(fm.group(1))
-                except ValueError:
-                    pass
-                continue
-
-            stripped = line.strip()
-            if ("RADIATION PATTERN" in line.upper()
-                    and "REQUESTED" not in line.upper()
-                    and not stripped.startswith("CM")
-                    and not stripped.startswith("*")):
-                in_rp = False
-                _rp_block_idx += 1
-                if _rp_block_idx < len(_active_freqs):
-                    _cur_freq_ord = _active_freqs[_rp_block_idx]
-                    if (_cur_freq_ban is not None
-                            and abs(_cur_freq_ban - _cur_freq_ord) > 0.5):
-                        print(
-                            f"  ⚠  RP block {_rp_block_idx+1}: "
-                            f"order freq {_cur_freq_ord:.4f} MHz differs from "
-                            f"banner {_cur_freq_ban:.4f} MHz — using order."
-                        )
-                    existing = parsed_patterns.get(_cur_freq_ord, [])
-                    if len(existing) == 0:
-                        parsed_patterns[_cur_freq_ord] = []
-                    in_rp = True
-                else:
-                    in_rp = False
-                continue
-
-            if in_rp and _cur_freq_ord is not None:
-                m = _rp_row_re.match(line)
-                if m:
-                    try:
-                        theta    = float(m.group(1))
-                        phi      = float(m.group(2))
-                        total_db = float(m.group(5))
-                        bucket = parsed_patterns[_cur_freq_ord]
-                        bucket.append((theta, phi, total_db))   # Bug 3 fix: removed broken dedupe guard
-
-                        if len(bucket) >= _expected_rows:
-                            in_rp = False
-                    except ValueError:
-                        pass
+        parsed_patterns: Dict[float, list] = {}
+        for _idx, _freq_ord in enumerate(_active_freqs):
+            if _idx >= len(_rp_run.freqs):
+                break
+            _fp = _rp_run.freqs[_idx]
+            if _fp.rp_rows:
+                parsed_patterns[_freq_ord] = _fp.rp_rows
 
         if not parsed_patterns:
             print(T("warn_no_rp_data"))
