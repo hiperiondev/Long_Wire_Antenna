@@ -11017,36 +11017,81 @@ def main() -> None:
             return _r, _run
 
         if mode == "nec2" and nec2c_bin:
-            # Refine every candidate that will actually be published — the
-            # winner plus the rest of the Pareto front — so the report never
-            # mixes segmentation densities within a single table. Candidates
-            # already at (or above) the fine density are left alone.
-            _to_refine = {id(best): best}
-            for _p in pareto:
-                if (_p.segs_per_half_wave or segs_sweep) < segs_final:
-                    _to_refine.setdefault(id(_p), _p)
+            # Refine every candidate that will actually be PUBLISHED — that
+            # means the winner, the rest of the Pareto front, AND every row
+            # that will appear in the "TOP N CANDIDATES" table (args.top_n,
+            # default 20) — so the report table and the Pareto section never
+            # mix segmentation densities, and so score_combined is only ever
+            # compared between numbers computed at the same density.
+            #
+            # A coarse score is optimistic relative to the fine one (see the
+            # module's own R/X-vs-segmentation notes above), so a candidate
+            # that only *looks* top-N at sweep density can still need
+            # refining — and, symmetrically, refining candidates can change
+            # who the true top-N are (a refined score can fall out of the
+            # window, letting the next coarse candidate rise into it). We
+            # therefore refine the coarse top-N/Pareto union and iterate:
+            # after each pass, re-rank and check whether the (now partly
+            # refined) top-N/Pareto window still contains an un-refined
+            # candidate; if so, refine it too. This converges in a handful
+            # of passes because each pass either refines a previously-coarse
+            # candidate (finite supply, strictly decreasing) or stops.
+            _report_top_n = max(0, int(getattr(args, "top_n", 0) or 0))
+
+            def _needs_refine(cand):
+                return (cand.segs_per_half_wave or segs_sweep) < segs_final
+
+            def _select_to_refine():
+                _sel = {id(best): best}
+                for _p in pareto:
+                    _sel.setdefault(id(_p), _p)
+                _cur_ranked = rank_results(results)
+                for _r in _cur_ranked[:_report_top_n]:
+                    _sel.setdefault(id(_r), _r)
+                return _sel
+
             _refined_by_id = {}
-            if len(_to_refine) > 1:
-                print(T("refining_best").format(segs_final) +
-                      f" ({len(_to_refine)} candidates)")
-            elif _to_refine:
-                print(T("refining_best").format(segs_final))
+            _pass = 0
+            while True:
+                _pass += 1
+                _to_refine = {cid: c for cid, c in _select_to_refine().items()
+                              if _needs_refine(c)}
+                if not _to_refine:
+                    break
+                if _pass == 1:
+                    if len(_to_refine) > 1:
+                        print(T("refining_best").format(segs_final) +
+                              f" ({len(_to_refine)} candidates)")
+                    else:
+                        print(T("refining_best").format(segs_final))
+                else:
+                    print(T("refining_best").format(segs_final) +
+                          f" ({len(_to_refine)} more — top-{_report_top_n}/Pareto "
+                          f"window shifted after refinement)")
 
-            for _cid, _cand in _to_refine.items():
-                if (_cand.segs_per_half_wave or segs_sweep) >= segs_final:
-                    continue
-                _ref, _fine_run = _refine_and_sync(_cand)
-                if _fine_run is None:
-                    print(f"  {Fore.YELLOW}" + T("refining_best_failed") + f"{Style.RESET_ALL}")
-                    continue
-                _refined_by_id[_cid] = _ref
-                if _cand is best:
-                    best, best_run_h = _ref, _fine_run
+                for _cid, _cand in _to_refine.items():
+                    _ref, _fine_run = _refine_and_sync(_cand)
+                    if _fine_run is None:
+                        print(f"  {Fore.YELLOW}" + T("refining_best_failed") + f"{Style.RESET_ALL}")
+                        continue
+                    _refined_by_id[_cid] = _ref
+                    if _cand is best:
+                        best, best_run_h = _ref, _fine_run
 
-            # Rebuild every derived view from the now-consistent `results` so
-            # `ranked`, `pareto`, and `pareto_ranked` all agree on which
-            # object (and which segmentation density) represents each
-            # candidate.
+                # Rebuild every derived view from the now-consistent
+                # `results` so `ranked`, `pareto`, and `pareto_ranked` all
+                # agree on which object (and which segmentation density)
+                # represents each candidate before the next pass decides
+                # whether the top-N/Pareto window has shifted.
+                ranked        = rank_results(results)
+                pareto        = pareto_front(results)
+                pareto_ranked = sorted(pareto, key=lambda r: r.score_combined)
+                best          = ranked[0] if ranked else best
+
+            # Final rebuild — a no-op if the loop above already left things
+            # consistent, but keeps this block correct even when nothing
+            # needed refining (e.g. --segs-per-half-wave was given, so
+            # segs_sweep == segs_final and every candidate is already fine).
             ranked        = rank_results(results)
             pareto        = pareto_front(results)
             pareto_ranked = sorted(pareto, key=lambda r: r.score_combined)
@@ -11069,22 +11114,39 @@ def main() -> None:
                     pareto        = pareto_front(results)
                     pareto_ranked = sorted(pareto, key=lambda r: r.score_combined)
                     best          = ranked[0] if ranked else best
-                    if (best.segs_per_half_wave or segs_sweep) < segs_final:
-                        # Re-scoring under the new ratio can promote a
-                        # candidate that was not refined above (it wasn't a
-                        # Pareto member under the old ratio) — refine it now
-                        # so it, too, is never published at sweep density.
-                        _ref2, _fine_run2 = _refine_and_sync(best)
-                        if _fine_run2 is not None:
-                            best, best_run_h = _ref2, _fine_run2
-                            ranked        = rank_results(results)
-                            pareto        = pareto_front(results)
-                            pareto_ranked = sorted(pareto, key=lambda r: r.score_combined)
-                            best          = ranked[0] if ranked else best
-                            _uu = find_best_unun(
-                                best=best, calc_rows=calc_rows, current_unun=unun_ratio,
-                                run_h=best_run_h, run_v=None, nec2_strict=True,
-                            )
+                    # Re-scoring under the new ratio can reshuffle the top-N
+                    # / Pareto window the same way the initial refinement
+                    # pass could — a candidate that wasn't in that window
+                    # under the old ratio can enter it now, still at sweep
+                    # density. Re-run the same converge-to-fixed-point
+                    # refinement used above rather than refining `best`
+                    # alone, or a non-winner row in the reshuffled top-N
+                    # table could stay published at the coarse density.
+                    _pass = 0
+                    while True:
+                        _pass += 1
+                        _to_refine = {cid: c for cid, c in _select_to_refine().items()
+                                      if _needs_refine(c)}
+                        if not _to_refine:
+                            break
+                        print(T("refining_best").format(segs_final) +
+                              f" ({len(_to_refine)} — top-{_report_top_n}/Pareto "
+                              f"window shifted after UnUn re-scoring)")
+                        for _cid, _cand in _to_refine.items():
+                            _ref2, _fine_run2 = _refine_and_sync(_cand)
+                            if _fine_run2 is None:
+                                print(f"  {Fore.YELLOW}" + T("refining_best_failed") + f"{Style.RESET_ALL}")
+                                continue
+                            if _cand is best:
+                                best, best_run_h = _ref2, _fine_run2
+                        ranked        = rank_results(results)
+                        pareto        = pareto_front(results)
+                        pareto_ranked = sorted(pareto, key=lambda r: r.score_combined)
+                        best          = ranked[0] if ranked else best
+                    _uu = find_best_unun(
+                        best=best, calc_rows=calc_rows, current_unun=unun_ratio,
+                        run_h=best_run_h, run_v=None, nec2_strict=True,
+                    )
                 unun_result = _uu
 
         # ── Radiation re-ranking of the shortlist ───────────────────────
