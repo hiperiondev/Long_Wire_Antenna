@@ -3156,6 +3156,26 @@ BAND_CENTRE_FREQ_MHZ: Dict[str, float] = {
 }
 
 
+def freq_match_tol_mhz(freq_mhz: float) -> float:
+    """
+    Return the frequency-matching tolerance (MHz) used to bind a requested
+    band frequency to the nearest frequency actually present in a parsed
+    NEC2 run (run.freq_map()).
+
+    Scales at 4% of the target frequency, clamped to [floor, 0.75] MHz.
+    The floor is *relative* (0.2% of freq) rather than a fixed 0.15 MHz,
+    because a fixed floor is larger than the frequency itself for 2200m
+    (0.1365 MHz) and comparable to it for 630m (0.475 MHz) — unphysical
+    for sub-MHz work and a thin margin against cross-band misbinding.
+
+    This is the single source of truth for that tolerance; every call
+    site that matches a requested freq_mhz against fmap.keys() must use
+    this helper instead of a local literal, so the rule can't drift out
+    of sync across call sites again.
+    """
+    return max(0.002 * freq_mhz, min(0.75, 0.04 * freq_mhz))
+
+
 def _lookup_band_freq(name: str) -> Optional[float]:
     """
     Return the centre frequency in MHz for a named amateur band.
@@ -4294,7 +4314,7 @@ def score_candidate(
             fmap = run.freq_map()
             if fmap:
                 key = min(fmap.keys(), key=lambda k: abs(k - freq))
-                _tol = max(0.15, min(0.75, 0.04 * freq))
+                _tol = freq_match_tol_mhz(freq)
                 # parse_nec2_output() deliberately writes R = X = NaN (and
                 # vswr50 = 999, plus the reason in run.note) when it detects a
                 # bad block split.  A NaN impedance is NOT NEC2 data, so it
@@ -4381,7 +4401,7 @@ def score_candidate(
             fmap = run.freq_map()
             if fmap:
                 key = min(fmap.keys(), key=lambda k: abs(k - freq))
-                _tol = max(0.15, min(0.75, 0.04 * freq))
+                _tol = freq_match_tol_mhz(freq)
                 # Same NaN guard as the active-band loop above: a wiped-out
                 # parse must not be stored as an NEC2 impedance.
                 if (abs(key - freq) <= _tol
@@ -4858,7 +4878,7 @@ def evaluate_pattern(
     gains_at_toa: List[float] = []
     for cr in active:
         key = min(fmap.keys(), key=lambda k: abs(k - cr.freq_mhz))
-        if abs(key - cr.freq_mhz) > 0.5:
+        if abs(key - cr.freq_mhz) > freq_match_tol_mhz(cr.freq_mhz):
             continue
         fp = fmap[key]
         if not fp.rp_rows:
@@ -5047,7 +5067,7 @@ def check_segmentation_convergence(
                 if not fmap:
                     continue
                 key = min(fmap.keys(), key=lambda k: abs(k - cr.freq_mhz))
-                _tol = max(0.15, min(0.75, 0.04 * cr.freq_mhz))
+                _tol = freq_match_tol_mhz(cr.freq_mhz)
                 if abs(key - cr.freq_mhz) > _tol:
                     continue
                 fp = fmap[key]
@@ -5358,7 +5378,7 @@ def find_best_unun(
                 if not fmap:
                     continue
                 key = min(fmap.keys(), key=lambda k: abs(k - freq))
-                _tol = max(0.15, min(0.75, 0.04 * freq))
+                _tol = freq_match_tol_mhz(freq)
                 if abs(key - freq) > _tol:
                     continue
                 fp = fmap[key]
@@ -6358,7 +6378,7 @@ def plot_radiation_diagrams(
         for cr in active:
             freq = cr.freq_mhz
             best_key = min(parsed_patterns.keys(), key=lambda k: abs(k - freq))
-            if abs(best_key - freq) > 0.5:
+            if abs(best_key - freq) > freq_match_tol_mhz(freq):
                 print(T("warn_no_rp_freq").format(freq, cr.band))
                 continue
             rows = parsed_patterns[best_key]
@@ -11427,7 +11447,7 @@ def main() -> None:
                     _fp = None
                     if _fm:
                         _key = min(_fm.keys(), key=lambda k: abs(k - cr.freq_mhz))
-                        _tol = max(0.15, min(0.75, 0.04 * cr.freq_mhz))
+                        _tol = freq_match_tol_mhz(cr.freq_mhz)
                         if abs(_key - cr.freq_mhz) <= _tol:
                             _fp = _fm[_key]
                     if _fp is not None and getattr(_fp, "efficiency", None) is not None:
