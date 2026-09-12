@@ -129,6 +129,8 @@ Il programma cerca `nec2c` automaticamente, nell'ordine seguente:
 
 Nella GUI, usare il pulsante **Rilevamento automatico** nella scheda Fisica per attivare questa ricerca su richiesta.
 
+> ⚠️ **Bug noto — la ricerca fissa in `Program Files\OpenNEC`, su Windows:** l'installer di Windows copia il motore anche in `C:\Program Files\OpenNEC\nec2c.exe` e in `C:\Program Files (x86)\OpenNEC\nec2c.exe` come parte dell'installazione. Tuttavia, i due percorsi fissi `OpenNEC` nell'elenco di posizioni comuni del passo 4 di ricerca si aspettano un file chiamato letteralmente **`onec.exe`**, non `nec2c.exe` — quindi questo ripiego non troverà mai la copia lasciata lì dall'installer di Windows. Nell'uso normale questo è invisibile, perché avviare tramite il collegamento sul Desktop (`run_gui.bat`) imposta direttamente la variabile d'ambiente `$NEC2C` (passo 2 di ricerca) e non necessita mai di questo ripiego. Diventa rilevante solo se si esegue `Long_Wire_Antenna.py` manualmente da un terminale dopo un'installazione con l'installer Windows, senza passare da `run_gui.bat` e senza `$NEC2C` impostata — in quel caso, passare esplicitamente `--nec2c "C:\Program Files\OpenNEC\nec2c.exe"` (oppure impostare `$NEC2C` manualmente) invece di affidarsi al rilevamento automatico.
+
 ---
 
 ## 4. Avvio del programma
@@ -649,6 +651,7 @@ Dopo una ricerca riuscita, utilizzare UnUn / Transmatch. I dati del CSV vengono 
 | Manca `--freqs` | Banda personalizzata senza frequenza | Inserire una frequenza per ogni banda |
 | Risultati sospetti con `fast` | Segmentazione troppo bassa | Usare `fine` |
 | NEC2 richiesto ma non trovato | Motore non installato/non rilevato | Installare il motore o specificare `--nec2c` |
+| Su Windows, `nec2c` non viene trovato anche se l'installazione è andata a buon fine, ed è stato avviato lo script manualmente invece di usare il collegamento sul Desktop | Il ripiego fisso dello script in `Program Files\OpenNEC` cerca un file chiamato `onec.exe`, ma l'installer copia il motore lì come `nec2c.exe` — un disallineamento di nomi noto, vedi [§3.4](#34-individuazione-del-binario-nec2c) | Usare invece il collegamento sul Desktop (`run_gui.bat`), che imposta `$NEC2C` direttamente e non risente del problema; oppure passare `--nec2c "C:\Program Files\OpenNEC\nec2c.exe"` / digitare quel percorso nel campo **Binario NEC2**; oppure impostare `$NEC2C` manualmente. |
 | Campi del contrappeso disabilitati | Contrappeso non selezionato | Abilitare "Use counterpoise" |
 | Percorso di ritorno disabilitato | Il contrappeso è presente | Disabilitare il contrappeso per usare questa funzione |
 | Vincitore sul bordo | Ricerca troppo stretta | Allargare la finestra o usare `Maximum retries` |

@@ -87,6 +87,8 @@ Download and run **`Setup_Long_Wire_Antenna.exe`**. It's fully self-contained �
 > ⚠️ **Extra dependency note:** step 4 also `pip install`s a fifth package, **`tabulate`**, alongside the four the script actually needs. `Long_Wire_Antenna.py` does **not** import or use `tabulate` anywhere — it is unused leftover in the installer's dependency list, not a real requirement. It costs nothing except a few extra seconds of install time and disk space, and you don't need it if you're setting the script up manually ([Option C](#option-c--run-the-python-script-directly-windowsmacoslinux)).
 
 > ⚠️ **Known installer quirk (engine self-upgrade step):** as part of step 4, `post_install_setup.py` optionally tries to download a newer NEC2 engine build from an external GitHub project and, if it finds one, verifies it starts correctly before using it — falling back to "the bundled engine" if the download fails or the downloaded build doesn't run. However, its fallback logic looks for a bundled file named `onec.exe` / `onec_bundled.exe`, while the installer only ever ships a file named `nec2c.exe`. In practice this just means the optional online-upgrade step can't find that baseline file to fall back to, so it's a no-op unless the network download succeeds. It does **not** break a normal install: `run_gui.bat` independently looks for (and finds) `nec2c\nec2c.exe` and points the `NEC2C` environment variable at it directly, so the bundled engine is used correctly either way. Worth knowing if you're troubleshooting install logs that mention `onec.exe`.
+>
+> ⚠️ **Known bug (Windows, only if you bypass `run_gui.bat`):** step 3 mirrors the engine to `C:\Program Files\OpenNEC\nec2c.exe` and `C:\Program Files (x86)\OpenNEC\nec2c.exe`. However, `Long_Wire_Antenna.py`'s own hardcoded Windows fallback search paths look for a file named **`onec.exe`** in those same two folders, not `nec2c.exe` — the filenames don't match, so the script's built-in `Program Files\OpenNEC` fallback will **not** find the installer's copy there. This has no effect on the normal Desktop-shortcut flow, because `run_gui.bat` sets the `NEC2C` environment variable directly and never relies on this fallback. It only matters if you open a plain terminal/PowerShell after installing and run `python Long_Wire_Antenna.py` (or `py Long_Wire_Antenna.py`) yourself, *without* `run_gui.bat`, without `%NEC2C%` set, and without `%INSTDIR%\nec2c` on your `PATH` — in that specific case, NEC2 mode will report "binary not found" even though a working engine is sitting in `Program Files\OpenNEC`. Work around it with `--nec2c "C:\Program Files\OpenNEC\nec2c.exe"`, or by setting `NEC2C` yourself, or by using the Desktop shortcut / `run_gui.bat` instead.
 
 ### Option B — Linux (AppImage, easiest for most distros)
 
@@ -239,16 +241,19 @@ The tool then separately checks standard UnUn transformer ratios (1:1, 4:1, 9:1,
 
 ## Troubleshooting
 
-<!-- TODO(maintainer): This section is a placeholder. The original README/manuals did not
-     include a troubleshooting or FAQ section, and it was not possible to source the script's
-     actual error messages and exit-code behavior at the time this document was corrected.
-     Please replace the items below with verified, script-accurate guidance, e.g.:
-     - What happens if nec2c is not found and --no-interactive is set?
-     - What does the "no standard ratio resolves the mismatch" warning mean in practice,
-       and what should the user do about it (accept higher VSWR on that band, use a
-       different feedline strategy, add an antenna tuner, etc.)?
-     - Common causes of NEC-2 convergence/retry failures and how --mode auto handles them.
-     - What to do if matplotlib/reportlab are missing but a plot/PDF was requested. -->
+| Symptom | Likely cause | What to do |
+|---|---|---|
+| `--mode nec2` exits immediately with a "binary not found" style error | `nec2c` could not be located by any discovery step, and `--mode nec2` does not fall back | Install `nec2c`, or pass `--nec2c /full/path/to/nec2c`, or set the `$NEC2C` environment variable. With `--mode auto` instead, the script falls back to `--mode empirical` automatically rather than exiting. |
+| On Windows, `nec2c`/`onec.exe` is not found even though the installer succeeded, and you did **not** launch via the Desktop shortcut | You ran `Long_Wire_Antenna.py` directly (bypassing `run_gui.bat`) without `%NEC2C%` set — see the [known bug above](#option-a--windows-easiest) about the `nec2c.exe`/`onec.exe` filename mismatch under `Program Files\OpenNEC` | Use the Desktop shortcut / `run_gui.bat`, or pass `--nec2c "C:\Program Files\OpenNEC\nec2c.exe"` explicitly, or set `NEC2C` yourself. |
+| A band is flagged as poorly matched by every standard UnUn ratio | The raw antenna impedance on that band is far enough from every ratio in the built-in sweep (1:1, 1.5:1, 2:1, 3:1, 4:1, 6:1, 9:1, ...) that none of them bring VSWR close to 1:1 | This is expected for some multi-band designs — a single feedline strategy cannot always match unrelated bands equally well. Options: accept the higher VSWR on that band, use the Transmatch (tapped-coil) calculator instead of, or in addition to, the UnUn for that band, or re-run the optimizer with a different/narrower search window or a different `--active-bands` selection to find a geometry that compromises less on it. |
+| `matplotlib`/`numpy`/`reportlab` is missing but a plot/PDF was requested | Optional package not installed | The run still completes and writes the non-graphical outputs (text report, CSV, `.nec` deck); the script prints which optional output was skipped and why. Install the missing package(s) with `pip install matplotlib numpy reportlab` (see [Option C](#option-c--run-the-python-script-directly-windowsmacoslinux)) and re-run. |
+
+<!-- TODO(maintainer): The rows above were reconstructed from reading the script's own control
+     flow (see find_nec2c(), the --mode resolution block in main(), the UnUn ratio sweep in
+     STANDARD_UNUN_RATIOS, and the optional-import guards at the top of the file) rather than
+     from exact captured error text. Consider replacing the free-text descriptions with the
+     literal console messages (the T("...") message keys) the next time this file is updated,
+     and add NEC-2 convergence/--retry-specific cases if they come up in practice. -->
 
 ## Third-party licensing note
 

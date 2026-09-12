@@ -87,6 +87,8 @@ Descargá y ejecutá **`Setup_Long_Wire_Antenna.exe`**. Es totalmente autoconten
 > ⚠️ **Nota sobre una dependencia extra:** el paso 4 también instala con `pip` un quinto paquete, **`tabulate`**, además de los cuatro que el script realmente necesita. `Long_Wire_Antenna.py` **no** importa ni usa `tabulate` en ningún lado — es un resabio sin usar en la lista de dependencias del instalador, no un requisito real. Solo cuesta unos segundos extra de instalación y algo de espacio en disco, y no lo necesitás si configurás el script a mano ([Opción C](#opción-c--ejecutar-el-script-python-directamente-windowsmacoslinux)).
 
 > ⚠️ **Particularidad conocida del instalador (paso de auto-actualización del motor):** como parte del paso 4, `post_install_setup.py` intenta opcionalmente descargar una versión más nueva del motor NEC2 desde un proyecto externo de GitHub y, si la encuentra, verifica que arranque correctamente antes de usarla — volviendo al "motor incluido" si la descarga falla o la versión descargada no arranca. Sin embargo, su lógica de respaldo busca un archivo incluido llamado `onec.exe` / `onec_bundled.exe`, mientras que el instalador solo llega a incluir un archivo llamado `nec2c.exe`. En la práctica esto solo significa que el paso opcional de actualización en línea no encuentra ese archivo de respaldo, así que no hace nada salvo que la descarga por red tenga éxito. Esto **no** rompe una instalación normal: `run_gui.bat` busca por su cuenta (y encuentra) `nec2c\nec2c.exe` y apunta la variable de entorno `NEC2C` directamente a él, así que el motor incluido se usa correctamente de todas formas. Vale la pena saberlo si estás revisando registros de instalación que mencionan `onec.exe`.
+>
+> ⚠️ **Bug conocido (Windows, solo si evitás `run_gui.bat`):** el paso 3 copia el motor a `C:\Program Files\OpenNEC\nec2c.exe` y a `C:\Program Files (x86)\OpenNEC\nec2c.exe`. Sin embargo, las rutas de respaldo fijas de `Long_Wire_Antenna.py` para Windows buscan un archivo llamado **`onec.exe`** en esas mismas dos carpetas, no `nec2c.exe` — los nombres de archivo no coinciden, así que la búsqueda de respaldo integrada en `Program Files\OpenNEC` **no** va a encontrar la copia que dejó el instalador ahí. Esto no afecta el flujo normal del acceso directo del Escritorio, porque `run_gui.bat` configura la variable de entorno `NEC2C` directamente y nunca depende de este respaldo. Solo importa si abrís una terminal normal después de instalar y ejecutás `python Long_Wire_Antenna.py` (o `py Long_Wire_Antenna.py`) vos mismo, *sin* pasar por `run_gui.bat`, sin tener `%NEC2C%` configurada, y sin `%INSTDIR%\nec2c` en tu `PATH` — en ese caso puntual, el modo NEC2 va a reportar que no encuentra el binario aunque haya un motor funcional en `Program Files\OpenNEC`. Se puede evitar con `--nec2c "C:\Program Files\OpenNEC\nec2c.exe"`, configurando `NEC2C` vos mismo, o usando el acceso directo del Escritorio / `run_gui.bat`.
 
 ### Opción B — Linux (AppImage, la más simple para la mayoría de las distros)
 
@@ -239,16 +241,20 @@ Luego la herramienta compara por separado las relaciones de transformador UnUn e
 
 ## Solución de problemas
 
-<!-- TODO(mantenedor): Esta sección es un marcador de posición. El README/manuales originales
-     no incluían una sección de solución de problemas o preguntas frecuentes, y no fue posible
-     obtener los mensajes de error reales del script ni su comportamiento de códigos de salida
-     al momento de corregir este documento. Por favor reemplazar los puntos siguientes con
-     información verificada y fiel al script, por ejemplo:
-     - ¿Qué ocurre si no se encuentra nec2c y está activado --no-interactive?
-     - ¿Qué significa en la práctica la advertencia "ninguna relación estándar resuelve el
-       desacople", y qué debería hacer el usuario al respecto?
-     - Causas comunes de fallas de convergencia/reintentos de NEC-2 y cómo las maneja --mode auto.
-     - Qué hacer si faltan matplotlib/reportlab pero se pidió un gráfico o PDF. -->
+| Síntoma | Causa probable | Qué hacer |
+|---|---|---|
+| `--mode nec2` termina de inmediato con un error de "binario no encontrado" | No se pudo localizar `nec2c` por ningún método de búsqueda, y `--mode nec2` no tiene alternativa automática | Instalá `nec2c`, o pasá `--nec2c /ruta/completa/a/nec2c`, o configurá la variable de entorno `$NEC2C`. Con `--mode auto`, en cambio, el script pasa automáticamente a `--mode empirical` en lugar de terminar. |
+| En Windows, no se encuentra `nec2c`/`onec.exe` aunque el instalador funcionó bien, y **no** lo iniciaste con el acceso directo del Escritorio | Ejecutaste `Long_Wire_Antenna.py` directamente (sin pasar por `run_gui.bat`) sin tener `%NEC2C%` configurada — ver el [bug conocido más arriba](#opción-a--windows-la-más-fácil) sobre el desajuste de nombres `nec2c.exe`/`onec.exe` en `Program Files\OpenNEC` | Usá el acceso directo del Escritorio / `run_gui.bat`, o pasá `--nec2c "C:\Program Files\OpenNEC\nec2c.exe"` explícitamente, o configurá `NEC2C` vos mismo. |
+| Una banda queda marcada como mal acoplada con todas las relaciones estándar de UnUn | La impedancia cruda de la antena en esa banda está lo bastante lejos de cada relación del barrido incluido (1:1, 1.5:1, 2:1, 3:1, 4:1, 6:1, 9:1, ...) como para que ninguna acerque el ROE a 1:1 | Esto es esperable en algunos diseños multibanda — una única estrategia de línea de alimentación no siempre puede acoplar bien bandas sin relación entre sí. Opciones: aceptar el ROE más alto en esa banda, usar la calculadora de Transmatch (bobina con tomas) en lugar de, o además de, el UnUn para esa banda, o volver a correr el optimizador con una ventana de búsqueda distinta/más angosta o con otra selección de `--active-bands` para encontrar una geometría que sacrifique menos en esa banda. |
+| Falta `matplotlib`/`numpy`/`reportlab` pero se pidió un gráfico o PDF | Paquete opcional no instalado | La corrida igual se completa y escribe las salidas no gráficas (reporte de texto, CSV, archivo `.nec`); el script indica qué salida opcional se omitió y por qué. Instalá el/los paquete(s) faltante(s) con `pip install matplotlib numpy reportlab` (ver la [Opción C](#opción-c--ejecutar-el-script-python-directamente-windowsmacoslinux)) y volvé a correrlo. |
+
+<!-- TODO(mantenedor): Las filas de arriba se reconstruyeron leyendo el flujo de control del
+     propio script (ver find_nec2c(), el bloque de resolución de --mode en main(), el barrido
+     de relaciones de UnUn en STANDARD_UNUN_RATIOS, y las protecciones de importación opcional
+     al principio del archivo), no a partir de mensajes de error capturados textualmente.
+     Considerar reemplazar las descripciones libres por los mensajes de consola literales (las
+     claves T("...")) la próxima vez que se actualice este documento, y agregar los casos de
+     convergencia/--retry de NEC-2 si aparecen en la práctica. -->
 
 ## Nota sobre licencias de terceros
 
