@@ -671,9 +671,9 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "it": '    Penalità ROS     = {0:.4f}',
     },
     "avoidance_mean": {
-        "en": "    Avoidance mean  = {0:.4f}",
-        "es": "    Evitación media = {0:.4f}",
-        "it": '    Evitamento medio = {0:.4f}',
+        "en": "    Avoidance mean (all bands, informational only) = {0:.4f}",
+        "es": "    Evitación media (todas las bandas, solo informativo) = {0:.4f}",
+        "it": '    Evitamento medio (tutte le bande, solo informativo) = {0:.4f}',
     },
     # ── boundary warnings ────────────────────────────────────────────────
     "warn_wire_at_max": {
@@ -1356,6 +1356,31 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "Sommerfeld-Norton di NEC-2 è singolare lì e nec2c non segnala alcun errore.  Il "
                "risultato è marcato come NON AFFIDABILE.  Usare --ground-model perfect con "
                "l'estremo a z=0 se si intende una connessione a terra reale."),
+    },
+    "warn_wire_min_raised": {
+        "en": ("WARNING: wire_min raised from {0:.2f} m to {1:.2f} m because the wire's "
+               "vertical rise ({2:.3f} m) exceeds the previous minimum.  A shorter wire "
+               "cannot reach the specified final height."),
+        "es": ("AVISO: wire_min ajustado de {0:.2f} m a {1:.2f} m porque el desnivel "
+               "vertical del hilo ({2:.3f} m) supera el mínimo anterior.  Un hilo más "
+               "corto no puede llegar a la altura final especificada."),
+        "it": ("AVVISO: wire_min innalzato da {0:.2f} m a {1:.2f} m perché il dislivello "
+               "verticale del filo ({2:.3f} m) supera il minimo precedente.  Un filo più "
+               "corto non può raggiungere l'altezza finale specificata."),
+    },
+    "err_wire_min_exceeds_max": {
+        "en": ("ERROR: the wire's vertical rise ({0:.3f} m) forces wire_min = {1:.2f} m, "
+               "above wire_max = {2:.2f} m: no wire length remains that can reach the "
+               "requested final height.  Increase --wire-max, lower --height, or raise "
+               "--wire-slope-end-height."),
+        "es": ("ERROR: el desnivel vertical del hilo ({0:.3f} m) obliga a wire_min = "
+               "{1:.2f} m, por encima de wire_max = {2:.2f} m: no queda ninguna longitud "
+               "de hilo que pueda alcanzar la altura final pedida.  Amplíe --wire-max, "
+               "baje --height o suba --wire-slope-end-height."),
+        "it": ("ERRORE: il dislivello verticale del filo ({0:.3f} m) impone wire_min = "
+               "{1:.2f} m, superiore a wire_max = {2:.2f} m: non resta alcuna lunghezza "
+               "di filo in grado di raggiungere l'altezza finale richiesta.  Aumentare "
+               "--wire-max, abbassare --height, oppure alzare --wire-slope-end-height."),
     },
     "report_return_path": {
         "en": "Return path   : {0}",
@@ -2240,6 +2265,14 @@ class NEC2Run:
     # can surface *why* a run's impedances came back as NaN/NEC2-MISS
     # instead of just seeing VSWR 999 with no explanation.
     note:       str = ""
+    # Set by parse_nec2_output / _parse_cp_from_nec_deck while parsing the
+    # .out/.nec files. Declared here (rather than left as dynamically
+    # attached attributes) so the dataclass stays introspectable and would
+    # not break if `slots=True` were ever added.
+    _has_rp_card:      bool = False
+    cp_type:           str  = ""
+    _wire_slope_end_m: Optional[float] = None
+    _cp_from_deck:     bool = False
 
     def freq_map(self, decimals: int = 4) -> Dict[float, FreqPoint]:
         return {round(fp.freq_mhz, decimals): fp for fp in self.freqs}
@@ -2956,7 +2989,14 @@ def wire_material_label(key: str, lang: Optional[str] = None) -> str:
 
 def wire_material_key_from_label(label: str, lang: Optional[str] = None) -> str:
     """Reverse lookup: localized label -> canonical WIRE_MATERIALS key.
-    Falls back to treating `label` as already a key (covers English/CLI use)."""
+    Checks `lang` (defaulting to the CLI's _LANG) first, since some labels
+    only differ by language-specific suffixes (e.g. "aluminio" vs
+    "aluminio (US)"); falls back to any language's label, then to treating
+    `label` as already a key (covers English/CLI use)."""
+    use_lang = lang if lang is not None else _LANG
+    for key, entry in WIRE_MATERIAL_LABELS.items():
+        if entry.get(use_lang) == label:
+            return key
     for key, entry in WIRE_MATERIAL_LABELS.items():
         if label in entry.values():
             return key
@@ -3388,7 +3428,10 @@ def _segs(length_m: float, highest_freq_mhz: float,
     spw = int(segs_per_half_wave or SEGS_PER_HALF_WAVE)
     spw = max(5, min(spw, SEGS_PER_HALF_WAVE_MAX))
     lambda_half = C_MHZ / (2.0 * highest_freq_mhz) if highest_freq_mhz else 10.0
-    n = max(7, int(length_m / lambda_half * spw))
+    # round() rather than int()-truncation: _segs_at_length() (used for every
+    # non-radiator conductor) already rounds, so truncating here would give a
+    # systematic one-segment-coarser bias for this wire relative to that one.
+    n = max(7, int(round(length_m / lambda_half * spw)))
     return n if n % 2 == 1 else n + 1
 
 
@@ -4168,7 +4211,7 @@ def run_nec2c(binary: str, nec_path: str, out_path: str,
     try:
         result = subprocess.run(
             cmd,
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True, text=True, timeout=timeout, check=False,
         )
         if result.returncode != 0:
             return False
@@ -5840,7 +5883,7 @@ def write_report(
         std_score = unun_result.best_standard_score
         ln(T("report_unun_best_std").format(std_n, std_score))
 
-        cur_score = unun_result.ratio_score[unun_ratio]
+        cur_score = unun_result.ratio_score.get(unun_ratio, 999.0)
         if cur_score > 0:
             delta = cur_score - std_score
             pct = 100.0 * delta / cur_score
@@ -6372,6 +6415,12 @@ def plot_radiation_diagrams(
 
                 _phis = sorted({round(p % 360.0, 2) for (_, p, _) in rows})
 
+                # _snap_phi/_cut close over _phis/rows from this loop
+                # iteration (`for cr in active:`) but are only ever called
+                # immediately below, within the same iteration — safe today,
+                # but do not store or defer these closures across iterations,
+                # since _phis/rows will have moved on to the next band by
+                # the time a deferred call ran.
                 def _snap_phi(target: float) -> float:
                     """Nearest φ actually present in the RP grid (wrapping)."""
                     tgt = target % 360.0
@@ -7114,7 +7163,6 @@ def plot_results(
     pareto: List[CandidateResult],
     ranked: List[CandidateResult],
     calc_rows: List[CalcRow],
-    unun_ratio: float,
     out_png: str,
 ) -> None:
     if not HAS_MPL:
@@ -7139,6 +7187,12 @@ def plot_results(
     cs = [r.cp_len_m   for r in results]
     sc = [r.score_combined for r in results]
     sc_clipped = [min(s, 5.0) for s in sc]
+    # NOTE: if every candidate scores >= 5.0, sc_clipped is uniformly 5.0 and
+    # vmin==vmax==5.0 here, which degenerates the color scale to a single
+    # flat color (matplotlib does not error on this — it renders, just
+    # without gradient). That is a correct rendering of "everything is
+    # equally bad", not a bug, but is called out here since it looks like
+    # a broken plot at a glance.
     scatter = ax1.scatter(ws, cs, c=sc_clipped, cmap="RdYlGn_r",
                           s=20, alpha=0.6, vmin=min(sc_clipped), vmax=5.0)
     fig.colorbar(scatter, ax=ax1, label=T("plot_colorbar"))
@@ -7176,7 +7230,10 @@ def plot_results(
     top10 = ranked[:10]
     labels = [f"{r.wire_len_m:.1f}m\n{r.cp_len_m:.1f}m" for r in top10]
 
-    for bi, cr in enumerate(active[:6]):
+    # `ranked` can be empty even when `results` is not (e.g. every candidate
+    # failed NEC-2), which would leave top10/vswrs empty and crash the
+    # per-band bar charts below on max(vswrs). Nothing to plot in that case.
+    for bi, cr in enumerate(active[:6] if top10 else []):
         row_idx = 1 + bi // 3
         col_idx = bi % 3
         ax = fig.add_subplot(gs[row_idx, col_idx])
@@ -8627,7 +8684,6 @@ def unun_design(freq_mhz: float,
         winding_code = "ok"
     ratio_check = (n_total / n_tap) ** 2 if n_tap else float("nan")
     if is_air:
-        pitch_mm = wire_dia_mm + space_mm
         wire_per_turn_m = round(math.pi * (coil_dia_mm / 1000.0), 3)
     else:
         wire_per_turn_m = round(math.pi * ((core_d["OD"] + core_d["ID"]) / 2.0) / 1000.0, 3)
@@ -9240,6 +9296,12 @@ def transmatch_design(taps: List[Dict[str, object]],
     # t_ref and the old max() described a coil shorter than its own 50 Ω port.
     n_total = max(int(t_ref_used), max((r["turns"] for r in rows), default=0))
     total_wire_mm = n_total * _wire_mm_per_turn
+    # NOTE: evaluated at f_max (worst-case skin depth for the whole winding),
+    # whereas each row's sec_rdc_mohm above uses that row's own band
+    # frequency. total_rdc_mohm is therefore NOT the sum of the rows'
+    # sec_rdc_mohm values (nor is it meant to be — those are incremental
+    # per-tap resistances at their own operating frequency; this is the
+    # complete winding's resistance at the highest band it must support).
     total_rdc_mohm = (total_wire_mm * 4.0 * _RHO_CU * 1e6
                       / (math.pi * wire_dia_mm ** 2)
                       * _skin_effect_ratio(f_max, wire_dia_mm))
@@ -9732,7 +9794,6 @@ def unun_toroid_png(design: Dict[str, object],
     # (angle = -90°) and going clockwise back up to the start.
     start_ang = -90.0
     tap_idx = max(1, min(n_tap, n_total))
-    r_mid = (R_out + R_in) / 2.0
     r_wire_out, r_wire_in = R_out + wire_dia_mm * 0.9, R_in - wire_dia_mm * 0.9
     lw_wire = max(1.0, min(3.2, wire_dia_mm * 1.4))
     for k in range(1, n_total + 1):
@@ -10385,11 +10446,8 @@ def main() -> None:
             _old_min = args.wire_min
             args.wire_min = math.ceil(_rise_guard / args.wire_step) * args.wire_step
             print(
-                f"  {Fore.YELLOW}AVISO: wire_min ajustado de {_old_min:.2f} m a "
-                f"{args.wire_min:.2f} m porque el desnivel vertical del hilo "
-                f"({_rise_guard:.3f} m) supera el mínimo anterior. "
-                f"Un hilo más corto no puede llegar a la altura final especificada."
-                f"{Style.RESET_ALL}"
+                f"  {Fore.YELLOW}" + T("warn_wire_min_raised").format(
+                    _old_min, args.wire_min, _rise_guard) + f"{Style.RESET_ALL}"
             )
             # The --wire-min ≤ --wire-max check ran on the ORIGINAL arguments,
             # long before this adjustment.  Raising wire_min above wire_max
@@ -10397,13 +10455,8 @@ def main() -> None:
             # as a crash in the plotting stage after part of the output set has
             # already been written.
             if args.wire_min > args.wire_max:
-                print(f"{Fore.RED}ERROR: el desnivel vertical del hilo "
-                      f"({_rise_guard:.3f} m) obliga a wire_min = "
-                      f"{args.wire_min:.2f} m, por encima de wire_max = "
-                      f"{args.wire_max:.2f} m: no queda ninguna longitud de "
-                      f"hilo que pueda alcanzar la altura final pedida. "
-                      f"Amplíe --wire-max, baje --height o suba "
-                      f"--wire-slope-end-height.{Style.RESET_ALL}")
+                print(f"{Fore.RED}" + T("err_wire_min_exceeds_max").format(
+                    _rise_guard, args.wire_min, args.wire_max) + f"{Style.RESET_ALL}")
                 sys.exit(1)
 
     wire_range = (args.wire_min, args.wire_max, args.wire_step)
@@ -10927,7 +10980,8 @@ def main() -> None:
                 break                       # ratio and ranking agree — done
             if _recommended in _seen_ratios:
                 # Oscillation between two ratios: keep the better-scoring one.
-                if unun_result.ratio_score[_recommended] < unun_result.ratio_score[unun_ratio] - 1e-9:
+                if (unun_result.ratio_score.get(_recommended, 999.0)
+                        < unun_result.ratio_score.get(unun_ratio, 999.0) - 1e-9):
                     unun_ratio = _recommended
                     for _cr in calc_rows:
                         _cr.unun_ratio = unun_ratio
@@ -11378,8 +11432,8 @@ def main() -> None:
         if unun_result is not None:
             print(f"\n  {Fore.CYAN}" + T("unun_analysis_header").format(
                 best.wire_len_m, best.cp_len_m) + f"{Style.RESET_ALL}")
-            print(T("unun_current").format(unun_ratio,
-                                           unun_result.ratio_score[unun_ratio]))
+            print(T("unun_current").format(
+                unun_ratio, unun_result.ratio_score.get(unun_ratio, 999.0)))
             print(T("unun_best_std").format(unun_result.best_standard_ratio,
                                             unun_result.best_standard_score))
             print(T("unun_continuous").format(unun_result.best_continuous_ratio,
@@ -11563,7 +11617,7 @@ def main() -> None:
         print(T("csv_best_saved").format(args.out_csv, export_unun))
 
     if results:
-        plot_results(results, pareto, ranked, calc_rows, unun_ratio, args.out_png)
+        plot_results(results, pareto, ranked, calc_rows, args.out_png)
 
     _wh_out  = args.height if args.height is not None else DEFAULT_HEIGHT_M
     _cph_out = _wh_out          # counterpoise shares the antenna height
