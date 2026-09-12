@@ -11563,7 +11563,6 @@ def _launch_gui() -> None:
 
     # ── All GUI code is inlined below so the file is self-contained ──────
 
-    import locale as _gui_locale
     import threading as _threading
     import tkinter as tk
     import tkinter.font as tkfont
@@ -11579,18 +11578,6 @@ def _launch_gui() -> None:
         "23cm":  1296.200,
     }
     _KNOWN_BANDS = _BAND_CENTRE_FREQ_MHZ.keys()
-
-    def _gui_detect_lang() -> str:
-        try:
-            lang = _gui_locale.getlocale()[0] or ""
-        except Exception:
-            lang = ""
-        lang = lang.lower()
-        if lang.startswith("es"):
-            return "es"
-        if lang.startswith("it"):
-            return "it"
-        return "en"
 
     def _gui_find_nec2c() -> str:
         for name in ("nec2c", "nec2c-mpich"):
@@ -13129,7 +13116,7 @@ def _launch_gui() -> None:
             # Point GUI at this very script
             self._script_path = os.path.abspath(__file__)
 
-            self._ui_lang = _gui_detect_lang()
+            self._ui_lang = _detect_locale_lang()
             self._font_sz = _BASE
             self._tw: list = []
 
