@@ -57,7 +57,7 @@ import subprocess
 import itertools
 import webbrowser
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 try:
     from colorama import Fore, Style, init as _cinit
@@ -2243,7 +2243,17 @@ class FreqPoint:
     R_ohm:      float = 0.0        # feedpoint resistance
     X_ohm:      float = 0.0        # feedpoint reactance
     gain_dbi:   float = 0.0        # max azimuth/elevation gain (dBi)
-    toa_deg:    float = 90.0       # take-off angle (degrees, 90=horizon)
+    # Take-off angle of the pattern maximum, in degrees of ELEVATION:
+    # 0 = horizon, 90 = zenith.  The parser stores 90 - theta_nec, where
+    # theta_nec is NEC's polar angle measured from the zenith, and every
+    # consumer reads it that way (HIGH_TOA_WARN_DEG flags a cloud-warmer
+    # ABOVE 60°).  The old comment claimed "90=horizon", the exact opposite.
+    # Only meaningful when `rp_rows` is non-empty — the value below is a
+    # placeholder for "no pattern data was parsed", and callers must gate on
+    # rp_rows rather than trust it (score_candidate's pattern pass does).
+    # It is 0.0, not 90.0, so that both routes of this program agree:
+    # plot_radiation_diagrams() already falls back to 0.0 for the same field.
+    toa_deg:    float = 0.0        # elevation of the pattern peak (deg)
     # Conductor (I²R) efficiency (0–1), parsed from the NEC2 power budget when
     # the
     # deck carries conductor losses (LD card) and a pattern request.  It stays
@@ -2912,6 +2922,8 @@ def parse_nec2_output(filepath: str, debug: bool = False,
         if rp_gains:
             best_rp = max(rp_gains, key=lambda t: t[2])
             fp.gain_dbi = best_rp[2]
+            # best_rp[0] is NEC's theta (from the zenith); toa_deg is stored
+            # as ELEVATION above the horizon: 0 = horizon, 90 = zenith.
             fp.toa_deg = 90.0 - best_rp[0]
             # Keep the whole table: the global maximum alone cannot tell the
             # optimiser what the antenna does at a low take-off angle.
@@ -4802,7 +4814,12 @@ def nec2_sweep(
     results: List[CandidateResult] = []
     total = len(grid)
     done  = 0
-    _warned_geom = False
+    # Geometry warnings are deduplicated by TEXT, not by "some warning already
+    # happened".  A single boolean latched on the first candidate that produced
+    # any warning and silently swallowed every *different* warning later in the
+    # sweep (e.g. a feedpoint clamp after a counterpoise clamp), which is
+    # exactly the case the user needs to hear about.
+    _warned_geom: Set[str] = set()
 
     with tempfile.TemporaryDirectory(prefix="nec2opt_") as tmpdir:
         for w, c in grid:
@@ -4843,12 +4860,15 @@ def nec2_sweep(
                     segs_per_half_wave=segs_per_half_wave,
                 )
                 # The geometry builder may have clamped a wire end away from
-                # the ground singularity.  Report it once, not once per point.
-                if _geo.warnings and not _warned_geom:
-                    _warned_geom = True
-                    print()
-                    for _wmsg in _geo.warnings:
-                        print(f"  {Fore.YELLOW}WARNING: {_wmsg}{Style.RESET_ALL}")
+                # the ground singularity.  Report each DISTINCT message once,
+                # not once per point and not "only the first batch".
+                if _geo.warnings:
+                    _new_msgs = [m for m in _geo.warnings if m not in _warned_geom]
+                    if _new_msgs:
+                        _warned_geom.update(_new_msgs)
+                        print()
+                        for _wmsg in _new_msgs:
+                            print(f"  {Fore.YELLOW}WARNING: {_wmsg}{Style.RESET_ALL}")
                 # Always report the geometry that ended up in the deck: the
                 # builder may have raised a wire end off the ground, and a
                 # candidate whose printed end height differs from the simulated
@@ -6630,6 +6650,8 @@ def plot_radiation_diagrams(
                 elev_front = []
                 elev_back  = []
 
+            # Elevation above the horizon (0 = horizon, 90 = zenith), the same
+            # convention FreqPoint.toa_deg uses.  No pattern rows → 0.0.
             toa = 90.0 - (best_theta if best_theta is not None else 90.0)
 
             band_patterns[cr.band] = {
@@ -7101,7 +7123,12 @@ def plot_radiation_diagrams(
             # Cap at 35° so the camera never looks nearly straight down —
             # high angles make the zenith cap face-on and exaggerate any
             # remaining depth-sort ordering issues at the pole.
-            _toa_deg = pat.get("toa_deg", 30.0)
+            # Same convention and same "no data" fallback as FreqPoint.toa_deg
+            # and the band_patterns builder: elevation in degrees, 0 = horizon.
+            # (The key is always written by the builder; this default only
+            # guards a hand-built dict, and a third, different value for the
+            # same quantity is how conventions drift apart.)
+            _toa_deg = pat.get("toa_deg", 0.0)
             if _toa_deg >= 70.0:
                 _view_elev = 35   # near-zenith: moderate overhead angle
             elif _toa_deg >= 45.0:
@@ -10205,7 +10232,20 @@ def unun_solenoid_png(design: Dict[str, object],
 def load_band_impedances_csv(path: str) -> Tuple[List[Dict[str, object]], float]:
     """
     Read an optimizer CSV (export_best_csv) and return
-    ([{'band','freq_mhz','R','X','active'}, …], unun_ratio).
+    ([{'band','freq_mhz','R','X','active','src'}, …], unun_ratio).
+
+    'src' carries the R_wire_source column verbatim-normalised:
+
+        "nec2"      — R/X came from a NEC-2 solution of the actual geometry
+        "empirical" — R/X came from the closed-form free-space wire estimate,
+                      which this program itself documents as unreliable in
+                      magnitude AND in sign
+        ""          — column absent (pre-provenance CSV, or a foreign file)
+
+    Dropping this column used to make the UnUn/Transmatch page size a matching
+    network from empirical numbers with no indication whatsoever that they were
+    not simulated.  The consumer decides what to do with it, but it can no
+    longer be unaware of it.
     """
     bands: List[Dict[str, object]] = []
     ratio = 1.0
@@ -10217,10 +10257,15 @@ def load_band_impedances_csv(path: str) -> Tuple[List[Dict[str, object]], float]
                 x = float(row.get("X_wire_ohm") or 0)
             except (TypeError, ValueError):
                 continue
+            _src = (row.get("R_wire_source") or "").strip().lower()
+            if _src not in ("nec2", "empirical"):
+                # Unknown/legacy value: do NOT silently promote it to "nec2".
+                _src = ""
             bands.append({
                 "band": (row.get("band") or "").strip(),
                 "freq_mhz": f, "R": r, "X": x,
                 "active": (row.get("active") or "").strip().upper() == "YES",
+                "src": _src,
             })
             try:
                 ratio = float(row.get("unun_ratio") or ratio)
@@ -12116,6 +12161,11 @@ def _launch_gui() -> None:
             "ut_manual":          "(manual)",
             "ut_no_data":         "No optimizer results loaded — values can be typed by hand.",
             "ut_loaded":          "Antenna data loaded: {n} bands  ({file})",
+            "ut_loaded_emp":      ("Antenna data loaded: {n} bands  ({file})  —  "
+                                   "\u26a0 {n_emp} active band(s) [{bands}] use the EMPIRICAL "
+                                   "wire model: R/X are unreliable in magnitude and in sign, "
+                                   "so the matching network below is an estimate. Re-run in "
+                                   "NEC2 mode for simulated impedances."),
             "ut_load_err":        "Could not read the optimizer CSV:\n{e}",
             "ut_csv_missing":     "CSV not found:\n{file}\n\nRun the optimizer first (Run tab).",
             "ut_core_lf":         "UnUn Transformer & Core",
@@ -12502,6 +12552,12 @@ def _launch_gui() -> None:
             "ut_manual":          "(manual)",
             "ut_no_data":         "Sin resultados del optimizador — los valores pueden cargarse a mano.",
             "ut_loaded":          "Datos de antena cargados: {n} bandas  ({file})",
+            "ut_loaded_emp":      ("Datos de antena cargados: {n} bandas  ({file})  —  "
+                                   "\u26a0 {n_emp} banda(s) activa(s) [{bands}] usan el modelo "
+                                   "EMPÍRICO de hilo: R/X no son fiables ni en módulo ni en "
+                                   "signo, así que la red de adaptación de abajo es una "
+                                   "estimación. Reejecute en modo NEC2 para impedancias "
+                                   "simuladas."),
             "ut_load_err":        "No se pudo leer el CSV del optimizador:\n{e}",
             "ut_csv_missing":     "No se encontró el CSV:\n{file}\n\nEjecute primero el optimizador (pestaña Ejecutar).",
             "ut_core_lf":         "Transformador UnUn y Núcleo",
@@ -12873,6 +12929,11 @@ def _launch_gui() -> None:
             "ut_manual": '(manuale)',
             "ut_no_data": "Nessun risultato dell'ottimizzatore caricato — i valori possono essere digitati a mano.",
             "ut_loaded": 'Dati antenna caricati: {n} bande  ({file})',
+            "ut_loaded_emp": ('Dati antenna caricati: {n} bande  ({file})  —  '
+                              '\u26a0 {n_emp} banda/e attiva/e [{bands}] usano il modello '
+                              'EMPIRICO del filo: R/X non sono affidabili né in modulo né in '
+                              'segno, quindi la rete di adattamento sotto è una stima. '
+                              'Rieseguire in modalità NEC2 per impedenze simulate.'),
             "ut_load_err": "Impossibile leggere il CSV dell'ottimizzatore:\n{e}",
             "ut_csv_missing": "CSV non trovato:\n{file}\n\nEseguire prima l'ottimizzatore (scheda Esegui).",
             "ut_core_lf": 'Trasformatore UnUn e Nucleo',
@@ -13455,6 +13516,14 @@ def _launch_gui() -> None:
             self._thread  = None
             self._running = False
             self._stopped = False
+            # Every Run gets a monotonically increasing token.  The worker
+            # thread carries its own token and only ever touches self._process
+            # (or posts a UI callback) while that token is still the current
+            # one.  Without it, a Stop followed by a fast Run let the OLD
+            # thread's `finally` clear the handle of the NEW process, after
+            # which Stop could no longer kill anything.
+            self._run_token  = 0
+            self._proc_lock  = _threading.Lock()
 
             # Point GUI at this very script
             self._script_path = os.path.abspath(__file__)
@@ -14894,6 +14963,10 @@ def _launch_gui() -> None:
 
             # Antenna data cached from the optimizer CSV
             self._ant_bands: list = []
+            # Bands whose R/X came from the empirical formula (or from a CSV
+            # without a provenance column) — kept so the status line and the
+            # exported text can flag them.
+            self._ant_emp_bands: list = []
             self._ant_unun_ratio: float = 1.0
             self._ut_busy = False
             self._ut_job = None
@@ -16036,8 +16109,27 @@ def _launch_gui() -> None:
                         self._tm_r_vars[i].set("")
                         self._tm_x_vars[i].set("")
                         self._tm_act_vars[i].set(False)
-                self._ut_status_key = "ut_loaded"
-                self._ut_status_kw = {"n": len(bands), "file": os.path.basename(path)}
+                # Provenance of the impedances that are about to size a
+                # matching network.  A band whose R/X came from the empirical
+                # free-space formula (or from a CSV with no provenance column
+                # at all) must say so here: the program's own documentation
+                # calls those numbers unreliable in magnitude and in sign, and
+                # this page is where a builder turns them into turns, taps and
+                # a series L or C.
+                _emp = [b for b in bands
+                        if b["active"] and str(b.get("src") or "") != "nec2"]
+                self._ant_emp_bands = [str(b["band"]) for b in _emp]
+                if _emp:
+                    self._ut_status_key = "ut_loaded_emp"
+                    self._ut_status_kw = {
+                        "n": len(bands), "file": os.path.basename(path),
+                        "n_emp": len(_emp),
+                        "bands": ", ".join(self._ant_emp_bands),
+                    }
+                else:
+                    self._ut_status_key = "ut_loaded"
+                    self._ut_status_kw = {"n": len(bands),
+                                          "file": os.path.basename(path)}
                 self._ut_status_upd()
             finally:
                 self._ut_busy = False
@@ -16053,9 +16145,22 @@ def _launch_gui() -> None:
             if not path:
                 return
             f = self._ut_fmt
-            out = ["=" * 78, "  UNUN / TRANSMATCH", "=" * 78, "",
-                   getattr(self, "_ut_unun_txt", ""), "",
-                   f"  {self.t('ut_mb_lf')}", "-" * 78]
+            out = ["=" * 78, "  UNUN / TRANSMATCH", "=" * 78, ""]
+            # The exported file outlives the window it was produced in, so the
+            # provenance caveat has to travel with it: nothing downstream can
+            # tell a simulated impedance from an empirical estimate otherwise.
+            _emp_bands = getattr(self, "_ant_emp_bands", []) or []
+            if _emp_bands:
+                out += [
+                    "  " + self.t("ut_loaded_emp",
+                                  n=len(getattr(self, "_ant_bands", []) or []),
+                                  file=self._out_csv_var.get().strip(),
+                                  n_emp=len(_emp_bands),
+                                  bands=", ".join(_emp_bands)),
+                    "",
+                ]
+            out += [getattr(self, "_ut_unun_txt", ""), "",
+                    f"  {self.t('ut_mb_lf')}", "-" * 78]
             for r in getattr(self, "_ut_mb_rows", []):
                 out.append(f"  {r['band']:<8}{f(r['freq_mhz'], 3):>10} MHz   "
                            f"R={f(r['R'], 1):>8}  X={f(r['X'], 1):>8}  "
@@ -16339,6 +16444,11 @@ def _launch_gui() -> None:
                     return
             self._running = True
             self._stopped = False
+            # Invalidate any worker still draining a terminated process.
+            with self._proc_lock:
+                self._run_token += 1
+                _token = self._run_token
+                self._process = None
             self._run_btn.config(state="disabled")
             self._stop_btn.config(state="normal")
             self._show_report_btn.config(state="disabled")
@@ -16347,29 +16457,61 @@ def _launch_gui() -> None:
             self._progress.start(15)
             self._set_status_key("running", _ACCENT)
             self._thread = _threading.Thread(
-                target=self._run_in_thread, args=(cmd, outdir), daemon=True)
+                target=self._run_in_thread, args=(cmd, outdir, _token), daemon=True)
             self._thread.start()
 
-        def _run_in_thread(self, cmd: list, cwd):
+        def _token_is_current(self, token: int) -> bool:
+            """True while `token` still identifies the run in progress."""
+            with self._proc_lock:
+                return token == self._run_token
+
+        def _log_from_worker(self, token: int, text: str):
+            """Console write posted by a worker — dropped if that run is over."""
+            if self._token_is_current(token):
+                self._log(text)
+
+        def _run_in_thread(self, cmd: list, cwd, token: int):
+            proc = None
             try:
-                self._process = subprocess.Popen(
+                proc = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, encoding="utf-8", errors="replace", cwd=cwd, bufsize=1)
-                for line in self._process.stdout:
+                with self._proc_lock:
+                    if token != self._run_token:
+                        # Stop (or a new Run) beat us to it while Popen was
+                        # still starting: kill what we just spawned and leave
+                        # self._process alone — it belongs to someone else.
+                        _stale = True
+                    else:
+                        self._process = proc
+                        _stale = False
+                if _stale:
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+                    return
+                for line in proc.stdout:
                     clean = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', line)
-                    self.after(0, self._log, clean)
-                self._process.wait()
-                rc = self._process.returncode
+                    self.after(0, self._log_from_worker, token, clean)
+                proc.wait()
+                rc = proc.returncode
                 if rc == 0:
-                    self.after(0, self._run_finished, True, self.t("finished_ok"))
+                    self.after(0, self._run_finished, True, self.t("finished_ok"), token)
                 else:
-                    self.after(0, self._run_finished, False, self.t("exit_code", rc=rc))
+                    self.after(0, self._run_finished, False, self.t("exit_code", rc=rc), token)
             except Exception as e:
-                self.after(0, self._run_finished, False, self.t("thread_error", e=e))
+                self.after(0, self._run_finished, False, self.t("thread_error", e=e), token)
             finally:
-                self._process = None
+                # Only clear the handle if it is still OURS.  Blindly setting
+                # it to None here is what used to orphan the next run.
+                with self._proc_lock:
+                    if proc is not None and self._process is proc:
+                        self._process = None
 
-        def _run_finished(self, success: bool, msg: str):
+        def _run_finished(self, success: bool, msg: str, token: Optional[int] = None):
+            if token is not None and not self._token_is_current(token):
+                return
             if self._stopped:
                 return
             self._running = False
@@ -16399,9 +16541,16 @@ def _launch_gui() -> None:
 
         def _stop(self):
             self._stopped = True
-            if self._process is not None:
+            # Take the handle and retire the token in one atomic step, so the
+            # worker that is still draining stdout can neither clobber a later
+            # process handle nor post callbacks against the next run.
+            with self._proc_lock:
+                self._run_token += 1
+                proc = self._process
+                self._process = None
+            if proc is not None:
                 try:
-                    self._process.terminate()
+                    proc.terminate()
                 except Exception:
                     pass
             self._set_status_key("stopped", _WARN)
