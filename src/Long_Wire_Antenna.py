@@ -3861,6 +3861,16 @@ def build_deck_geometry(
     elif g.return_kind == "ground-rod":
         # Vertical conductor from the feedpoint down to the earth stake at z=0.
         rod_len = max(0.0, z_near)
+        if rod_len < wire_radius_m:
+            raise FeedpointHeightError(
+                f"Ground-rod return requires the feedpoint to be strictly "
+                f"above z=0: at z={z_near:.4f} m the rod length ({rod_len:.4f} m) "
+                f"collapses to less than the wire radius ({wire_radius_m:.5f} m), "
+                f"which NEC-2 cannot model as a wire (a GW card with coincident "
+                f"endpoints is a zero-length-segment geometry error).  Raise the "
+                f"feedpoint above ground, or choose a different return-path "
+                f"model (coax-stub) for a feedpoint at z=0."
+            )
         segs_rod = _segs_at_length(rod_len, seg_len_ref)
         g.cp_x_end, g.cp_z_end, g.cp_angle_deg = 0.0, 0.0, 0.0
         g.gw_lines.append(
