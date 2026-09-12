@@ -1639,7 +1639,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "note4_body": {
         "en": ("When nec2c is available, the optimizer runs a full Sommerfeld-Norton ground"
                " simulation for each candidate.  Without NEC2, the empirical formulas"
-               " R = 50·80^cos²(π·L/λ½) and X = 1500·sin(2π·L/λ½) are used as a free-space,"
+               " R = 50·80^cos²(π·L/λ½) and X = -1500·sin(2π·L/λ½) are used as a free-space,"
                " no-ground, no-counterpoise approximation for SCREENING GEOMETRIES ONLY."
                " Against NEC2 with a real ground and counterpoise, R can be off by 60x or more"
                " near L = λ/4-type points, and X is unreliable in both magnitude and sign —"
@@ -1651,7 +1651,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                " and cross-validate the final geometry with a VNA on the bench."),
         "es": ("Cuando nec2c está disponible, el optimizador ejecuta una simulación completa de"
                " tierra Sommerfeld-Norton para cada candidato.  Sin NEC2 se usan las fórmulas"
-               " empíricas R = 50·80^cos²(π·L/λ½) y X = 1500·sin(2π·L/λ½) como una aproximación"
+               " empíricas R = 50·80^cos²(π·L/λ½) y X = -1500·sin(2π·L/λ½) como una aproximación"
                " de hilo en espacio libre, sin tierra ni contrapeso, SÓLO PARA CRIBAR GEOMETRÍAS."
                " Frente a NEC2 con tierra real y contrapeso, R puede errar por 60x o más cerca de"
                " puntos tipo L = λ/4, y X no es confiable ni en magnitud ni en signo: la fórmula"
@@ -1661,7 +1661,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                " absoluto.  Nunca use el valor de X empírico para diseñar una red de adaptación."
                " Los resultados NEC2 siempre son preferidos; instale nec2c (ver más abajo) cuando"
                " la precisión importe, y valide la geometría final con un VNA en el banco."),
-        "it": "Quando nec2c è disponibile, l'ottimizzatore esegue una simulazione completa di terra Sommerfeld-Norton per ogni candidato.  Senza NEC2 si usano le formule empiriche R = 50·80^cos²(π·L/λ½) e X = 1500·sin(2π·L/λ½) come approssimazione di filo in spazio libero, senza terra né contrappeso, SOLO PER LA SELEZIONE DELLE GEOMETRIE. Rispetto a NEC2 con terra reale e contrappeso, R può sbagliare di 60x o più vicino a punti tipo L = λ/4, e X non è affidabile né in modulo né in segno — la formula prevede reattanza nulla a ogni multiplo di mezza onda, mentre NEC2 mostra tipicamente una grande reattanza negativa lì, perché le perdite di terra e contrappeso dominano X e le formule di filo in spazio libero non le modellano affatto. Non usare mai il valore X empirico per progettare una rete di adattamento.  I risultati NEC2 sono sempre preferiti; installare nec2c (vedi sotto) ogni volta che la precisione conta, e validare la geometria finale con un VNA in laboratorio.",
+        "it": "Quando nec2c è disponibile, l'ottimizzatore esegue una simulazione completa di terra Sommerfeld-Norton per ogni candidato.  Senza NEC2 si usano le formule empiriche R = 50·80^cos²(π·L/λ½) e X = -1500·sin(2π·L/λ½) come approssimazione di filo in spazio libero, senza terra né contrappeso, SOLO PER LA SELEZIONE DELLE GEOMETRIE. Rispetto a NEC2 con terra reale e contrappeso, R può sbagliare di 60x o più vicino a punti tipo L = λ/4, e X non è affidabile né in modulo né in segno — la formula prevede reattanza nulla a ogni multiplo di mezza onda, mentre NEC2 mostra tipicamente una grande reattanza negativa lì, perché le perdite di terra e contrappeso dominano X e le formule di filo in spazio libero non le modellano affatto. Non usare mai il valore X empirico per progettare una rete di adattamento.  I risultati NEC2 sono sempre preferiti; installare nec2c (vedi sotto) ogni volta che la precisione conta, e validare la geometria finale con un VNA in laboratorio.",
     },
     "note5_title": {
         "en": "Next steps",
@@ -2289,7 +2289,7 @@ class CalcRow:
     wire_len_m:     float = 0.0
     L_over_lhalf:   float = 0.0    # L / (λ/2)
     R_wire_ohm:     float = 0.0    # empirical: 50·80^cos²(π·L/λ½)
-    X_wire_ohm:     float = 0.0    # empirical: 1500·sin(2π·L/λ½)
+    X_wire_ohm:     float = 0.0    # empirical: -1500·sin(2π·L/λ½)  (sign matters)
     vswr_no_cp:     float = 0.0    # VSWR without counterpoise
     vswr_with_cp:   float = 0.0    # VSWR with counterpoise correction
     Z_eff_ohm:      float = 0.0    # Z_wire + Zcp
@@ -5999,9 +5999,12 @@ def export_best_csv(
       vswr_with_cp — Tx-side VSWR after UnUn (best stored impedance or empirical fallback)
       R_wire_ohm / X_wire_ohm — antenna-side impedance (NEC2 if available, else
                      empirical — see R_wire_source for which one this row used)
-      R_wire_source — "nec2" or "empirical", so a row that mixes an NEC2-derived
-                     R_wire_ohm/Z_eff_ohm with the always-empirical vswr_no_cp
-                     is identifiable from the file itself, not just this docstring.
+      R_wire_source — "nec2" or "empirical", derived from band_imp_src (the
+                     same field the report/PDF/console print), NOT from the
+                     mere presence of a stored impedance.  A row that mixes an
+                     NEC2-derived R_wire_ohm/Z_eff_ohm with the always-empirical
+                     vswr_no_cp is therefore identifiable from the file itself,
+                     and a run without nec2c can never claim "nec2".
     """
     fieldnames = [
         "band", "freq_mhz", "active", "lambda_half_m", "lambda_qtr_m",
@@ -6026,13 +6029,33 @@ def export_best_csv(
                     and not math.isnan(_stored_R) and not math.isnan(_stored_X)):
                 R = _stored_R
                 X = _stored_X
-                r_wire_source = "nec2"
+                # band_R_ant/band_X_ant are filled by score_candidate() from
+                # NEC2 *or* from the empirical formula: the mere existence of
+                # a stored value says nothing about its provenance.  The only
+                # authority on that is band_imp_src ("NEC2" / "NEC2-MISS" /
+                # "empirical"), which is what the report, the PDF and the
+                # console summary already print.  Stamping "nec2"
+                # unconditionally here made an --mode empirical run emit a
+                # report saying `emp` and a CSV saying `nec2` for the same
+                # number — and this CSV is exactly what the UnUn/Transmatch
+                # tab loads to size a matching network.
+                _src = best.band_imp_src.get(cr.band, "empirical")
+                r_wire_source = "nec2" if _src == "NEC2" else "empirical"
             else:
                 ratio_emp = w / lhalf if lhalf else 0.0
                 arg = math.pi * ratio_emp
                 cos2 = math.cos(arg) ** 2
-                R = max(1.0, 50 * (80 ** cos2))
-                X = 1500 * math.sin(2 * arg)
+                R = max(1.0, 50.0 * (80.0 ** cos2))
+                # Sign convention: X = -1500·sin(2π·L/λ½), identical to
+                # score_candidate() (both branches), find_best_unun() and the
+                # X_no_cp column a few lines below.  The bare +1500 that used
+                # to be here inverted the reactance of every NEC2-less row:
+                # short wire (L ≪ λ/2, arg → 0, sin(2·arg) > 0) must come out
+                # capacitive, and L between λ/4 and λ/2 inductive.  Z_eff and
+                # the VSWR columns are even in X and were unaffected, so the
+                # only visible symptom was the published X_wire_ohm telling a
+                # builder to fit a series C where a series L is needed.
+                X = -1500.0 * math.sin(2.0 * arg)
                 r_wire_source = "empirical"
 
             lhalf_emp = C_MHZ / (2.0 * freq) if freq else 1.0
@@ -8414,6 +8437,12 @@ TOROID_DB: Dict[str, Dict[str, float]] = {
 
 DEFAULT_TOROID = "FT-240-31"
 
+# Wire the builder must actually cut, over the ideal geometric perimeter of
+# the winding: real turns have a finite bend radius, do not lie flat against
+# the core, and need leads at both ends and at the tap.  Applied to
+# wire_total_m only — wire_per_turn_m stays the pure geometric figure.
+UNUN_WIRE_ALLOWANCE = 1.10
+
 # ── Core loss model ────────────────────────────────────────────────────────
 #
 # At HF a ferrite transformer is almost never limited by flux saturation: it
@@ -8684,10 +8713,22 @@ def unun_design(freq_mhz: float,
         winding_code = "ok"
     ratio_check = (n_total / n_tap) ** 2 if n_tap else float("nan")
     if is_air:
+        # Air core: one turn really is the circumference of the cylindrical
+        # former, so π·coil_dia is correct here.
         wire_per_turn_m = round(math.pi * (coil_dia_mm / 1000.0), 3)
     else:
-        wire_per_turn_m = round(math.pi * ((core_d["OD"] + core_d["ID"]) / 2.0) / 1000.0, 3)
-    wire_total_m = round(n_total * wire_per_turn_m, 2)
+        # Toroid: a turn goes through the hole (H), across the top face
+        # ((OD-ID)/2), down the outside (H) and back across the bottom face
+        # ((OD-ID)/2)  →  (OD - ID) + 2·H.  The old expression was
+        # π·(OD+ID)/2, i.e. the MEAN CIRCUMFERENCE of the core (the magnetic
+        # path length, used by Ae/Le), which is ~3x too long for every core
+        # in TOROID_DB and made the bill of materials ask for three times
+        # the enamelled wire actually needed.
+        wire_per_turn_m = round(((core_d["OD"] - core_d["ID"])
+                                 + 2.0 * core_d["H"]) / 1000.0, 3)
+    # Cut length: the geometric perimeter assumes a zero-radius bend and no
+    # leads, so the purchasing figure carries a build allowance.
+    wire_total_m = round(n_total * wire_per_turn_m * UNUN_WIRE_ALLOWANCE, 2)
 
     # ── 3. Reactance compensation ────────────────────────────────────────
     # Reference plane: LOAD side (antenna side), matching unun_multiband(),
@@ -11986,7 +12027,7 @@ def _launch_gui() -> None:
             "ut_r_nabove":        "Turns above tap (Nt − N_tap)",
             "ut_r_ratiochk":      "Ratio check (Nt/N_tap)²",
             "ut_r_wpt":           "Wire length per turn",
-            "ut_r_wtot":          "Total wire length required",
+            "ut_r_wtot":          "Total wire to cut (incl. 10% allowance)",
             "ut_r_sec3":          "3.  REACTANCE COMPENSATION",
             "ut_r_xcomp":         "Required compensation reactance",
             "ut_r_ctype":         "Component type needed",
@@ -12372,7 +12413,7 @@ def _launch_gui() -> None:
             "ut_r_nabove":        "Espiras sobre la toma (Nt − N_tap)",
             "ut_r_ratiochk":      "Verificación de relación (Nt/N_tap)²",
             "ut_r_wpt":           "Longitud de hilo por espira",
-            "ut_r_wtot":          "Longitud total de hilo necesaria",
+            "ut_r_wtot":          "Hilo total a cortar (incl. 10% margen)",
             "ut_r_sec3":          "3.  COMPENSACIÓN DE REACTANCIA",
             "ut_r_xcomp":         "Reactancia de compensación necesaria",
             "ut_r_ctype":         "Tipo de componente necesario",
@@ -12740,7 +12781,7 @@ def _launch_gui() -> None:
             "ut_r_nabove": 'Spire sopra la presa (Nt − N_tap)',
             "ut_r_ratiochk": 'Verifica rapporto (Nt/N_tap)²',
             "ut_r_wpt": 'Lunghezza filo per spira',
-            "ut_r_wtot": 'Lunghezza totale di filo richiesta',
+            "ut_r_wtot": 'Filo totale da tagliare (incl. 10% margine)',
             "ut_r_sec3": '3.  COMPENSAZIONE DELLA REATTANZA',
             "ut_r_xcomp": 'Reattanza di compensazione richiesta',
             "ut_r_ctype": 'Tipo di componente necessario',
