@@ -5433,6 +5433,7 @@ def write_report(
     out_path: str,
     unun_result: Optional[UnUnResult] = None,
     total_candidates: int = 0,
+    top_n: int = 0,
     wire_height_m: float = DEFAULT_HEIGHT_M,
     cp_end_height_m: Optional[float] = None,
     use_counterpoise: bool = True,
@@ -5525,8 +5526,13 @@ def write_report(
     ln(T("report_total_candidates").format(display_total))
     lines.append("")
 
-    # ── TOP 20 RANKING ───────────────────────────────────────────────────
-    top_n = len(ranked)
+    # ── TOP N RANKING ────────────────────────────────────────────────────
+    # `ranked` is the FULL ranked list — the winner (ranked[0]) and every
+    # downstream deliverable (CSV, .nec deck, plots, PDF) is computed from
+    # it. `top_n` only controls how many rows are printed in the table
+    # below; it must never be used to slice `ranked` itself, or the report's
+    # "best candidate" section silently disappears whenever top_n <= 0.
+    top_n = min(top_n, len(ranked)) if top_n > 0 else len(ranked)
     h1(T("report_top_n_header").format(top_n))
     # Defensive check: the table header states one segmentation density for
     # every published result. If some row was never refined to that density
@@ -10055,7 +10061,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--rerank-top", metavar="N", type=int,
                    default=DEFAULT_RERANK_TOP_N,
                    help=T("ap_rerank_top"))
-    p.add_argument("--top-n", metavar="N", type=int, default=20,
+    def _positive_int(value):
+        ivalue = int(value)
+        if ivalue < 1:
+            raise argparse.ArgumentTypeError(
+                f"--top-n must be >= 1 (got {value})")
+        return ivalue
+
+    p.add_argument("--top-n", metavar="N", type=_positive_int, default=20,
                    help=T("ap_top_n"))
     p.add_argument("--out-txt", metavar="FILE", default="optimizer_report.txt",
                    help=T("ap_out_txt"))
@@ -11420,7 +11433,7 @@ def main() -> None:
     export_unun = unun_ratio
 
     report = write_report(
-        ranked=ranked[:args.top_n],
+        ranked=ranked,
         pareto=pareto_ranked,
         calc_rows=calc_rows,
         unun_ratio=unun_ratio,
@@ -11430,6 +11443,7 @@ def main() -> None:
         out_path=args.out_txt,
         unun_result=unun_result,
         total_candidates=len(results),
+        top_n=args.top_n,
         wire_height_m=args.wire_height if args.wire_height is not None else DEFAULT_HEIGHT_M,
         cp_end_height_m=cp_end_height,
         use_counterpoise=use_counterpoise,
