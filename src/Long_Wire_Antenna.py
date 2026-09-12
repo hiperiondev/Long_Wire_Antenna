@@ -5485,6 +5485,7 @@ def write_report(
     segs_sweep: Optional[int] = None,
     segs_final: Optional[int] = None,
     conv_report: Optional[ConvergenceReport] = None,
+    target_toa_deg: float = DEFAULT_TARGET_TOA_DEG,
 ) -> str:
     active = [r for r in calc_rows if r.active]
     bands  = [cr.band for cr in active]
@@ -5689,7 +5690,7 @@ def write_report(
         # report must not let that pass unnoticed.
         if best.pattern_ok and best.band_toa:
             ln("")
-            ln(T("radiation_summary_hdr").format(DEFAULT_TARGET_TOA_DEG))
+            ln(T("radiation_summary_hdr").format(target_toa_deg))
             ln(T("radiation_row_hdr").format(
                 T("radiation_col_band"), T("radiation_col_mhz"),
                 T("radiation_col_gain"), T("radiation_col_toa"),
@@ -11557,6 +11558,7 @@ def main() -> None:
         segs_sweep=segs_sweep,
         segs_final=segs_final,
         conv_report=conv_report,
+        target_toa_deg=float(getattr(args, "target_toa", DEFAULT_TARGET_TOA_DEG)),
     )
     print(T("report_saved").format(args.out_txt))
 
@@ -12854,7 +12856,7 @@ def _launch_gui() -> None:
             "help_nocp_mode": "How the antenna is grounded when no counterpoise wire is used: choose the radial, ground-stake, or stub-based scheme that matches your installation.",
             "help_stub_len": "Length in meters of the matching/loading stub used in counterpoise-free mode. Only applies when a stub-based grounding option is selected.",
             "help_radiator_height": "Height above ground, in meters, of the radiator wire's ends. Affects ground-reflection modeling and feed-point impedance.",
-            "help_rad_target_toa": "Desired radiation take-off angle in degrees. Candidate geometries are scored on how close their modeled elevation pattern peak comes to this angle.",
+            "help_rad_target_toa": "Desired radiation take-off angle in degrees. Candidate geometries are scored on the modeled gain at this elevation angle, not on how close the pattern's peak comes to it.",
             "help_rad_gain_weight": "How strongly peak gain (versus VSWR match) influences the aggregate score. Higher values favor high-gain geometries even if match is slightly worse.",
             "help_rad_rerank_top": "Number of top VSWR-ranked candidates that are then re-ordered by radiation-pattern score before the final ranking is produced.",
             "help_cp_range": "Lower and upper bounds (in meters) the optimizer is allowed to try for the counterpoise length during the search sweep.",
@@ -12926,7 +12928,7 @@ def _launch_gui() -> None:
             "help_nocp_mode": "Cómo se conecta a tierra la antena cuando no se usa hilo de contrapeso: elija el esquema de radiales, estaca de tierra, o basado en stub que corresponda a su instalación.",
             "help_stub_len": "Longitud en metros del stub de acople/carga usado en modo sin contrapeso. Solo se aplica cuando se selecciona una opción de puesta a tierra basada en stub.",
             "help_radiator_height": "Altura sobre el suelo, en metros, de los extremos del hilo radiante. Afecta el modelado de reflexión en tierra y la impedancia en el punto de alimentación.",
-            "help_rad_target_toa": "Ángulo de despegue de radiación deseado, en grados. Las geometrías candidatas se puntúan según cuán cerca queda el pico de su patrón de elevación modelado de este ángulo.",
+            "help_rad_target_toa": "Ángulo de despegue de radiación deseado, en grados. Las geometrías candidatas se puntúan según la ganancia modelada en este ángulo de elevación, no según cuán cerca queda el pico del patrón de este ángulo.",
             "help_rad_gain_weight": "Cuánto influye la ganancia pico (frente al acople de ROE) en el puntaje agregado. Valores más altos favorecen geometrías de alta ganancia aunque el acople sea algo peor.",
             "help_rad_rerank_top": "Cantidad de candidatos mejor clasificados por ROE que luego se reordenan según el puntaje de patrón de radiación antes de producir la clasificación final.",
             "help_cp_range": "Límites inferior y superior (en metros) que el optimizador puede probar para la longitud del contrapeso durante el barrido de búsqueda.",
@@ -12998,7 +13000,7 @@ def _launch_gui() -> None:
             "help_nocp_mode": "Come viene messa a terra l'antenna quando non si usa un filo di contrappeso: scegliere lo schema a radiali, con picchetto di terra o basato su stub adatto alla propria installazione.",
             "help_stub_len": "Lunghezza in metri dello stub di accoppiamento/carico usato in modalità senza contrappeso. Si applica solo quando è selezionata un'opzione di messa a terra basata su stub.",
             "help_radiator_height": "Altezza da terra, in metri, delle estremità del filo radiante. Influisce sulla modellazione della riflessione a terra e sull'impedenza al punto di alimentazione.",
-            "help_rad_target_toa": "Angolo di decollo della radiazione desiderato, in gradi. Le geometrie candidate vengono valutate in base a quanto il picco del loro diagramma di elevazione modellato si avvicina a questo angolo.",
+            "help_rad_target_toa": "Angolo di decollo della radiazione desiderato, in gradi. Le geometrie candidate vengono valutate in base al guadagno modellato a questo angolo di elevazione, non a quanto il picco del diagramma si avvicina a questo angolo.",
             "help_rad_gain_weight": "Quanto influisce il guadagno di picco (rispetto all'accoppiamento ROS) sul punteggio complessivo. Valori più alti favoriscono geometrie ad alto guadagno anche con un accoppiamento leggermente peggiore.",
             "help_rad_rerank_top": "Numero dei migliori candidati classificati per ROS che vengono poi riordinati in base al punteggio del diagramma di radiazione prima di produrre la classifica finale.",
             "help_cp_range": "Limiti inferiore e superiore (in metri) che l'ottimizzatore può provare per la lunghezza del contrappeso durante la scansione di ricerca.",
