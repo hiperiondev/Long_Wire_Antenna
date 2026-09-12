@@ -2350,10 +2350,16 @@ _RE_PWR_IN = re.compile(
 _RE_PWR_RAD = re.compile(
     r'RADIATED\s+POWER\s*=\s*([\d.E+\-]+)', re.IGNORECASE)
 _RE_WIRE_CM = re.compile(r'Wire\s+length:\s*([\d.]+)\s*m',             re.IGNORECASE)
-_RE_CP_CM   = re.compile(
-    r'Counterpoise\s*\(angle=([\d.]+)\s*deg\)',                        re.IGNORECASE)
+# Current format, written by build_deck_geometry():
+#   CM Counterpoise: 3.000 m  feed z=8.000 m -> end z=8.0000 m  (reach 3.000 m, 90.0 deg from vertical)
 _RE_CP_CM_LEN = re.compile(
-    r'Counterpoise\s*\(angle=[\d.]+\s*deg\):\s*([\d.]+)\s*m',       re.IGNORECASE)
+    r'Counterpoise:\s*([\d.]+)\s*m',                                   re.IGNORECASE)
+_RE_CP_CM_ANGLE = re.compile(
+    r'([\d.]+)\s*deg\s+from\s+vertical',                               re.IGNORECASE)
+# Legacy format kept for backward compatibility with older/third-party .out
+# files; not produced by this codebase's current writer.
+_RE_CP_CM_LEN_LEGACY = re.compile(
+    r'Counterpoise\s*\(angle=[\d.]+\s*deg\):\s*([\d.]+)\s*m',          re.IGNORECASE)
 _RE_CP_VERT = re.compile(r'counterpoise\s*\(vertical\)',                re.IGNORECASE)
 
 _RE_RP_SECTION = re.compile(r'[-]{4,}\s*RADIATION PATTERNS\s*[-]{4,}', re.IGNORECASE)
@@ -2653,13 +2659,19 @@ def parse_nec2_output(filepath: str, debug: bool = False,
     m = _RE_WIRE_CM.search(text)
     if m:
         run.wire_len_m = float(m.group(1))
-    m = _RE_CP_CM.search(text)
+    m = _RE_CP_CM_LEN.search(text) or _RE_CP_CM_LEN_LEGACY.search(text)
     if m:
         run.cp_len_m = float(m.group(1))
     if _RE_CP_VERT.search(text):
         run.cp_type = "vertical"
     elif run.cp_len_m > 0:
-        run.cp_type = "horizontal"
+        # cp_angle_deg convention (see _cp_angle_from_geometry): 0 deg = hanging
+        # straight down (vertical), 90 deg = horizontal.
+        m_angle = _RE_CP_CM_ANGLE.search(text)
+        if m_angle and float(m_angle.group(1)) < 45.0:
+            run.cp_type = "vertical"
+        else:
+            run.cp_type = "horizontal"
     else:
         run.cp_type = "none"
 
