@@ -4314,7 +4314,7 @@ def score_candidate(
                 arg = math.pi * ratio_l
                 cos2 = math.cos(arg) ** 2
                 best_R = max(1.0, 50.0 * (80.0 ** cos2))
-                best_X = 1500.0 * math.sin(2.0 * arg)
+                best_X = -1500.0 * math.sin(2.0 * arg)
                 if unun_ratio > 1.0:
                     R_in_emp = best_R / unun_ratio
                     X_in_emp = best_X / unun_ratio
@@ -4374,7 +4374,7 @@ def score_candidate(
             arg = math.pi * ratio_l
             cos2 = math.cos(arg) ** 2
             found_R = max(1.0, 50.0 * (80.0 ** cos2))
-            found_X = 1500.0 * math.sin(2.0 * arg)
+            found_X = -1500.0 * math.sin(2.0 * arg)
             found_src = "empirical"
         if found_R is not None:
             res.band_R_ant[cr.band]   = round(found_R, 2)
@@ -5357,7 +5357,7 @@ def find_best_unun(
             arg = math.pi * ratio
             cos2 = math.cos(arg) ** 2
             R_ant = max(1.0, 50.0 * (80.0 ** cos2))
-            X_ant = 1500.0 * math.sin(2.0 * arg)
+            X_ant = -1500.0 * math.sin(2.0 * arg)
 
         band_impedances.append((cr.band, R_ant, X_ant))
 
@@ -5938,7 +5938,7 @@ def export_best_csv(
             arg_emp = math.pi * ratio_emp
             cos2_emp = math.cos(arg_emp) ** 2
             R_no_cp = max(1.0, 50.0 * (80.0 ** cos2_emp))
-            X_no_cp = 1500.0 * math.sin(2.0 * arg_emp)
+            X_no_cp = -1500.0 * math.sin(2.0 * arg_emp)
             # vswr_no_cp: antenna-side VSWR ref 50 Ω, no UnUn, empirical formula.
             # This represents the bare wire impedance before the UnUn transformer.
             vswr_no = _recompute_vswr(R_no_cp, X_no_cp, 1.0)  # ratio=1 → antenna side
