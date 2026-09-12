@@ -3193,6 +3193,44 @@ def resonance_preference(unun_ratio: float) -> Tuple[float, float]:
     return (w_odd / tot, w_even / tot) if tot > 0 else (0.5, 0.5)
 
 
+def band_avoidance_score(wire_len_m: float,
+                         freq_mhz: float,
+                         unun_ratio: float,
+                         weights: Optional[Tuple[float, float]] = None) -> float:
+    """
+    Normalised resonance-avoidance score (0…1) for ONE band.
+
+    SINGLE SOURCE OF TRUTH.  Every consumer — score_candidate(), the
+    re-score pass that runs when the UnUn ratio changes, and the CSV
+    exporter — must call this and nothing else.  Three independent copies
+    of this arithmetic used to exist and they disagreed with each other
+    (the report and the CSV of the same run printed opposite verdicts for
+    the same band), so any new consumer goes through here too.
+
+    Not every λ/4 multiple is something to avoid — only every OTHER one:
+      odd  multiples (λ/4, 3λ/4, 5λ/4 …) → current maximum, R of tens of ohms;
+      even multiples (λ/2, λ, 3λ/2 …)    → voltage maximum, R of a few kΩ.
+    WHICH of the two is the good one depends on the transformer in use, so
+    the score is ratio-dependent, NOT geometry-only: see
+    resonance_preference().  1.0 means sitting on the resonance class the
+    transformer actually wants, 0.0 the other one, 0.5 midway between two
+    resonances — the scale _avoidance_rating() is calibrated for.
+
+    `weights` lets a caller hoist resonance_preference(unun_ratio) out of a
+    per-band loop; when given it must be that exact pair.
+    """
+    w_odd, w_even = (weights if weights is not None
+                     else resonance_preference(unun_ratio))
+    lambda_qtr = C_MHZ / (4.0 * freq_mhz) if freq_mhz else 0.0
+    if lambda_qtr <= 0.0:
+        return 0.0
+    ratio = wire_len_m / lambda_qtr        # how many λ/4 units is the wire?
+    mod2 = ratio % 2.0                     # odd multiples near 1, even near 0 or 2
+    dist_from_odd = abs(mod2 - 1.0)        # 0 = odd λ/4, 1 = even λ/4
+    near_odd = math.cos(math.pi * dist_from_odd / 2.0) ** 2  # 1 at odd, 0 at even
+    return w_odd * near_odd + w_even * (1.0 - near_odd)
+
+
 def _avoidance_rating(score: float) -> str:
     """
     Map a resonance-avoidance score to a human-readable label.
@@ -4235,7 +4273,20 @@ def score_candidate(
             if fmap:
                 key = min(fmap.keys(), key=lambda k: abs(k - freq))
                 _tol = max(0.15, min(0.75, 0.04 * freq))
-                if abs(key - freq) <= _tol:
+                # parse_nec2_output() deliberately writes R = X = NaN (and
+                # vswr50 = 999, plus the reason in run.note) when it detects a
+                # bad block split.  A NaN impedance is NOT NEC2 data, so it
+                # must not be consumed here: math.hypot() would yield a NaN
+                # reflection coefficient, `nan < 1` is False, and the result
+                # would silently degrade to VSWR 999 while still being stamped
+                # imp_src="NEC2" / nec2_ok=True — leaving a failed parse
+                # eligible for pareto_front() and presented by the report as
+                # trustworthy.  Treat it exactly like a missing frequency: fall
+                # through to the strict (NEC2-MISS) or empirical branch below,
+                # both of which clear nec2_ok.
+                if (abs(key - freq) <= _tol
+                        and not math.isnan(fmap[key].R_ohm)
+                        and not math.isnan(fmap[key].X_ohm)):
                     fp = fmap[key]
                     R_ant, X_ant = fp.R_ohm, fp.X_ohm
                     # An n:1 impedance transformer scales BOTH R and X by 1/n
@@ -4309,7 +4360,11 @@ def score_candidate(
             if fmap:
                 key = min(fmap.keys(), key=lambda k: abs(k - freq))
                 _tol = max(0.15, min(0.75, 0.04 * freq))
-                if abs(key - freq) <= _tol:
+                # Same NaN guard as the active-band loop above: a wiped-out
+                # parse must not be stored as an NEC2 impedance.
+                if (abs(key - freq) <= _tol
+                        and not math.isnan(fmap[key].R_ohm)
+                        and not math.isnan(fmap[key].X_ohm)):
                     fp = fmap[key]
                     found_R, found_X = fp.R_ohm, fp.X_ohm
                     found_src = "NEC2"
@@ -4327,31 +4382,17 @@ def score_candidate(
             res.band_imp_src[cr.band] = found_src
 
     # ── Avoidance score: computed over ALL defined bands ────────────────
-    # Not every λ/4 multiple is something to avoid — only every OTHER one:
-    #   odd  multiples (λ/4, 3λ/4, 5λ/4 …) → current maximum, R of tens of ohms;
-    #   even multiples (λ/2, λ, 3λ/2 …)    → voltage maximum, R of a few kΩ.
-    # The previous `ratio % 1.0` form treated both alike, so it pushed the
-    # search away from one class as hard as from the other and raised
-    # ✗ RESONANCE RISK on lengths that were in fact perfectly well fed.  The
-    # mod-2 form below is the same one the counterpoise bonus already uses.
+    # The metric itself lives in band_avoidance_score(); see there for why only
+    # every OTHER λ/4 multiple is a resonance to avoid and why which one it
+    # is depends on the transformer ratio.  Range 0…1, so the −0.25 weight
+    # and the _avoidance_rating() thresholds carry over unchanged.
     #
-    # WHICH class is the good one depends on the transformer: see
-    # resonance_preference().  Below ~16:1 the odd multiples win (direct or
-    # near-direct feed); at 49:1/64:1 the polarity inverts, because that is an
-    # end-fed half-wave whose whole point is to match the kΩ voltage maximum
-    # — and the automatic UnUn search in this program does select such ratios,
-    # so a hard-wired odd-is-good rule would fight its own VSWR term.
-    # Range stays 0…1, so the −0.25 weight and the _avoidance_rating()
-    # thresholds carry over unchanged.
-    w_odd, w_even = resonance_preference(unun_ratio)
+    # NOTE: this is ratio-dependent.  Anything that changes `unun_ratio`
+    # after the fact MUST recompute it (see _rescore_all()).
+    _w = resonance_preference(unun_ratio)
     for cr in calc_rows:
-        freq = cr.freq_mhz
-        lambda_qtr = C_MHZ / (4.0 * freq)     # λ/4 for this band
-        ratio = wire_len_m / lambda_qtr        # how many λ/4 units is the wire?
-        mod2 = ratio % 2.0                     # odd multiples near 1, even near 0 or 2
-        dist_from_odd = abs(mod2 - 1.0)        # 0 = odd λ/4, 1 = even λ/4
-        near_odd = math.cos(math.pi * dist_from_odd / 2.0) ** 2   # 1 at odd, 0 at even
-        avoidance = w_odd * near_odd + w_even * (1.0 - near_odd)
+        avoidance = band_avoidance_score(wire_len_m, cr.freq_mhz, unun_ratio,
+                                         weights=_w)
         res.band_avoidance[cr.band] = round(avoidance, 4)
         avoidances.append(avoidance)
 
@@ -5897,14 +5938,22 @@ def export_best_csv(
             vswr_no = _recompute_vswr(R_no_cp, X_no_cp, 1.0)  # ratio=1 → antenna side
 
             lambda_qtr = lhalf / 2.0 if lhalf else 0.0
-            ratio_qtr = w / lambda_qtr if lambda_qtr else 0.0
-            frac_qtr = ratio_qtr % 1.0
-            # Same normalised metric as score_candidate(): ×2 maps
-            # min(frac, 1-frac) onto 0…1, which is the scale
-            # _avoidance_rating() thresholds are calibrated for.  The old
-            # clamp at 0.25 halved every value and capped the CSV at
-            # ★ MARGINAL, disagreeing with the report for the same run.
-            avoid = 2.0 * min(frac_qtr, 1.0 - frac_qtr)
+            # Avoidance: the SAME number the report prints, not a second
+            # opinion.  What used to be here — 2·min(frac, 1−frac) on
+            # ratio_qtr % 1.0 — was the superseded "distance from ANY λ/4
+            # multiple" metric: it peaks midway between quarter-wave points
+            # and is zero at every λ/4 multiple, i.e. anti-correlated with
+            # the mod-2, transformer-aware metric score_candidate() uses,
+            # which is 1.0 at the resonance class the UnUn actually wants.
+            # Both were fed to the same _avoidance_rating() thresholds, so a
+            # single run shipped a report and a CSV that contradicted each
+            # other on the headline verdict (40 m ★★ GOOD vs ★ MARGINAL,
+            # 20 m ★★ GOOD vs ★★★ EXCELLENT).  Prefer the stored value so
+            # the two files are identical by construction; fall back to the
+            # shared helper for a band the candidate never scored.
+            avoid = best.band_avoidance.get(cr.band)
+            if avoid is None:
+                avoid = band_avoidance_score(w, freq, unun_ratio)
             rating = _avoidance_rating(avoid)
 
             writer.writerow({
@@ -10722,12 +10771,24 @@ def main() -> None:
                      ratio: float) -> List[CandidateResult]:
         """Re-evaluate every candidate under a new UnUn ratio.
 
-        Antenna-side impedances are geometry-only and therefore reused; just
-        the transformer divisor, the Tx-side impedances, the VSWR figures and
-        the aggregate scores are rebuilt.
+        Antenna-side impedances ARE geometry-only and are therefore reused;
+        everything the transformer touches is rebuilt: the divisor, the
+        Tx-side impedances, the VSWR figures, the avoidance scores and the
+        aggregate scores.
+
+        The avoidance block is emphatically NOT geometry-only — it was
+        carried forward unchanged here, which left every candidate scored
+        with the AUTO_UNUN_SEED weights no matter where the search
+        converged.  resonance_preference() exists precisely to invert the
+        odd/even polarity between a low-ratio feed and a 49:1/64:1 EFHW
+        feed, so a wire that is ★★★ EXCELLENT at the final ratio could be
+        printed as ✗ RESONANCE RISK (or the reverse), and the stale
+        score_avoidance_active also perturbed score_combined through its
+        −0.25 term and hence the ranking itself.
         """
         import copy as _copy
         _active_rows = [_cr for _cr in calc_rows if _cr.active]
+        _w = resonance_preference(ratio)
         out: List[CandidateResult] = []
         for _c in cands:
             _new = _copy.copy(_c)
@@ -10753,7 +10814,27 @@ def main() -> None:
             _worst = max(_vswr_penalties_r) if _vswr_penalties_r else 999.0
             _new.score_vswr     = _mean
             _new.score_vswr_raw = _mean + 1.5 * _worst
-            # Avoidance scores are geometry-only — unchanged.
+
+            # ── Avoidance: ratio-dependent, so rebuilt from scratch ──────
+            # Same shape as score_candidate(): band_avoidance over ALL
+            # defined bands, score_avoidance over all, score_avoidance_active
+            # over the active ones only.  A fresh dict is mandatory — _new is
+            # a SHALLOW copy, so mutating _c.band_avoidance in place would
+            # corrupt the candidate this one was copied from.
+            _new.band_avoidance = {}
+            _avoid_all = []
+            for _cr in calc_rows:
+                _av = band_avoidance_score(_c.wire_len_m, _cr.freq_mhz, ratio,
+                                           weights=_w)
+                _new.band_avoidance[_cr.band] = round(_av, 4)
+                _avoid_all.append(_av)
+            _new.score_avoidance = (sum(_avoid_all) / len(_avoid_all)
+                                    if _avoid_all else 0.0)
+            _avoid_act = [_new.band_avoidance[_ar.band] for _ar in _active_rows
+                          if _ar.band in _new.band_avoidance]
+            _new.score_avoidance_active = (sum(_avoid_act) / len(_avoid_act)
+                                           if _avoid_act else 0.0)
+
             _cp_avoid_scores = []
             for _ar in _active_rows:
                 _lq = C_MHZ / (4.0 * _ar.freq_mhz)
