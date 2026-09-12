@@ -463,6 +463,11 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "  ERROR: --freqs contiene un valor no numérico: {0}",
         "it": '  ERRORE: --freqs contiene un valore non numerico: {0}',
     },
+    "err_freq_not_positive": {
+        "en": "  ERROR: --freqs: the frequency for {0} must be > 0 MHz (got {1})",
+        "es": "  ERROR: --freqs: la frecuencia de {0} debe ser > 0 MHz (se recibió {1})",
+        "it": '  ERRORE: --freqs: la frequenza di {0} deve essere > 0 MHz (ricevuto {1})',
+    },
     "err_bands_freqs_mismatch": {
         "en": "  ERROR: --bands has {0} entries but --freqs has {1} entries.  They must match one-to-one.",
         "es": "  ERROR: --bands tiene {0} entradas pero --freqs tiene {1}.  Deben coincidir uno a uno.",
@@ -1468,6 +1473,28 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "Per-band results:",
         "es": "Resultados por banda:",
         "it": 'Risultati per banda:',
+    },
+    "report_avoid_degenerate": {
+        "en": ("NOTE: with a ratio near 9:1 ({0:.1f}:1 here) the avoidance metric does not "
+               "discriminate — both resonance classes land equally far from 50 Ω after the "
+               "transformer, every length scores ~0.50 (span {1:.3f}) and the rating column "
+               "above is the same for all geometries.  The wire length is therefore chosen "
+               "on VSWR alone.  Use a ratio away from ~9:1 (e.g. 1:1/4:1, or 49:1 for an "
+               "end-fed half-wave) for the resonance preference to mean anything."),
+        "es": ("NOTA: con una relación cercana a 9:1 ({0:.1f}:1 aquí) la métrica de evitación "
+               "no discrimina — ambas clases de resonancia quedan igual de lejos de 50 Ω tras "
+               "el transformador, toda longitud puntúa ~0,50 (dispersión {1:.3f}) y la columna "
+               "de valoración de arriba es idéntica para todas las geometrías.  La longitud del "
+               "hilo se elige, por tanto, solo por VSWR.  Use una relación alejada de ~9:1 "
+               "(p. ej. 1:1/4:1, o 49:1 para media onda alimentada en el extremo) para que la "
+               "preferencia de resonancia signifique algo."),
+        "it": ("NOTA: con un rapporto vicino a 9:1 ({0:.1f}:1 qui) la metrica di evitamento non "
+               "discrimina — entrambe le classi di risonanza finiscono ugualmente lontane da 50 Ω "
+               "dopo il trasformatore, ogni lunghezza ottiene ~0,50 (dispersione {1:.3f}) e la "
+               "colonna di valutazione sopra è identica per tutte le geometrie.  La lunghezza del "
+               "filo è quindi scelta solo in base al VSWR.  Usare un rapporto lontano da ~9:1 "
+               "(es. 1:1/4:1, o 49:1 per una mezz'onda alimentata all'estremità) perché la "
+               "preferenza di risonanza abbia un significato."),
     },
     "report_per_band_imp": {
         "en": "Per-band impedance (antenna side and transmitter side):",
@@ -3272,6 +3299,14 @@ def resonance_preference(unun_ratio: float) -> Tuple[float, float]:
     an intermediate ratio (e.g. 9:1, aimed at ~450 Ω, which is neither
     resonance) the weights come out near 0.5/0.5 and the metric correctly
     expresses "no parity preference".
+
+    CAVEAT — see avoidance_discrimination() below.  "No parity preference" is
+    the honest answer, but it also means the avoidance score collapses to a
+    constant: the two weights are exactly equal at r = sqrt(R_CURRENT_MAX *
+    R_VOLTAGE_MAX) / 50 = sqrt(80) ≈ 8.944, i.e. essentially the 9:1 that is
+    both AUTO_UNUN_SEED and the most common end-fed transformer.  Around there
+    the metric ranks nothing and its ★ rating is meaningless, so the reports
+    say so instead of printing a confident-looking ★★ GOOD for every geometry.
     """
     r = max(float(unun_ratio), 1e-9)
     e_odd = abs(math.log((R_CURRENT_MAX / r) / 50.0))
@@ -3279,6 +3314,35 @@ def resonance_preference(unun_ratio: float) -> Tuple[float, float]:
     w_odd, w_even = math.exp(-e_odd), math.exp(-e_even)
     tot = w_odd + w_even
     return (w_odd / tot, w_even / tot) if tot > 0 else (0.5, 0.5)
+
+
+# Below this span the avoidance metric is treated as non-discriminating.  The
+# span is the full width of the achievable score range (see
+# avoidance_discrimination); 0.10 of a 0…1 metric moves score_combined by at
+# most 0.25 * 0.10 = 0.025 on a scale of ~10, i.e. it cannot reorder anything,
+# and every geometry lands in the same _avoidance_rating() bucket.
+AVOIDANCE_DEGENERATE_SPAN = 0.10
+
+
+def avoidance_discrimination(unun_ratio: float,
+                             weights: Optional[Tuple[float, float]] = None) -> float:
+    """How much band_avoidance_score() can actually vary at this ratio (0…1).
+
+    The score is w_odd * near_odd + w_even * (1 - near_odd) with near_odd
+    sweeping the full 0…1 range as the wire length changes, so the score is
+    bounded by min(w_odd, w_even) and max(w_odd, w_even) and its total span is
+    exactly |w_odd - w_even|.  1.0 = fully discriminating (a direct feed, or a
+    49:1 end-fed half-wave); 0.0 = blind, every length scores 0.5.
+    """
+    w_odd, w_even = (weights if weights is not None
+                     else resonance_preference(unun_ratio))
+    return abs(w_odd - w_even)
+
+
+def avoidance_is_degenerate(unun_ratio: float,
+                            weights: Optional[Tuple[float, float]] = None) -> bool:
+    """True when the resonance-avoidance metric cannot rank geometries."""
+    return avoidance_discrimination(unun_ratio, weights) < AVOIDANCE_DEGENERATE_SPAN
 
 
 def band_avoidance_score(wire_len_m: float,
@@ -3331,6 +3395,11 @@ def _avoidance_rating(score: float) -> str:
       ≥ 0.48  → ★★  GOOD
       ≥ 0.24  → ★   MARGINAL
       < 0.24  → ✗   RESONANCE RISK
+
+    The label is only informative while the underlying metric can vary: at a
+    ratio near 9:1 every score sits at ~0.50 and this returns ★★ GOOD for any
+    geometry.  Callers that publish the label must pair it with the
+    avoidance_is_degenerate() note — see write_report().
     """
     if score >= 0.80:
         return T("rating_excellent")
@@ -4545,6 +4614,32 @@ def score_candidate(
 # SEARCH GRID BUILDER
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Float slack for the interval count: (hi - lo) / step is rarely exact in
+# binary (4.0 / 0.4 = 9.999999999999998), and without the slack ceil() would
+# add a whole spurious interval whose only point is a duplicate of the clamped
+# maximum.
+_GRID_EPS = 1e-9
+
+
+def _grid_axis(lo: float, hi: float, step: float) -> List[float]:
+    """Inclusive [lo, hi] sample points, step `step`, endpoints guaranteed.
+
+    The last interval is short whenever (hi - lo) is not a multiple of step:
+    the point is clamped to `hi` rather than dropped, so the user-requested
+    upper bound is always in the sweep.  Points are rounded to mm and returned
+    strictly increasing, so a step finer than the rounding cannot emit
+    duplicate candidates.
+    """
+    lo, hi, step = float(lo), float(hi), float(step)
+    n = max(0, math.ceil((hi - lo) / step - _GRID_EPS))
+    points: List[float] = []
+    for i in range(n + 1):
+        v = round(min(lo + i * step, hi), 3)
+        if not points or v > points[-1]:
+            points.append(v)
+    return points
+
+
 def build_search_grid(
     wire_min: float,
     wire_max: float,
@@ -4559,6 +4654,14 @@ def build_search_grid(
     Points are clamped to [wire_min, wire_max] / [cp_min, cp_max] so that
     non-integer step sizes (e.g. 0.3 m over a 2 m range) never produce
     candidates outside the requested bounds.
+
+    Both endpoints are ALWAYS evaluated: the number of intervals is taken with
+    math.ceil, not round, so the last point lands on (or is clamped to) the
+    upper bound whatever the step.  round() used to make this a coin flip for
+    non-commensurate steps — [19, 23] with 0.25 m ended at 23.0 m but with
+    0.3 m it stopped at 22.9 m and never tested the length the user explicitly
+    asked for, while [0, 1] with step 2 dropped the maximum through banker's
+    rounding of round(0.5) → 0.
 
     With use_counterpoise=False the counterpoise axis collapses to the single
     value 0.0 m, so only the radiator length is swept.
@@ -4575,8 +4678,7 @@ def build_search_grid(
             f"Empty radiator search window: wire_min ({wire_min:.3f} m) is "
             f"greater than wire_max ({wire_max:.3f} m)."
         )
-    n_w = round((wire_max - wire_min) / wire_step)
-    wires = [round(min(wire_min + i * wire_step, wire_max), 3) for i in range(n_w + 1)]
+    wires = _grid_axis(wire_min, wire_max, wire_step)
 
     if not use_counterpoise:
         return [(w, 0.0) for w in wires]
@@ -4588,8 +4690,7 @@ def build_search_grid(
             f"Empty counterpoise search window: cp_min ({cp_min:.3f} m) is "
             f"greater than cp_max ({cp_max:.3f} m)."
         )
-    n_c = round((cp_max - cp_min) / cp_step)
-    cps = [round(min(cp_min + i * cp_step, cp_max), 3) for i in range(n_c + 1)]
+    cps = _grid_axis(cp_min, cp_max, cp_step)
 
     return list(itertools.product(wires, cps))
 
@@ -5816,6 +5917,15 @@ def write_report(
                 ln(f"  {b:>8}  {act_flag:>6}  {v:9.2f}  {a:8.4f}  {rating:>22}  {vlabel}")
             else:
                 ln(f"  {b:>8}  {act_flag:>6}  {'—':>9}  {a:8.4f}  {rating:>22}  —")
+
+        # The Avoid/Rating columns above are only meaningful when the
+        # transformer actually prefers one resonance class over the other.
+        # Near 9:1 it does not, so say so rather than let the reader take a
+        # constant ★★ GOOD for a verdict on the geometry.
+        _av_span = avoidance_discrimination(unun_ratio)
+        if _av_span < AVOIDANCE_DEGENERATE_SPAN:
+            lines.append("")
+            ln(T("report_avoid_degenerate").format(unun_ratio, _av_span))
 
         lines.append("")
         ln(T("report_per_band_imp"))
@@ -8072,6 +8182,14 @@ def write_pdf_brochure(
         style_cmds.append(("FONTNAME", (2, i), (2, i), "Helvetica-Bold"))
     perf_table.setStyle(TableStyle(style_cmds))
     story.append(KeepTogether([Paragraph(T("pdf_section_perband"), style_h2), perf_table]))
+    # Same caveat the text report prints: near 9:1 the Rating column is a
+    # constant, not a verdict.  The brochure is the document most likely to be
+    # read on its own, so it must not be the one that hides this.
+    _av_span_pdf = avoidance_discrimination(unun_ratio)
+    if _av_span_pdf < AVOIDANCE_DEGENERATE_SPAN:
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(
+            T("report_avoid_degenerate").format(unun_ratio, _av_span_pdf), style_small))
     story.append(Spacer(1, 6 * mm))
 
     # NEC2 / impedance details
@@ -10369,6 +10487,23 @@ def main() -> None:
         print(T("freqs_auto"))
         for _bn, _f in zip(_band_names, _freqs_mhz):
             print(f"    {_bn:>8} → {_f} MHz")
+
+    # ── Frequencies must be strictly positive ────────────────────────────
+    # This cannot live in the _bad block above: that block runs before the
+    # band list and the frequency list exist.  A zero or negative frequency
+    # parses fine, survives the bands/freqs length check and only explodes
+    # much later inside score_candidate() (`C_MHZ / (4.0 * cr.freq_mhz)`)
+    # with a raw ZeroDivisionError, or — when negative — silently models a
+    # negative wavelength.  Fail here, in the same style as every other
+    # input error.
+    _bad_freqs = [
+        T("err_freq_not_positive").format(_bn, _f)
+        for _bn, _f in zip(_band_names, _freqs_mhz) if not _f > 0.0
+    ]
+    if _bad_freqs:
+        for _bf in _bad_freqs:
+            print(f"{Fore.RED}{_bf}{Style.RESET_ALL}")
+        sys.exit(1)
 
     if args.active_bands:
         _active_set = {b.strip() for b in args.active_bands.split(",") if b.strip()}
