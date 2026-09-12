@@ -11690,25 +11690,20 @@ def _launch_gui() -> None:
     from pathlib import Path
 
     # ── Band reference data ───────────────────────────────────────────────
-    _BAND_CENTRE_FREQ_MHZ = {
-        "2200m": 0.1365,  "630m": 0.475,   "160m": 1.850,   "80m": 3.650,
-        "60m":   5.350,   "40m": 7.100,    "30m": 10.125,   "20m": 14.175,
-        "17m":   18.118,  "15m": 21.225,   "12m": 24.940,   "10m": 28.500,
-        "6m":    50.200,  "4m":  70.200,   "2m":  144.200,  "70cm": 432.100,
-        "23cm":  1296.200,
-    }
-    _KNOWN_BANDS = _BAND_CENTRE_FREQ_MHZ.keys()
+    # Use the module-level table/finder directly (defined above, already in
+    # scope) instead of a private GUI copy that silently drifts out of sync
+    # and omits engines (onec/OpenNEC) and platforms (Windows) the CLI
+    # already supports.
+    _KNOWN_BANDS = BAND_CENTRE_FREQ_MHZ.keys()
 
     def _gui_find_nec2c() -> str:
-        for name in ("nec2c", "nec2c-mpich"):
-            p = shutil.which(name)
-            if p:
-                return p
-        for p in ("/usr/bin/nec2c", "/usr/local/bin/nec2c",
-                  "/opt/nec2c/bin/nec2c", "/opt/homebrew/bin/nec2c"):
-            if os.path.isfile(p) and os.access(p, os.X_OK):
-                return p
-        return ""
+        """Non-interactive wrapper around the module-level find_nec2c().
+
+        interactive=False so it never calls input() (there is no console
+        prompt to answer from a GUI callback); returns "" instead of None
+        so callers can keep using a falsy-string check.
+        """
+        return find_nec2c(interactive=False) or ""
 
     # ── i18n strings ──────────────────────────────────────────────────────
     _GUI_STRINGS = {
