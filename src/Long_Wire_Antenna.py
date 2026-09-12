@@ -875,6 +875,11 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "  📻  Diagramas de radiación guardados → {0}",
         "it": '  📻  Diagrammi di radiazione salvati → {0}',
     },
+    "plot_skipped_no_results": {
+        "en": "  ⚠️  Optimizer plot skipped: the sweep produced no candidates.",
+        "es": "  ⚠️  Gráfico del optimizador omitido: el barrido no produjo candidatos.",
+        "it": "  ⚠️  Grafico dell'ottimizzatore omesso: la scansione non ha prodotto candidati.",
+    },
     "plot_saved": {
         "en": "  📊  Optimizer plot saved → {0}",
         "es": "  📊  Gráfico del optimizador guardado → {0}",
@@ -3563,7 +3568,9 @@ class DeckGeometry:
     cp_z_end:    Optional[float] = None
     cp_angle_deg: float = 0.0
     segs_cp:     int = 0   # segments actually written on the GW 2 card
+    cp_len_deck_m: float = 0.0   # straight-line length of the GW 2 card as written
     # Bookkeeping
+    segs_per_half_wave: int = SEGS_PER_HALF_WAVE
     ground_model: str  = DEFAULT_GROUND_MODEL
     clearance_floor_m: float = 0.0
     seg_len_ref_m: float = 0.0        # radiator segment length at the junction
@@ -3745,10 +3752,17 @@ def build_deck_geometry(
 
     # ── Second conductor: counterpoise or return path ────────────────────
     if use_cp:
-        cp_z_target = _cp_end_z(wire_height_m, cp_end_height_m, cp_height_m, wire_radius_m)
+        # BOTH wires start at the feedpoint, so the counterpoise must be built
+        # from the RESOLVED feedpoint height `z_near`, never from the requested
+        # `wire_height_m`.  When the soft ground-clearance clamp above raises
+        # the feedpoint, using the requested height here writes the GW 2 card
+        # at a different z than the GW 1 card: the two wires then share no node,
+        # the EX source sits on a free end, and nec2c happily returns the
+        # impedance of an open circuit (huge −jX) without reporting an error.
+        cp_z_target = _cp_end_z(z_near, cp_end_height_m, cp_height_m, wire_radius_m)
         cp_z_target = _clamp_end(cp_z_target, "Counterpoise far end", result_is_final=False)
         _cvl, _chr, _cbot, cp_x_end, cp_z_end = _cp_geometry(
-            cp_len_m, wire_height_m, cp_z_target)
+            cp_len_m, z_near, cp_z_target)
         # The far end is clamped ONCE, on the TARGET, before the geometry is
         # resolved.  Clamping the resolved end a second time moved it without
         # touching cp_x_end, silently changing the modelled wire length: over a
@@ -3770,27 +3784,28 @@ def build_deck_geometry(
                 f"marked UNRELIABLE.  The geometry is left untouched so the "
                 f"modelled wire keeps the length being optimised."
             )
-        g.cp_angle_deg = _cp_angle_from_geometry(cp_x_end, wire_height_m, cp_z_end)
+        g.cp_angle_deg = _cp_angle_from_geometry(cp_x_end, z_near, cp_z_end)
         g.cp_x_end, g.cp_z_end = cp_x_end, cp_z_end
         cp_x_neg = -cp_x_end if cp_x_end > 1e-9 else 0.0
         # Segment the counterpoise to the radiator's segment length: it shares
         # the fed junction with wire 1 (see _segs_at_length).  The length used
         # is the one actually written on the GW card, not the requested one.
-        _cp_len_deck = math.hypot(cp_x_end, wire_height_m - cp_z_end)
+        _cp_len_deck = math.hypot(cp_x_end, z_near - cp_z_end)
         segs_cp = _segs_at_length(_cp_len_deck, seg_len_ref)
         g.segs_cp = segs_cp
+        g.cp_len_deck_m = _cp_len_deck
         g.gw_lines.append(
-            f"GW 2 {segs_cp} 0.0 0.0 {wire_height_m:.3f} "
+            f"GW 2 {segs_cp} 0.0 0.0 {z_near:.3f} "
             f"{cp_x_neg:.3f} 0.0 {cp_z_end:.4f} {wire_radius_m:.5f}\n"
         )
         g.comments.append(
-            f"CM Counterpoise: {cp_len_m:.3f} m  feed z={wire_height_m:.3f} m -> "
+            f"CM Counterpoise: {cp_len_m:.3f} m  feed z={z_near:.3f} m -> "
             f"end z={cp_z_end:.4f} m  (reach {cp_x_end:.3f} m, "
             f"{g.cp_angle_deg:.1f} deg from vertical)"
         )
-        if cp_z_target >= wire_height_m - 1e-9:
+        if cp_z_target >= z_near - 1e-9:
             g.comments.append("CM WARNING: CP end height >= wire height; CP placed at wire height (horizontal).")
-        if cp_len_m <= wire_height_m - cp_z_target:
+        if cp_len_m <= z_near - cp_z_target:
             g.comments.append("CM WARNING: CP too short to reach the requested end height; it hangs vertically.")
 
     elif g.return_kind == "ground-rod":
@@ -3830,6 +3845,24 @@ def build_deck_geometry(
         )
     else:
         g.comments.append("CM Counterpoise: NONE (antenna without counterpoise)")
+
+    # ── Structural invariant: every conductor starts at the feed node ─────
+    # The EX card excites segment 1 of wire 1, i.e. the feedpoint.  If wire 2
+    # does not start at EXACTLY the same coordinates, NEC-2 builds two disjoint
+    # structures, the source sits on a free end and nec2c returns the impedance
+    # of an open circuit (hundreds of ohms of R, tens of kilo-ohms of −jX)
+    # without printing a single error.  Nothing downstream can detect that, so
+    # the deck is rejected here instead of being simulated.
+    if len(g.gw_lines) > 1:
+        _feed_node = g.gw_lines[0].split()[3:6]
+        for _card in g.gw_lines[1:]:
+            if _card.split()[3:6] != _feed_node:
+                raise ValueError(
+                    "internal geometry error: conductor "
+                    f"'{_card.strip()}' does not start at the feedpoint "
+                    f"({' '.join(_feed_node)}); the deck would be an open "
+                    "circuit at the source."
+                )
 
     # ── Ground / excitation cards ────────────────────────────────────────
     g.ge_flag = 1   # ground plane present; required for the GN card to apply
@@ -4387,13 +4420,32 @@ def build_search_grid(
 
     With use_counterpoise=False the counterpoise axis collapses to the single
     value 0.0 m, so only the radiator length is swept.
+
+    An inverted window (min > max) or a non-positive step is a caller error and
+    raises ValueError.  Returning an empty list instead would let the run reach
+    the output stage with zero candidates, where the plotters and the boundary
+    check all assume at least one point exists.
     """
+    if wire_step <= 0:
+        raise ValueError(f"wire_step must be > 0 (got {wire_step}).")
+    if wire_min > wire_max:
+        raise ValueError(
+            f"Empty radiator search window: wire_min ({wire_min:.3f} m) is "
+            f"greater than wire_max ({wire_max:.3f} m)."
+        )
     n_w = round((wire_max - wire_min) / wire_step)
     wires = [round(min(wire_min + i * wire_step, wire_max), 3) for i in range(n_w + 1)]
 
     if not use_counterpoise:
         return [(w, 0.0) for w in wires]
 
+    if cp_step <= 0:
+        raise ValueError(f"cp_step must be > 0 (got {cp_step}).")
+    if cp_min > cp_max:
+        raise ValueError(
+            f"Empty counterpoise search window: cp_min ({cp_min:.3f} m) is "
+            f"greater than cp_max ({cp_max:.3f} m)."
+        )
     n_c = round((cp_max - cp_min) / cp_step)
     cps = [round(min(cp_min + i * cp_step, cp_max), 3) for i in range(n_c + 1)]
 
@@ -4902,8 +4954,9 @@ def check_segmentation_convergence(
                 # best.cp_len_m alone — see DeckGeometry.segs_cp.
                 if geo.segs_cp:
                     row.segs_cp = geo.segs_cp
-                    _cp_len_deck = (math.hypot(geo.cp_x_end, wire_height_m - geo.cp_z_end)
-                                    if geo.cp_x_end is not None and geo.cp_z_end is not None
+                    # geo.cp_len_deck_m is measured from the RESOLVED feedpoint
+                    # height, which is not always the requested wire_height_m.
+                    _cp_len_deck = (geo.cp_len_deck_m if geo.cp_len_deck_m > 0.0
                                     else best.cp_len_m)
                     row.seg_len_cp_m = _cp_len_deck / row.segs_cp
                 else:
@@ -7006,6 +7059,13 @@ def plot_results(
         print(T("matplotlib_missing"))
         return
 
+    if not results:
+        # Every panel below aggregates over the candidate list (min/max of the
+        # scores, the top-10 bar charts); with no candidates they raise on an
+        # empty sequence.  There is simply nothing to draw.
+        print(T("plot_skipped_no_results"))
+        return
+
     active = [r for r in calc_rows if r.active]
 
     fig = plt.figure(figsize=(18, 14))
@@ -7310,7 +7370,12 @@ def plot_construction_diagram(
     _floor_cd   = ground_clearance_floor_m(_freqs_cd) if _freqs_cd else 0.0
     _perfect_cd = (ground_model == "perfect"
                    or (not use_counterpoise and no_cp_return == "ground-rod"))
-    z_near = wire_height_m
+    # The feedpoint follows the same ground-clearance rule as every other end
+    # (build_deck_geometry() raises it to the floor over a Sommerfeld-Norton
+    # ground), and both wires hang from it — so the drawing must start from the
+    # resolved height, not the requested one.
+    z_near = (float(wire_height_m) if _perfect_cd
+              else max(float(wire_height_m), _floor_cd))
     if slope_end is not None:
         z_far = (0.0 if (_perfect_cd and float(slope_end) <= _floor_cd)
                  else max(float(slope_end), _floor_cd))
@@ -7559,7 +7624,7 @@ def plot_construction_diagram(
 
     # ── height annotations ────────────────────────────────────────────────
     t_ht = _vdim_line(ax, -1.1, 0, z_near,
-                      f"{T('construction_dim_height')}\n{wire_height_m:.2f} m",
+                      f"{T('construction_dim_height')}\n{z_near:.2f} m",
                       color="#5b6b7c", text_color=TEXT, bg=BG)
     placer.register(t_ht, priority=4)
 
@@ -10225,11 +10290,29 @@ def main() -> None:
                 f"Un hilo más corto no puede llegar a la altura final especificada."
                 f"{Style.RESET_ALL}"
             )
+            # The --wire-min ≤ --wire-max check ran on the ORIGINAL arguments,
+            # long before this adjustment.  Raising wire_min above wire_max
+            # here would leave an empty grid that is only noticed much later,
+            # as a crash in the plotting stage after part of the output set has
+            # already been written.
+            if args.wire_min > args.wire_max:
+                print(f"{Fore.RED}ERROR: el desnivel vertical del hilo "
+                      f"({_rise_guard:.3f} m) obliga a wire_min = "
+                      f"{args.wire_min:.2f} m, por encima de wire_max = "
+                      f"{args.wire_max:.2f} m: no queda ninguna longitud de "
+                      f"hilo que pueda alcanzar la altura final pedida. "
+                      f"Amplíe --wire-max, baje --height o suba "
+                      f"--wire-slope-end-height.{Style.RESET_ALL}")
+                sys.exit(1)
 
     wire_range = (args.wire_min, args.wire_max, args.wire_step)
     cp_range   = (args.cp_min,  args.cp_max,  args.cp_step)
-    grid = build_search_grid(*wire_range, *cp_range,
-                             use_counterpoise=use_counterpoise)
+    try:
+        grid = build_search_grid(*wire_range, *cp_range,
+                                 use_counterpoise=use_counterpoise)
+    except ValueError as _grid_err:
+        print(f"{Fore.RED}ERROR: {_grid_err}{Style.RESET_ALL}")
+        sys.exit(1)
     _n_wire = round((args.wire_max - args.wire_min) / args.wire_step) + 1
     _n_cp = (
         1 if not use_counterpoise
@@ -10535,6 +10618,13 @@ def main() -> None:
                 print(f"\n  {Fore.YELLOW}"
                       + T("retry_cp_expanding_min").format(_new_cp_min, _retry_n, _retry_max)
                       + f"{Style.RESET_ALL}")
+
+            # The expansions above pin one edge of the window to the current
+            # best length and clamp the other to 1.0 m, so a best length below
+            # 1.0 m can invert the window.  build_search_grid() now rejects
+            # that outright, so collapse it to a single point instead.
+            _new_w_max  = max(_new_w_max,  _new_w_min)
+            _new_cp_max = max(_new_cp_max, _new_cp_min)
 
             _new_results, _new_ranked, _new_pareto_ranked = _run_sweep(
                 _new_w_min, _new_w_max, _new_cp_min, _new_cp_max
@@ -11275,7 +11365,8 @@ def main() -> None:
         export_best_csv(ranked[0], calc_rows, export_unun, args.out_csv)
         print(T("csv_best_saved").format(args.out_csv, export_unun))
 
-    plot_results(results, pareto, ranked, calc_rows, unun_ratio, args.out_png)
+    if results:
+        plot_results(results, pareto, ranked, calc_rows, unun_ratio, args.out_png)
 
     _wh_out  = args.height if args.height is not None else DEFAULT_HEIGHT_M
     _cph_out = _wh_out          # counterpoise shares the antenna height
