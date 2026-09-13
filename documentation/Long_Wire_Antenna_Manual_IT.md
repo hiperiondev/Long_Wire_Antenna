@@ -12,21 +12,21 @@
 2. [Come funziona, in termini semplici](#2-come-funziona-in-termini-semplici)
 3. [Requisiti e installazione](#3-requisiti-e-installazione)
 4. [Avvio del programma](#4-avvio-del-programma)
-5. [L'interfaccia grafica (GUI) — panoramica](#5-linterfaccia-grafica-gui--panoramica)
-6. [Scheda 1 — Banda / Sorgente](#6-scheda-1--banda--sorgente)
-7. [Scheda 2 — Intervallo di ricerca](#7-scheda-2--intervallo-di-ricerca)
-8. [Scheda 3 — Fisica](#8-scheda-3--fisica)
-9. [Scheda 4 — File di output](#9-scheda-4--file-di-output)
-10. [Scheda 5 — Esecuzione](#10-scheda-5--esecuzione)
-11. [Scheda 6 — UnUn / Transmatch](#11-scheda-6--unun--transmatch)
+5. [L'interfaccia grafica (GUI) — panoramica](#5-linterfaccia-grafica-gui-panoramica)
+6. [Scheda 1 — Banda / Sorgente](#6-scheda-1-banda-sorgente)
+7. [Scheda 2 — Intervallo di ricerca](#7-scheda-2-intervallo-di-ricerca)
+8. [Scheda 3 — Fisica](#8-scheda-3-fisica)
+9. [Scheda 4 — File di output](#9-scheda-4-file-di-output)
+10. [Scheda 5 — Esecuzione](#10-scheda-5-esecuzione)
+11. [Scheda 6 — UnUn / Transmatch](#11-scheda-6-unun-transmatch)
 12. [Barra dell'intestazione e controlli globali](#12-barra-dellintestazione-e-controlli-globali)
 13. [Comprendere i file di output](#13-comprendere-i-file-di-output)
-14. [L'interfaccia a riga di comando (CLI) — riferimento completo](#14-linterfaccia-a-riga-di-comando-cli--riferimento-completo)
-15. [Flussi di lavoro tipici, passo dopo passo](#15-flussi-di-lavoro-tipici-passo-dopo-passo)
+14. [Interfaccia a riga di comando (CLI) — riferimento completo](#14-interfaccia-a-riga-di-comando-cli-riferimento-completo)
+15. [Flussi di lavoro tipici](#15-flussi-di-lavoro-tipici)
 16. [Risoluzione dei problemi](#16-risoluzione-dei-problemi)
 17. [Glossario](#17-glossario)
-18. [Appendice: bande radioamatoriali conosciute](#18-appendice-bande-radioamatoriali-conosciute)
-19. [Appendice: database dei nuclei toroidali (scheda UnUn)](#19-appendice-database-dei-nuclei-toroidali-scheda-unun-tab)
+18. [Appendice — Bande radioamatoriali conosciute](#18-appendice-bande-radioamatoriali-conosciute)
+19. [Appendice — Database dei nuclei toroidali](#19-appendice-database-dei-nuclei-toroidali)
 
 ---
 
@@ -151,7 +151,7 @@ Questo apre la finestra interattiva descritta nel resto del manuale. Non servono
 python src/Long_Wire_Antenna.py --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
 ```
 
-Vedere la [Sezione 14](#14-linterfaccia-a-riga-di-comando-cli--riferimento-completo) per l'elenco completo dei parametri. La GUI è, di fatto, un front-end che assembla esattamente questo tipo di riga di comando e la esegue — ogni opzione visibile nella GUI corrisponde a uno di questi flag, e la **casella di anteprima del comando nella scheda Esecuzione mostra il comando letterale che viene costruito** in tempo reale.
+Vedere la [Sezione 14](#14-interfaccia-a-riga-di-comando-cli-riferimento-completo) per l'elenco completo dei parametri. La GUI è, di fatto, un front-end che assembla esattamente questo tipo di riga di comando e la esegue — ogni opzione visibile nella GUI corrisponde a uno di questi flag, e la **casella di anteprima del comando nella scheda Esecuzione mostra il comando letterale che viene costruito** in tempo reale.
 
 ### 4.3 Ottenere la guida della riga di comando
 
@@ -418,7 +418,7 @@ Progetta un autotrasformatore a banda larga (UnUn) avvolto su un nucleo toroidal
 
 #### 11.1.2 Sezione "Core" (nucleo)
 
-- **Menu a discesa Core** — scegliere il codice del toroide dal database integrato (vedere la [Sezione 19](#19-appendice-database-dei-nuclei-toroidali-scheda-unun-tab) per l'elenco completo e le specifiche). Predefinito: `FT-240-31`.
+- **Menu a discesa Core** — scegliere il codice del toroide dal database integrato (vedere la [Sezione 19](#19-appendice-database-dei-nuclei-toroidali) per l'elenco completo e le specifiche). Predefinito: `FT-240-31`.
 - **Riga informativa** — mostra le specifiche principali del nucleo selezionato (materiale, dimensioni, ecc.).
 - **Numero di spire primarie (Np)** — predefinito `15`.
 - **Diametro del filo (mm)** — predefinito `2.0`.

@@ -12,16 +12,16 @@
 2. [Cómo funciona, en términos simples](#2-cómo-funciona-en-términos-simples)
 3. [Requisitos e instalación](#3-requisitos-e-instalación)
 4. [Iniciar el programa](#4-iniciar-el-programa)
-5. [La Interfaz Gráfica de Usuario (GUI) — resumen](#5-la-interfaz-gráfica-de-usuario-gui--resumen)
-6. [Pestaña 1 — Banda / Fuente](#6-pestaña-1--banda--fuente)
-7. [Pestaña 2 — Rango de búsqueda](#7-pestaña-2--rango-de-búsqueda)
-8. [Pestaña 3 — Física](#8-pestaña-3--física)
-9. [Pestaña 4 — Archivos de salida](#9-pestaña-4--archivos-de-salida)
-10. [Pestaña 5 — Ejecutar](#10-pestaña-5--ejecutar)
-11. [Pestaña 6 — UnUn / Transmatch](#11-pestaña-6--ununtransmatch)
+5. [La Interfaz Gráfica de Usuario (GUI) — resumen](#5-la-interfaz-gráfica-de-usuario-gui-resumen)
+6. [Pestaña 1 — Banda / Fuente](#6-pestaña-1-banda-fuente)
+7. [Pestaña 2 — Rango de búsqueda](#7-pestaña-2-rango-de-búsqueda)
+8. [Pestaña 3 — Física](#8-pestaña-3-física)
+9. [Pestaña 4 — Archivos de salida](#9-pestaña-4-archivos-de-salida)
+10. [Pestaña 5 — Ejecutar](#10-pestaña-5-ejecutar)
+11. [Pestaña 6 — UnUn / Transmatch](#11-pestaña-6-unun-transmatch)
 12. [Barra de encabezado y controles globales](#12-barra-de-encabezado-y-controles-globales)
 13. [Entendiendo los archivos de salida](#13-entendiendo-los-archivos-de-salida)
-14. [La interfaz de línea de comandos (CLI) — referencia completa](#14-la-interfaz-de-línea-de-comandos-cli--referencia-completa)
+14. [La interfaz de línea de comandos (CLI) — referencia completa](#14-la-interfaz-de-línea-de-comandos-cli-referencia-completa)
 15. [Flujos de trabajo típicos, paso a paso](#15-flujos-de-trabajo-típicos-paso-a-paso)
 16. [Solución de problemas](#16-solución-de-problemas)
 17. [Glosario](#17-glosario)
@@ -153,7 +153,7 @@ Esto abre la ventana interactiva descrita en el resto de este manual. No se nece
 python src/Long_Wire_Antenna.py --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
 ```
 
-Vea la [Sección 14](#14-la-interfaz-de-línea-de-comandos-cli--referencia-completa) para la lista completa de parámetros. La GUI es, de hecho, un frontend que arma exactamente este tipo de línea de comandos y la ejecuta — cada opción que se ve en la GUI corresponde a uno de estos parámetros, y **la vista previa del comando en la pestaña Ejecutar muestra el comando ensamblado a partir de la configuración actual de la GUI** en tiempo real.
+Vea la [Sección 14](#14-la-interfaz-de-línea-de-comandos-cli-referencia-completa) para la lista completa de parámetros. La GUI es, de hecho, un frontend que arma exactamente este tipo de línea de comandos y la ejecuta — cada opción que se ve en la GUI corresponde a uno de estos parámetros, y **la vista previa del comando en la pestaña Ejecutar muestra el comando ensamblado a partir de la configuración actual de la GUI** en tiempo real.
 
 ### 4.3 Obtener ayuda de línea de comandos
 

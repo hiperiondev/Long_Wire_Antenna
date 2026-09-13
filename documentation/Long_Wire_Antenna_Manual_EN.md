@@ -12,17 +12,17 @@
 2. [How it works, in plain terms](#2-how-it-works-in-plain-terms)
 3. [Requirements and installation](#3-requirements-and-installation)
 4. [Starting the program](#4-starting-the-program)
-5. [The Graphical User Interface (GUI) — overview](#5-the-graphical-user-interface-gui--overview)
-6. [Tab 1 — Band / Source](#6-tab-1--band--source)
-7. [Tab 2 — Search Range](#7-tab-2--search-range)
-8. [Tab 3 — Physics](#8-tab-3--physics)
-9. [Tab 4 — Output Files](#9-tab-4--output-files)
-10. [Tab 5 — Run](#10-tab-5--run)
-11. [Tab 6 — UnUn / Transmatch](#11-tab-6--ununtransmatch)
+5. [The Graphical User Interface (GUI) — overview](#5-the-graphical-user-interface-gui-overview)
+6. [Tab 1 — Band / Source](#6-tab-1-band-source)
+7. [Tab 2 — Search Range](#7-tab-2-search-range)
+8. [Tab 3 — Physics](#8-tab-3-physics)
+9. [Tab 4 — Output Files](#9-tab-4-output-files)
+10. [Tab 5 — Run](#10-tab-5-run)
+11. [Tab 6 — UnUn / Transmatch](#11-tab-6-unun-transmatch)
 12. [Header bar and global controls](#12-header-bar-and-global-controls)
 13. [Understanding the output files](#13-understanding-the-output-files)
     - [13.8 Important limitations of the outputs and the modelling](#138-important-limitations-of-the-outputs-and-the-modelling)
-14. [The command-line interface (CLI) — full reference](#14-the-command-line-interface-cli--full-reference)
+14. [The command-line interface (CLI) — full reference](#14-the-command-line-interface-cli-full-reference)
 15. [Typical workflows, step by step](#15-typical-workflows-step-by-step)
 16. [Troubleshooting](#16-troubleshooting)
 17. [Glossary](#17-glossary)
@@ -154,7 +154,7 @@ This opens the interactive window described in the rest of this manual. No other
 python src/Long_Wire_Antenna.py --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
 ```
 
-See [Section 14](#14-the-command-line-interface-cli--full-reference) for the complete list of flags. The GUI is, in fact, a front-end that assembles exactly this kind of command line for you and runs it — every option you see in the GUI corresponds to one of these flags, and the **Run tab's command preview shows the command assembled from the current GUI settings** in real time.
+See [Section 14](#14-the-command-line-interface-cli-full-reference) for the complete list of flags. The GUI is, in fact, a front-end that assembles exactly this kind of command line for you and runs it — every option you see in the GUI corresponds to one of these flags, and the **Run tab's command preview shows the command assembled from the current GUI settings** in real time.
 
 ### 4.3 Getting command-line help
 
