@@ -9041,19 +9041,56 @@ def unun_design(freq_mhz: float,
         comp_std = 0.0
 
     # ── 4. Magnetics ───────────────────────────────────────────────────
+    #
+    # The magnetising reactance has to be evaluated with the permeability the
+    # core ACTUALLY HAS at the working frequency.  AL in TOROID_DB is an
+    # initial-permeability figure, measured at a few kHz; across HF µ′ falls
+    # away, on some mixes by more than an order of magnitude.  Taking AL at
+    # face value made X_Lp a fiction: FT-240-31, Np = 2, 14.175 MHz gives
+    # X_Lp = 641 Ω from AL where µ′ has already dropped 1400 → 40 and the
+    # physical figure is ≈ 18 Ω.  mag_ok (X_Lp ≥ 4·R_in) is a bare comparison
+    # with nothing to compensate the error, so it returned "adequate" for a
+    # core that has no usable transformer permeability left — contradicting
+    # section 5's own reading of the same MU_COMPLEX curve.
+    #
+    # Fix: scale the AL inductance by µ′(f)/µ′(f_ref), where µ′(f_ref) is the
+    # first (lowest-frequency) point of the material's MU_COMPLEX curve, i.e.
+    # the initial permeability AL itself is quoted against.  The ratio is
+    # dimensionless, so no AL-to-µ geometry constant is needed.
+    #
+    # If the material has no MU_COMPLEX entry, core_mu() returns NaN.  Fall
+    # back to the raw AL inductance (previous behaviour) rather than letting
+    # NaN poison mag_ok — NaN >= x is False, which would silently flag every
+    # untabulated core as inadequate.  mag_basis records which path was taken
+    # so the report can say so instead of implying a µ′(f)-corrected number.
+    mu_p = mu_pp = float("nan")
+    mu_p0 = float("nan")
+    mu_scale = 1.0
     if is_air:
         # Single-layer air-core solenoid (Wheeler), same formula and inputs
         # (coil diameter, wire diameter, turn spacing) as the Transmatch
-        # calculator's winding. There is no AL value on an air core.
+        # calculator's winding. There is no AL value on an air core, and no
+        # permeability to lose: air is µ′ = 1 flat to daylight.
         al = float("nan")
         lp_uh = wheeler_solenoid_uh(np_turns, coil_dia_mm, wire_dia_mm, space_mm)
-        xlp = 2.0 * math.pi * freq_mhz * lp_uh
-        mag_ok = xlp >= 4.0 * r_in
+        lp_uh_nominal = lp_uh
+        mag_basis = "air"
     else:
+        mu_p, mu_pp = core_mu(core_d["material"], freq_mhz)
+        mu_tbl = MU_COMPLEX.get(core_d["material"])
+        mu_p0 = float(mu_tbl[0][1]) if mu_tbl else float("nan")
         al = core_d["AL"]
-        lp_uh = al * (np_turns ** 2) / 1000.0
-        xlp = 2.0 * math.pi * freq_mhz * lp_uh
-        mag_ok = xlp >= 4.0 * r_in
+        lp_uh_nominal = al * (np_turns ** 2) / 1000.0     # AL / initial-µ figure
+        if mu_p == mu_p and mu_p0 == mu_p0 and mu_p0 > 0:  # NaN-safe
+            mu_scale = mu_p / mu_p0
+            lp_uh = lp_uh_nominal * mu_scale
+            mag_basis = "mu_f"
+        else:                                              # material not tabulated
+            lp_uh = lp_uh_nominal
+            mag_basis = "al_only"
+    xlp = 2.0 * math.pi * freq_mhz * lp_uh                 # µ′(f)-corrected
+    xlp_nominal = 2.0 * math.pi * freq_mhz * lp_uh_nominal  # AL / initial-µ
+    mag_ok = xlp >= 4.0 * r_in
 
     # ── 5. Core loss, saturation & power handling ──────────────────────
     #
@@ -9098,13 +9135,22 @@ def unun_design(freq_mhz: float,
                        * np_turns * (ae_cm2 * 1e-4), 1)
         p_sat = round(v_peak ** 2 / (2.0 * r_in))      # flux-limited (LF limit)
 
-        mu_p, mu_pp = core_mu(core_d["material"], freq_mhz)
+        # mu_p / mu_pp were already read in section 4 (the magnetising
+        # reactance needs µ′(f) too); no second interpolation of the same
+        # curve at the same frequency.
         a_surf_cm2 = round(core_surface_area_cm2(core_d), 1)
         p_diss_w = round(core_dissipation_w(a_surf_cm2, CORE_DELTA_T_C), 2)
 
         if mu_p == mu_p and mu_pp and mu_pp > 0:       # NaN-safe
             q_core = mu_p / mu_pp
-            rp_core = xlp * q_core                      # Ω across the primary
+            # NOTE (scope): this deliberately keeps the AL/initial-µ
+            # reactance, which is what this expression has always used.
+            # Physically Rp = ω·L0·µ′·(µ′/µ″), i.e. it should read xlp
+            # (µ′-corrected) — but the thermal rating below is calibrated
+            # around the present figure, so swapping it here would rewrite
+            # every published power number as a side effect of a magnetics
+            # fix. That belongs to the power-rating item, not to this one.
+            rp_core = xlp_nominal * q_core              # Ω across the primary
             core_loss_frac = r_in / (r_in + rp_core)    # of input power
             p_thermal = round(p_diss_w * (r_in + rp_core) / r_in)
             loss_pct = round(100.0 * core_loss_frac, 2)
@@ -9161,6 +9207,8 @@ def unun_design(freq_mhz: float,
         "comp_value": comp_value, "comp_std": comp_std,
         "comp_ref_plane": comp_ref_plane, "x_in_reflected": x_in_reflected,
         "al": al, "lp_uh": lp_uh, "xlp": xlp, "mag_ok": mag_ok,
+        "lp_uh_nominal": lp_uh_nominal, "xlp_nominal": xlp_nominal,
+        "mu_scale": mu_scale, "mu_p_ref": mu_p0, "mag_basis": mag_basis,
         "ae_cm2": ae_cm2, "b_max_mt": b_max_mt,
         "v_peak": v_peak, "p_sat": p_sat,
         "mu_prime": mu_p, "mu_dprime": mu_pp, "q_core": q_core,
@@ -16108,8 +16156,21 @@ def _launch_gui() -> None:
             lines.append(f"  {self.t('ut_r_sec4')}\n")
             if is_core:
                 lines.append(self._ut_line("ut_r_al",       f"{f(d['al'], 1)} nH/N²"))
+            # Lp/XLp are the µ′(f)-corrected figures for a tabulated ferrite.
+            # The suffix says which permeability they rest on, so a reader who
+            # multiplies AL·N² by hand and gets a much larger number can see
+            # why — and so an untabulated material is not passed off as
+            # frequency-corrected when it is just the raw AL figure.
+            mag_basis = d.get("mag_basis", "")
+            if mag_basis == "mu_f":
+                mu_note = (f"  [µ′(f) {f(d['mu_prime'], 0)}"
+                           f" / µ′i {f(d['mu_p_ref'], 0)}]")
+            elif mag_basis == "al_only":
+                mu_note = "  [AL, µ′(f) n/a]"
+            else:
+                mu_note = ""
             lines.append(self._ut_line("ut_r_lp",       f"{f(d['lp_uh'], 2)} µH"))
-            lines.append(self._ut_line("ut_r_xlp",      f"{f(d['xlp'], 1)} Ω"))
+            lines.append(self._ut_line("ut_r_xlp",      f"{f(d['xlp'], 1)} Ω{mu_note}"))
             lines.append(self._ut_line("ut_r_check",
                                        self.t("ut_st_mag_ok") if d["mag_ok"]
                                        else self.t("ut_st_mag_warn")))
