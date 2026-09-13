@@ -8145,6 +8145,17 @@ def plot_radiation_diagrams(
         ax3d.grid(True, color="#cccccc", linewidth=0.5)
 
     plt.tight_layout(rect=[0, 0, 1, 0.97])
+    # tight_layout()'s automatic spacing is computed from each Axes'
+    # get_tightbbox(), which does not reliably include the info_str text box
+    # drawn below each polar Axes via ax.text(..., transform=ax.transAxes)
+    # (polar projections are not fully supported by tight_layout's extent
+    # calculation). With a single band this happens to leave enough margin,
+    # but with ≥2 bands the reserved gap between rows is too small and the
+    # next row's title ("20m Azimuth") overlaps the previous row's info box
+    # (freq/VSWR/gain/TOA). Force extra vertical breathing room explicitly
+    # instead of trusting the automatic layout in the multi-band case.
+    if n_bands > 1:
+        fig.subplots_adjust(hspace=0.5)
     plt.savefig(out_png, dpi=180, bbox_inches="tight",
                 facecolor=_BG, edgecolor="none")
     plt.close()
