@@ -2760,8 +2760,19 @@ def _parse_nec2_fallback(text: str, run: NEC2Run):
 
 
 def parse_nec2_output(filepath: str, debug: bool = False,
-                      explicit_nec_path: Optional[str] = None) -> NEC2Run:
-    """Parse a NEC2 .out file produced by nec2c, 4nec2, xnec2c, or EZNEC export."""
+                      explicit_nec_path: Optional[str] = None,
+                      parse_deck: bool = True) -> NEC2Run:
+    """Parse a NEC2 .out file produced by nec2c, 4nec2, xnec2c, or EZNEC export.
+
+    parse_deck: when True (default), also reopens the companion .nec input
+    deck to fill run.cp_type / run._has_rp_card / run._wire_slope_end_m /
+    run._cp_from_deck via _parse_cp_from_nec_deck(). Those fields are never
+    read outside that parser (score_candidate() only uses run.note and
+    run.freq_map()), so hot loops that score thousands of candidates
+    — e.g. nec2_sweep() — should pass parse_deck=False to skip a second
+    full-file read plus per-line regex pass that produces data nobody
+    consumes.
+    """
     run = NEC2Run(filepath=filepath)
     run._has_rp_card = False
     run._cp_from_deck = False
@@ -2810,7 +2821,8 @@ def parse_nec2_output(filepath: str, debug: bool = False,
     else:
         run.cp_type = "none"
 
-    _parse_cp_from_nec_deck(filepath, run, explicit_nec_path=explicit_nec_path)
+    if parse_deck:
+        _parse_cp_from_nec_deck(filepath, run, explicit_nec_path=explicit_nec_path)
 
     freq_positions: List[Tuple[int, float]] = []
     freq_pattern = _detect_freq_pattern(text)
@@ -4983,7 +4995,15 @@ def nec2_sweep(
             _parse_exc: Optional[BaseException] = None
             if run_nec2c(nec2c_bin, nec_p, out_p):
                 try:
-                    _r = parse_nec2_output(out_p, debug=False, explicit_nec_path=nec_p)
+                    # parse_deck=False: this runs once per grid candidate
+                    # (potentially thousands of times). The deck-derived
+                    # fields it would fill (cp_type, _has_rp_card,
+                    # _wire_slope_end_m, _cp_from_deck) are write-only —
+                    # score_candidate() below never reads them — so
+                    # skip the extra .nec re-open + regex pass here.
+                    _r = parse_nec2_output(out_p, debug=False,
+                                            explicit_nec_path=nec_p,
+                                            parse_deck=False)
                     if _r is not None and not _r.freq_map():
                         _r = None
                     run = _r
