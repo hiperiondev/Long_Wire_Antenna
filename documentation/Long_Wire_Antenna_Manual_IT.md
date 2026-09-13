@@ -1,7 +1,7 @@
 # NEC2 Antenna Length Optimizer — Manuale utente completo
 
 **Autore del software:** LU3VEA (released CC0 v1.0)
-**Versione del manuale:** 1.3 (verificato rispetto al codice)
+**Versione del manuale:** 1.4 (verificato rispetto al codice; corregge in §8.5/§14 il valore predefinito di segmentazione fine, da un 90 obsoleto al valore reale di 180, e la cifra di incertezza su R di `--fast`, da un 14% obsoleto al ~28–31% calcolato dal modello calibrato dello strumento)
 **Ambito di questo manuale:** installazione, concetti, interfaccia grafica (GUI) in dettaglio completo, interfaccia a riga di comando (CLI), file di output prodotti e risoluzione dei problemi.
 
 ---
@@ -341,10 +341,12 @@ Le perdite del conduttore influenzano resistenza e guadagno. Un modello a condut
 
 ### 8.5 Segmentazione
 
-- `fine`: `90` segmenti per mezza lunghezza d'onda; è la densità usata per i risultati finali.
-- `fast`: `21` segmenti per mezza lunghezza d'onda; serve allo screening/pattern e può produrre errori importanti su R e persino sul segno di X.
+- `fine`: `180` segmenti per mezza lunghezza d'onda; è la densità usata per i risultati finali.
+- `fast`: `21` segmenti per mezza lunghezza d'onda; serve allo screening/pattern e, secondo il modello di errore di segmentazione del programma, comporta un'incertezza su R di circa il **28–31%** (misurata bassa), oltre a poter produrre errori sul segno di X.[^nota-fast]
 - `custom`: densità scelta dall'utente.
-- Senza override, la scansione usa internamente `45` segmenti per mezza lunghezza d'onda e le esecuzioni finali `90`.
+- Senza override, la scansione usa internamente `45` segmenti per mezza lunghezza d'onda e le esecuzioni finali `180`.
+
+[^nota-fast]: Il messaggio di console/report che accompagna `--fast` calcola questa percentuale dal vivo usando il modello di errore calibrato del programma (`estimated_imp_uncertainty_pct()`, adattato come errore% ≈ 420 / spw^0.86 rispetto a un riferimento estrapolato con Richardson), che a 21 segmenti per mezza onda dà ~30,6% — è la cifra citata sopra. Una stringa di aiuto statica della GUI, altrove nel codice sorgente, mostra ancora una vecchia cifra non aggiornata di "~14%" rimasta da prima che quel modello venisse ricalibrato; considerare corretto il valore calcolato dinamicamente (e la cifra di questo manuale).
 
 "Re-check convergence" esegue il vincitore a densità 2× e 4× e confronta la deriva di R e X. La soglia di circa 3% riguarda R; X ha una propria tolleranza. Se X non converge, non va usata per dimensionare una rete di adattamento.
 
@@ -573,7 +575,7 @@ Il PDF è una sintesi di una pagina e richiede `reportlab`. Le immagini vengono 
 | `--wire-diameter MM` | `2.0` | Diametro del filo |
 | `--wire-material` | `copper` | Materiale del conduttore |
 | `--wire-conductivity S/M` | da materiale | Conducibilità personalizzata |
-| `--segs-per-half-wave N` | `45/90` | Densità di scansione/finale |
+| `--segs-per-half-wave N` | `45/180` | Densità di scansione/finale |
 | `--fast` | disattivo | Scansione a 21 segmenti/mezza onda |
 | `--converge` | disattivo | Controllo a 2× e 4× |
 | `--target-toa DEG` | `25` | Angolo di elevazione |

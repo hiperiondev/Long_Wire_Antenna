@@ -1,7 +1,7 @@
 # NEC2 Antenna Length Optimizer — Complete User Manual
 
 **Author of the software:** LU3VEA (released CC0 v1.0)
-**Manual version:** 1.3 (code-audited)
+**Manual version:** 1.4 (code-audited; corrects the §8.6/§14 fine-segmentation default from a stale 90 to the actual 180, and the `--fast` R-uncertainty figure from a stale 14% to the ~28–31% the tool's own calibrated model computes)
 **Scope of this manual:** installation, concepts, the Graphical User Interface (GUI) in full detail, the command‑line interface (CLI), the output files produced, and troubleshooting.
 
 ---
@@ -398,9 +398,11 @@ NEC2 subdivides each wire into short calculation "segments"; how many segments p
 
 Three mutually-exclusive radio buttons:
 
-- **`fine`** (default) — 90 segments per half wavelength. This is the default density used for every number that actually gets published (the winning candidate's final figures, the exported `.nec` deck, the report, the CSV). **It is not a guarantee that the result has converged** — recommended for anything you intend to build, but pair it with "Re-check convergence" below for a final design.
-- **`fast`** — 21 segments per half wavelength. This is deliberately coarse; the program warns that it can produce roughly **14% error in R (measured low)** and **reactance sign errors** in some cases. It is intended for fast sweeps and pattern-only work — its impedances must never be used to size a matching network or make a build decision.
-- **`custom`** — enter your own segments-per-half-wavelength value in the adjoining field. The program's internal default for the search *sweep* itself (as opposed to the final published numbers) is 45 segments per half wavelength — a middle ground chosen because the ranking of candidates against each other is fairly insensitive to this density, even though the absolute numbers are not. Unless this option overrides both, the normal sweep uses 45 segments per half wavelength and the final run uses 90.
+- **`fine`** (default) — 180 segments per half wavelength. This is the default density used for every number that actually gets published (the winning candidate's final figures, the exported `.nec` deck, the report, the CSV). **It is not a guarantee that the result has converged** — recommended for anything you intend to build, but pair it with "Re-check convergence" below for a final design.
+- **`fast`** — 21 segments per half wavelength. This is deliberately coarse; the program's own segmentation-error model puts the resulting R uncertainty at roughly **28–31% (measured low)**, and it can also produce **reactance sign errors** in some cases.[^segs-warn-note] It is intended for fast sweeps and pattern-only work — its impedances must never be used to size a matching network or make a build decision.
+- **`custom`** — enter your own segments-per-half-wavelength value in the adjoining field. The program's internal default for the search *sweep* itself (as opposed to the final published numbers) is 45 segments per half wavelength — a middle ground chosen because the ranking of candidates against each other is fairly insensitive to this density, even though the absolute numbers are not. Unless this option overrides both, the normal sweep uses 45 segments per half wavelength and the final run uses 180.
+
+[^segs-warn-note]: The console/report message that accompanies `--fast` computes this percentage live from the tool's calibrated error model (`estimated_imp_uncertainty_pct()`, fitted as err% ≈ 420 / spw^0.86 against a Richardson-extrapolated reference), which gives ~30.6% at 21 segments per half wavelength — this is the number quoted above. One static GUI hint string elsewhere in the source still shows an older, uncorrected "~14%" figure left over from before that model was refitted; treat the dynamically-computed value (and this manual's figure) as the accurate one.
 
 **"Re-check convergence" checkbox** — when enabled, the winning geometry is automatically re-simulated a second and third time, at 2× and 4× the working segmentation density, and the report tells you how much R and X still moved between those runs. The approximately 3% threshold applies to R drift; X has a separate tolerance. If R moves by more than roughly 3%, the report flags it — a sign you may want to increase the fine-density setting further before building; if convergence is not satisfactory, do not size a matching network from X.
 
@@ -693,7 +695,7 @@ Every one of these flags corresponds to a GUI control described above; this tabl
 | `--wire-diameter MM` | float | `2.0` mm | Conductor diameter in millimetres. |
 | `--wire-material {...}` | choice | `copper` | One of: `copper`, `aluminium`, `aluminum`, `brass`, `silver`, `steel`, `perfect`. |
 | `--wire-conductivity S/M` | float | *(from material)* | Manual override of conductor conductivity. |
-| `--segs-per-half-wave N` | int | *(45 sweep / 90 fine)* | Overrides both the sweep and final-run segmentation densities. |
+| `--segs-per-half-wave N` | int | *(45 sweep / 180 fine)* | Overrides both the sweep and final-run segmentation densities. |
 | `--fast` | flag | off | Sweep at coarse (21 seg/half-wave) density; the winner is still recomputed fine regardless. |
 | `--converge` | flag | off | Re-run the winner at 2× and 4× segmentation and report how far R/X still move. |
 | `--target-toa DEG` | float | `25.0` | Elevation angle (degrees) at which the gain bonus is evaluated. |

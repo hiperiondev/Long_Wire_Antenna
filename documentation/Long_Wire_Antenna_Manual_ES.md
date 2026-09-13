@@ -1,7 +1,7 @@
 # NEC2 Antenna Length Optimizer — Manual de Usuario Completo
 
 **Autor del software:** LU3VEA (publicado bajo CC0 v1.0)
-**Versión del manual:** 1.3 (auditado contra el código)
+**Versión del manual:** 1.4 (auditado contra el código; corrige en §8.6/§14 el valor por defecto de segmentación fina, de un 90 desactualizado al valor real de 180, y la cifra de incertidumbre en R de `--fast`, de un 14% desactualizado al ~28–31% que calcula el propio modelo calibrado de la herramienta)
 **Alcance de este manual:** instalación, conceptos, la Interfaz Gráfica de Usuario (GUI) en detalle completo, la interfaz de línea de comandos (CLI), los archivos de salida generados, y solución de problemas.
 
 ---
@@ -397,9 +397,11 @@ NEC2 subdivide cada hilo en "segmentos" cortos para el cálculo; cuántos segmen
 
 Tres botones de opción mutuamente excluyentes:
 
-- **`fine`** (por defecto) — 90 segmentos por media longitud de onda. Se usa para cada cifra que realmente se publica (las cifras finales del candidato ganador, el archivo `.nec` exportado, el reporte, el CSV). **No debe interpretarse como una garantía de convergencia** — recomendado para cualquier cosa que se pretenda construir, combinado con "Reverificar convergencia" más abajo para un diseño final.
-- **`fast`** — 21 segmentos por media longitud de onda. Es una densidad deliberadamente gruesa: el propio programa advierte que puede producir aproximadamente un **14 % de error en R (medida baja)** y **errores de signo en X** en determinados casos. Se utiliza para barridos rápidos y trabajo de patrones únicamente — sus impedancias no deben emplearse jamás para dimensionar una adaptación ni para una decisión de construcción.
-- **`custom`** — escriba su propio valor de segmentos por media longitud de onda en el campo adyacente. El valor por defecto interno del programa para el *barrido* de búsqueda en sí (a diferencia de las cifras finales publicadas) es de 45 segmentos por media longitud de onda — un término medio elegido porque la clasificación de candidatos entre sí es bastante insensible a esta densidad, aunque las cifras absolutas no lo sean. Salvo que esta opción sobrescriba ambas, el barrido normal utiliza 45 segmentos por media onda y la ejecución final 90.
+- **`fine`** (por defecto) — 180 segmentos por media longitud de onda. Se usa para cada cifra que realmente se publica (las cifras finales del candidato ganador, el archivo `.nec` exportado, el reporte, el CSV). **No debe interpretarse como una garantía de convergencia** — recomendado para cualquier cosa que se pretenda construir, combinado con "Reverificar convergencia" más abajo para un diseño final.
+- **`fast`** — 21 segmentos por media longitud de onda. Es una densidad deliberadamente gruesa: el propio modelo de error de segmentación del programa sitúa la incertidumbre resultante en R en aproximadamente **28–31 % (medida baja)**, y en algunos casos también puede producir **errores de signo en X**.[^nota-fast] Se utiliza para barridos rápidos y trabajo de patrones únicamente — sus impedancias no deben emplearse jamás para dimensionar una adaptación ni para una decisión de construcción.
+- **`custom`** — escriba su propio valor de segmentos por media longitud de onda en el campo adyacente. El valor por defecto interno del programa para el *barrido* de búsqueda en sí (a diferencia de las cifras finales publicadas) es de 45 segmentos por media longitud de onda — un término medio elegido porque la clasificación de candidatos entre sí es bastante insensible a esta densidad, aunque las cifras absolutas no lo sean. Salvo que esta opción sobrescriba ambas, el barrido normal utiliza 45 segmentos por media onda y la ejecución final 180.
+
+[^nota-fast]: El mensaje de consola/reporte que acompaña a `--fast` calcula este porcentaje en tiempo real a partir del modelo de error calibrado del programa (`estimated_imp_uncertainty_pct()`, ajustado como error% ≈ 420 / spw^0.86 frente a una referencia extrapolada por Richardson), que da ~30.6 % a 21 segmentos por media onda — esa es la cifra citada arriba. Una cadena de ayuda estática de la GUI, en otra parte del código fuente, todavía muestra una cifra antigua y no corregida de "~14 %" que quedó de antes de reajustar ese modelo; considere el valor calculado dinámicamente (y la cifra de este manual) como el correcto.
 
 **Casilla "Reverificar convergencia"** — cuando está habilitada, la geometría ganadora se vuelve a simular automáticamente una segunda y una tercera vez, a 2× y 4× la densidad de trabajo, y el reporte mide cuánto se movieron todavía R y X entre esas ejecuciones. El umbral de aproximadamente 3 % se aplica a la deriva de R; X tiene una tolerancia independiente. Si R se mueve más de aproximadamente un 3 %, el reporte lo marca — una señal de que quizás quiera aumentar más el ajuste de densidad fina antes de construir; si la convergencia no es satisfactoria, no se debe dimensionar una red de adaptación a partir de X.
 
@@ -693,7 +695,7 @@ Esta tabla es la referencia autoritativa para los nombres exactos de los paráme
 | `--wire-diameter MM` | flotante | `2.0` mm | Diámetro del conductor en milímetros. |
 | `--wire-material {...}` | selección | `copper` | Uno de: `copper`, `aluminium`, `aluminum`, `brass`, `silver`, `steel`, `perfect`. |
 | `--wire-conductivity S/M` | flotante | *(del material)* | Anulación manual de la conductividad del conductor. |
-| `--segs-per-half-wave N` | entero | *(45 barrido / 90 fina)* | Anula tanto las densidades de segmentación de barrido como las de la ejecución final. |
+| `--segs-per-half-wave N` | entero | *(45 barrido / 180 fina)* | Anula tanto las densidades de segmentación de barrido como las de la ejecución final. |
 | `--fast` | bandera | desactivado | Barre a densidad gruesa (21 seg/media onda); el ganador de todos modos se recalcula fino. |
 | `--converge` | bandera | desactivado | Vuelve a ejecutar el ganador a 2× y 4× la segmentación y reporta cuánto se mueven todavía R/X. |
 | `--target-toa DEG` | flotante | `25.0` | Ángulo de elevación (grados) en el que se evalúa la bonificación de ganancia. |
