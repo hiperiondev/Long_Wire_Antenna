@@ -9311,7 +9311,16 @@ def unun_design(freq_mhz: float,
             # around the present figure, so swapping it here would rewrite
             # every published power number as a side effect of a magnetics
             # fix. That belongs to the power-rating item, not to this one.
-            rp_core = xlp_nominal * q_core              # Ω across the primary
+            #
+            # Exact series->parallel transform for a lossy inductor:
+            #   Rp = Rs*(1 + Q^2) = X_L * (Q + 1/Q)
+            # X_L * Q is only the high-Q (Q >> 1) approximation, and HF
+            # ferrite Q commonly falls below 1 (the very regime this loss
+            # table exists to cover) -- so the exact form is used here.
+            if q_core > 0:
+                rp_core = xlp_nominal * (q_core + 1.0 / q_core)  # Ω, primary side
+            else:
+                rp_core = float("nan")
             core_loss_frac = r_in / (r_in + rp_core)    # of input power
             p_thermal = round(p_diss_w * (r_in + rp_core) / r_in)
             loss_pct = round(100.0 * core_loss_frac, 2)
