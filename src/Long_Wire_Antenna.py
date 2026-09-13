@@ -5386,7 +5386,8 @@ def refine_peak_gain_toa(
         ((t, g) for (t, p, g) in rp_rows if abs(p - best_phi) < 1e-6),
         key=lambda tg: tg[0],
     )
-    idx = next((i for i, (t, _) in enumerate(same_phi) if t == best_theta), None)
+    idx = next((i for i, (t, _) in enumerate(same_phi)
+                if abs(t - best_theta) < 1e-6), None)
     if idx is None or len(same_phi) < 3 or idx == 0 or idx == len(same_phi) - 1:
         # Peak sits at a grid edge (0 deg / 90 deg) or too few points to fit
         # a parabola: fall back to the raw grid sample rather than guessing.
