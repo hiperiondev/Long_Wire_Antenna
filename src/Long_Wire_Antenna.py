@@ -10759,10 +10759,24 @@ def _build_parser() -> argparse.ArgumentParser:
                    help=T("help_fast").format(SEGS_PER_HALF_WAVE_FAST))
     p.add_argument("--converge", action="store_true",
                    help=T("help_converge"))
-    p.add_argument("--target-toa", metavar="DEG", type=float,
+    def _target_toa_deg(value):
+        fvalue = float(value)
+        if not (0.0 <= fvalue <= 90.0):
+            raise argparse.ArgumentTypeError(
+                f"--target-toa must be in [0, 90] (got {value})")
+        return fvalue
+
+    def _nonneg_gain_weight(value):
+        fvalue = float(value)
+        if fvalue < 0.0:
+            raise argparse.ArgumentTypeError(
+                f"--gain-weight must be >= 0 (got {value})")
+        return fvalue
+
+    p.add_argument("--target-toa", metavar="DEG", type=_target_toa_deg,
                    default=DEFAULT_TARGET_TOA_DEG,
                    help=T("ap_target_toa"))
-    p.add_argument("--gain-weight", metavar="W", type=float,
+    p.add_argument("--gain-weight", metavar="W", type=_nonneg_gain_weight,
                    default=DEFAULT_GAIN_WEIGHT,
                    help=T("ap_gain_weight"))
     p.add_argument("--rerank-top", metavar="N", type=int,
