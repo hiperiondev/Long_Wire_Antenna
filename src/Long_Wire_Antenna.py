@@ -5072,6 +5072,12 @@ def evaluate_pattern(
     if not active or not nec2c_bin:
         return False
     active_freqs = [cr.freq_mhz for cr in active]
+    # Geometry (segmentation and the 0.05.lambda_max ground-clearance floor) is
+    # derived from `freqs_mhz` inside build_deck_geometry(), so it MUST see the
+    # same band list the sweep used; otherwise the pattern is evaluated on a
+    # different geometry than the one that was scored. Only the RP cards are
+    # restricted to the active bands.
+    all_freqs = [cr.freq_mhz for cr in calc_rows] or active_freqs
 
     with tempfile.TemporaryDirectory(prefix="nec2opt_rp_") as td:
         nec_p = os.path.join(td, "pattern.nec")
@@ -5081,7 +5087,7 @@ def evaluate_pattern(
                 nec_path=nec_p,
                 wire_len_m=cand.wire_len_m,
                 cp_len_m=cand.cp_len_m,
-                freqs_mhz=active_freqs,
+                freqs_mhz=all_freqs,
                 wire_height_m=wire_height_m,
                 wire_slope_end_m=wire_slope_end_m,
                 cp_height_m=cp_height_m,
