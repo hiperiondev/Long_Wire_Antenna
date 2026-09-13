@@ -116,10 +116,10 @@ This is also the **only supported path for macOS**, since there is no packaged m
 - Python packages:
 
 ```
-pip install numpy matplotlib colorama reportlab
+pip install numpy matplotlib colorama reportlab pillow
 ```
 
-`colorama`, `matplotlib`, `numpy`, and `reportlab` are all optional — the script degrades gracefully (no color, no plot/PDF output) if they aren't installed. `numpy` is only actually needed for the radiation-pattern diagrams and is normally installed automatically as a dependency of `matplotlib`, so you rarely need to install it by hand.
+`colorama`, `matplotlib`, `numpy`, `reportlab`, and `pillow` are all optional — the script degrades gracefully (no color, no plot/PDF output) if they aren't installed. `numpy` is only actually needed for the radiation-pattern diagrams and is normally installed automatically as a dependency of `matplotlib`, so you rarely need to install it by hand. `pillow` (`PIL`) is only needed to embed the construction/radiation PNGs into the PDF brochure; without it the PDF is still generated, with an "(unavailable)" placeholder in the affected image section.
 
 **NEC2C binary discovery order:**
 
@@ -248,22 +248,11 @@ The tool then separately checks standard UnUn transformer ratios (1:1, 4:1, 9:1,
 | A band is flagged as poorly matched by every standard UnUn ratio | The raw antenna impedance on that band is far enough from every ratio in the built-in sweep (1:1, 1.5:1, 2:1, 3:1, 4:1, 6:1, 9:1, ...) that none of them bring VSWR close to 1:1 | This is expected for some multi-band designs — a single feedline strategy cannot always match unrelated bands equally well. Options: accept the higher VSWR on that band, use the Transmatch (tapped-coil) calculator instead of, or in addition to, the UnUn for that band, or re-run the optimizer with a different/narrower search window or a different `--active-bands` selection to find a geometry that compromises less on it. |
 | `matplotlib`/`numpy`/`reportlab` is missing but a plot/PDF was requested | Optional package not installed | The run still completes and writes the non-graphical outputs (text report, CSV, `.nec` deck); the script prints which optional output was skipped and why. Install the missing package(s) with `pip install matplotlib numpy reportlab` (see [Option C](#option-c-run-the-python-script-directly-windowsmacoslinux)) and re-run. |
 
-<!-- TODO(maintainer): The rows above were reconstructed from reading the script's own control
-     flow (see find_nec2c(), the --mode resolution block in main(), the UnUn ratio sweep in
-     STANDARD_UNUN_RATIOS, and the optional-import guards at the top of the file) rather than
-     from exact captured error text. Consider replacing the free-text descriptions with the
-     literal console messages (the T("...") message keys) the next time this file is updated,
-     and add NEC-2 convergence/--retry-specific cases if they come up in practice. -->
-
 ## Third-party licensing note
 
 This project's own source code (`src/Long_Wire_Antenna.py`), build scripts, and documentation are released under **CC0 1.0 Universal** (public domain) — see [`LICENSE`](https://github.com/hiperiondev/Long_Wire_Antenna/blob/main/LICENSE).
 
 The bundled `nec2c.exe` (Windows) and the statically-linked `nec2c` binary inside the Linux AppImage are **third-party software** — the [`nec2c`](https://www.nec2.org/) C translation of NEC-2 by Neoklis Kyriazis (5B4AZ), itself derived from the original NEC-2 code developed at Lawrence Livermore National Laboratory. These binaries are **not** covered by this project's CC0 dedication; they retain their own upstream licensing terms.
-
-<!-- TODO(maintainer): State the exact upstream license (e.g. specific BSD variant / public-domain
-     status) that applies to the bundled nec2c binary, and confirm redistribution terms are
-     satisfied by shipping the compiled binary in this repository. -->
 
 If you redistribute this project (including the bundled installer, AppImage, or `nec2c.exe`), make sure your redistribution also complies with `nec2c`'s own license terms, not just this project's CC0 dedication.
 

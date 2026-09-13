@@ -520,7 +520,7 @@ Diseña un autotransformador de banda ancha (UnUn) devanado sobre un núcleo tor
 
 #### 11.1.3 Panel de "Resultados"
 
-Un panel de texto desplazable, monoespaciado y con código de colores que reporta el diseño de UnUn calculado: relación de vueltas, impedancia transformada, calidad de adaptación esperada, estimación de pérdidas/calentamiento del núcleo, y cualquier advertencia (p. ej., vueltas insuficientes, núcleo cerca de saturación o sobretemperatura, o la advertencia de autorresonancia descrita en 11.1.4).
+Un panel de texto desplazable, monoespaciado y con código de colores que reporta el diseño de UnUn calculado: relación de vueltas, impedancia transformada, calidad de adaptación esperada, estimación de pérdidas/calentamiento del núcleo, y cualquier advertencia (p. ej., vueltas insuficientes, o núcleo cerca de saturación o sobretemperatura).
 
 #### 11.1.4 Sección "Multibanda"
 
@@ -532,8 +532,6 @@ Dado que un único diseño de UnUn se usa en todas las bandas que cubre la anten
 - **Campo Relación** — la relación de vueltas del UnUn elegida manualmente (solo se usa cuando Auto está desmarcado).
 - **Campo Z0** — la impedancia de referencia/objetivo para la evaluación multibanda. Por defecto `50` Ω.
 - **Tabla de resultados** — una fila por banda, mostrando: nombre de banda, frecuencia, R, X, reactancia compensadora, impedancia de entrada resultante, ROE sin y con compensación, y la diferencia entre ambas.
-
-> **Nota técnica importante incorporada en esta herramienta:** un transformador toroidal derivado/devanado solo se comporta como un autotransformador ideal *por debajo* de su propia frecuencia de autorresonancia (SRF). Por encima de la SRF, el devanado pasa a ser dominado capacitivamente y el modelo simple de relación de vueltas ya no aplica — sin embargo, diseños anteriores e ingenuos podían reportar silenciosamente una ROE de apariencia plausible (pero incorrecta) para una banda que en realidad está por encima de la SRF del devanado. Esta herramienta verifica la SRF del devanado y acortará/ajustará el devanado de referencia automático hasta que la SRF supere la banda solicitada más alta con un margen de seguridad (1.5×), y marca las filas donde la propia reactancia del devanado no es cómodamente mayor que la impedancia de la antena (una señal de que la derivación está siendo "cargada" por la bobina en lugar de transformar limpiamente a través de ella).
 
 ### 11.2 Subpestaña: Transmatch
 
@@ -549,6 +547,8 @@ Diseña una red de adaptación de bobina derivada (estilo autotransformador) —
 | Espaciado del devanado | Espaciado entre vueltas | `1.0` mm |
 | Devanado de referencia (vueltas) | Número de vueltas usado como la derivación de referencia Z0 | vacío (en blanco) |
 | Casilla **Referencia automática** | Cuando está marcada, la longitud del devanado de referencia anterior se calcula automáticamente en lugar de introducirse manualmente | marcada por defecto |
+
+> **Nota técnica importante incorporada en esta herramienta:** una bobina derivada/devanada solo se comporta como un autotransformador ideal *por debajo* de su propia frecuencia de autorresonancia (SRF). Por encima de la SRF, el devanado pasa a ser dominado capacitivamente y el modelo simple de relación de vueltas ya no aplica — sin embargo, diseños anteriores e ingenuos podían reportar silenciosamente una ROE de apariencia plausible (pero incorrecta) para una banda que en realidad está por encima de la SRF del devanado. Esta herramienta verifica la SRF del devanado y acortará/ajustará el devanado de referencia automático hasta que la SRF supere la banda solicitada más alta con un margen de seguridad (1.5×), y marca las filas donde la propia reactancia del devanado no es cómodamente mayor que la impedancia de la antena (una señal de que la derivación está siendo "cargada" por la bobina en lugar de transformar limpiamente a través de ella).
 
 #### 11.2.2 Tabla de "Derivaciones"
 
@@ -795,7 +795,7 @@ Si el reporte advierte que la longitud del hilo (o del contrapeso) "puede necesi
 | La sección "Trayectoria de retorno sin contrapeso" está en gris | "Usar contrapeso" está marcada | Esta sección solo aplica cuando *no* hay contrapeso; se activa automáticamente al desmarcar "Usar contrapeso". |
 | La longitud de hilo/CP ganadora es igual al mínimo o máximo de la ventana de búsqueda | El verdadero óptimo puede estar fuera del rango buscado | Amplíe `wire-min`/`wire-max` (o `cp-min`/`cp-max`), o configure **Reintentos máximos** > 0 y vuelva a ejecutar. |
 | La pestaña UnUn/Transmatch muestra "sin datos cargados" | Ninguna ejecución del optimizador ha producido aún un CSV, o está en una carpeta distinta a la esperada | Ejecute primero el optimizador, o haga clic en el botón **Recargar** en la subpestaña UnUn después de apuntar el directorio de trabajo de Archivos de salida a la carpeta que contiene `optimizer_best.csv`. |
-| Una banda de UnUn muestra una ROE sospechosa que no parece corresponder con la reactancia real de la antena | El devanado puede estar operando por encima de su propia frecuencia de autorresonancia (SRF) | Verifique el panel de Resultados en busca de una advertencia de SRF; con **Auto** marcada, la herramienta ya acorta el devanado de referencia para mantener la SRF por encima de su banda más alta con margen, pero un devanado de referencia introducido manualmente aún puede ser demasiado largo. |
+| Una banda del Transmatch muestra una ROE sospechosa que no parece corresponder con la reactancia real de la antena | El devanado puede estar operando por encima de su propia frecuencia de autorresonancia (SRF) | Verifique la tabla de resultados "Devanado" en busca de una advertencia de SRF; con **Referencia automática** marcada, la herramienta ya acorta el devanado de referencia para mantener la SRF por encima de su banda más alta con margen, pero un devanado de referencia introducido manualmente aún puede ser demasiado largo. |
 | No se producen salidas PNG | `matplotlib` (o, para los diagramas de radiación en particular, `numpy`) no está instalado | `pip install matplotlib numpy`, luego vuelva a ejecutar. |
 | El PDF se genera pero una sección de diagrama dice "no disponible" | `Pillow` (`PIL`) no está instalado | `pip install pillow`, luego vuelva a ejecutar — esto no requiere repetir la búsqueda, ya que solo afecta la incrustación de imágenes en el PDF. |
 | La vista previa del comando de la GUI muestra algo inesperado | Un campo quedó con texto obsoleto, o el estado de una casilla no coincide con lo que se pretendía | Todo lo que se muestra en el cuadro de vista previa del comando es exactamente lo que se ejecutará — inspecciónelo antes de ejecutar, y ajuste el campo correspondiente. |

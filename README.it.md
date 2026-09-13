@@ -116,10 +116,10 @@ Questa è anche l'**unica via supportata per macOS**, dato che non esiste un ins
 - Pacchetti Python:
 
 ```
-pip install numpy matplotlib colorama reportlab
+pip install numpy matplotlib colorama reportlab pillow
 ```
 
-`colorama`, `matplotlib`, `numpy` e `reportlab` sono tutti facoltativi — lo script si adatta senza problemi (niente colori, niente grafico/PDF) se non sono installati. `numpy` serve solo per i diagrammi del pattern di radiazione e viene normalmente installato in automatico come dipendenza di `matplotlib`, quindi raramente occorre installarlo a parte.
+`colorama`, `matplotlib`, `numpy`, `reportlab` e `pillow` sono tutti facoltativi — lo script si adatta senza problemi (niente colori, niente grafico/PDF) se non sono installati. `numpy` serve solo per i diagrammi del pattern di radiazione e viene normalmente installato in automatico come dipendenza di `matplotlib`, quindi raramente occorre installarlo a parte. `pillow` (`PIL`) serve solo per incorporare i PNG di costruzione/radiazione nel brochure PDF; senza di esso il PDF viene comunque generato, con un segnaposto "non disponibile" nella sezione immagine interessata.
 
 **Ordine di ricerca del binario NEC2C:**
 

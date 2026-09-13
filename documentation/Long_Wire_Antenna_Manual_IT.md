@@ -428,7 +428,7 @@ Progetta un autotrasformatore a banda larga (UnUn) avvolto su un nucleo toroidal
 
 #### 11.1.3 Pannello "Results" (risultati)
 
-Un pannello di testo a spaziatura fissa, scorrevole e a colori, che riporta il progetto UnUn calcolato: rapporto di spire, impedenza trasformata, qualità di adattamento attesa, stima delle perdite/riscaldamento del nucleo, ed eventuali avvertenze (ad es. spire insufficienti, nucleo vicino alla saturazione o alla sovratemperatura, o l'avvertenza sull'autorisonanza descritta in 11.1.4).
+Un pannello di testo a spaziatura fissa, scorrevole e a colori, che riporta il progetto UnUn calcolato: rapporto di spire, impedenza trasformata, qualità di adattamento attesa, stima delle perdite/riscaldamento del nucleo, ed eventuali avvertenze (ad es. spire insufficienti, o nucleo vicino alla saturazione o alla sovratemperatura).
 
 #### 11.1.4 Sezione "Multi-band"
 
@@ -440,8 +440,6 @@ Poiché un singolo progetto UnUn viene usato su tutte le bande coperte dall'ante
 - Campo **Ratio** — il rapporto di spire dell'UnUn scelto manualmente (usato solo quando Auto è deselezionato).
 - Campo **Z0** — l'impedenza di riferimento/obiettivo per la valutazione multi-banda. Predefinita `50` Ω.
 - **Tabella dei risultati** — una riga per banda, con: nome banda, frequenza, R, X, reattanza compensante, impedenza di ingresso risultante, VSWR senza e con compensazione, e la differenza tra le due.
-
-> **Nota tecnica importante integrata nello strumento:** un trasformatore toroidale a presa/avvolgimento si comporta come un autotrasformatore ideale solo **al di sotto** della propria frequenza di autorisonanza (SRF). Al di sopra della SRF, l'avvolgimento diventa a dominanza capacitiva e il semplice modello a rapporto di spire non è più valido — eppure progetti ingenui precedenti potevano silenziosamente riportare un VSWR plausibile (ma sbagliato) per una banda che in realtà si trova sopra la SRF dell'avvolgimento. Questo strumento verifica la SRF dell'avvolgimento e accorcia/regola automaticamente l'avvolgimento di riferimento finché la SRF non supera la banda richiesta più alta con un margine di sicurezza (1.5×), e segnala le righe in cui la reattanza propria dell'avvolgimento non è comodamente superiore all'impedenza dell'antenna (segno che la presa viene "caricata" dalla bobina invece di trasformare in modo pulito).
 
 ### 11.2 Sotto-scheda: Transmatch
 
@@ -457,6 +455,8 @@ Progetta una rete di adattamento a bobina con prese (in stile autotrasformatore)
 | Spaziatura spire | Spaziatura tra le spire | `1.0` mm |
 | Avvolgimento di riferimento (spire) | Numero di spire usato come presa di riferimento Z0 | vuoto |
 | Casella **Auto reference** | Se selezionata, la lunghezza dell'avvolgimento di riferimento sopra viene calcolata automaticamente invece di essere inserita manualmente | selezionata per impostazione predefinita |
+
+> **Nota tecnica importante integrata nello strumento:** una bobina a presa/avvolgimento si comporta come un autotrasformatore ideale solo **al di sotto** della propria frequenza di autorisonanza (SRF). Al di sopra della SRF, l'avvolgimento diventa a dominanza capacitiva e il semplice modello a rapporto di spire non è più valido — eppure progetti ingenui precedenti potevano silenziosamente riportare un VSWR plausibile (ma sbagliato) per una banda che in realtà si trova sopra la SRF dell'avvolgimento. Questo strumento verifica la SRF dell'avvolgimento e accorcia/regola automaticamente l'avvolgimento di riferimento finché la SRF non supera la banda richiesta più alta con un margine di sicurezza (1.5×), e segnala le righe in cui la reattanza propria dell'avvolgimento non è comodamente superiore all'impedenza dell'antenna (segno che la presa viene "caricata" dalla bobina invece di trasformare in modo pulito).
 
 #### 11.2.2 Tabella "Taps" (prese)
 
@@ -658,7 +658,7 @@ Dopo una ricerca riuscita, utilizzare UnUn / Transmatch. I dati del CSV vengono 
 | Percorso di ritorno disabilitato | Il contrappeso è presente | Disabilitare il contrappeso per usare questa funzione |
 | Vincitore sul bordo | Ricerca troppo stretta | Allargare la finestra o usare `Maximum retries` |
 | Nessun dato nelle calcolatrici | CSV assente o directory diversa | Eseguire una ricerca o usare Reload nella directory corretta |
-| VSWR UnUn anomalo | SRF dell'avvolgimento insufficiente | Controllare l'avviso SRF e ridurre le spire se necessario |
+| VSWR Transmatch anomalo | SRF dell'avvolgimento insufficiente | Controllare l'avviso SRF nella tabella "Winding" e ridurre le spire se necessario |
 | Mancano i PNG | `matplotlib` assente (o `numpy`, per i soli diagrammi di radiazione) | Installare `matplotlib numpy` |
 | Manca il PDF | `reportlab` assente | Installare `reportlab` |
 | Diagramma nel PDF segnato "non disponibile" | `Pillow` (`PIL`) assente | Installare `pillow` |

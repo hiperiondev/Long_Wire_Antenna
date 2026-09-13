@@ -521,7 +521,7 @@ Designs a wideband autotransformer (UnUn) wound on a ferrite or iron-powder toro
 
 #### 11.1.3 "Results" panel
 
-A scrollable, colour-coded, monospaced text panel reporting the computed UnUn design: turns ratio, transformed impedance, expected match quality, core loss/heating estimate, and any warnings (e.g., insufficient turns, core near saturation or over-temperature, or the self-resonance caveat described in 11.1.4).
+A scrollable, colour-coded, monospaced text panel reporting the computed UnUn design: turns ratio, transformed impedance, expected match quality, core loss/heating estimate, and any warnings (e.g., insufficient turns, or core near saturation or over-temperature).
 
 #### 11.1.4 "Multi-band" section
 
@@ -533,8 +533,6 @@ Because a single UnUn design is used across every band the antenna covers, this 
 - **Ratio** field — the manually-chosen UnUn turns ratio (only used when Auto is unchecked).
 - **Z0** field — the reference/target impedance for the multi-band evaluation. Default `50` Ω.
 - **Results table** — one row per band, showing: band name, frequency, R, X, compensating reactance, resulting input impedance, VSWR without and with compensation, and the delta between them.
-
-> **Important engineering note built into this tool:** a tapped/wound toroid transformer only behaves as an ideal autotransformer *below* its own self-resonant frequency (SRF). Above the SRF, the winding becomes capacitively dominated and the simple turns-ratio model no longer applies — yet earlier, naive designs could silently report a plausible-looking (but wrong) VSWR for a band that actually sits above the winding's SRF. This tool checks the winding's SRF and will shorten/adjust the automatic reference winding until the SRF clears the highest requested band by a safety margin (1.5×), and it flags rows where the winding's own reactance is not comfortably larger than the antenna impedance (a sign the tap is being "loaded" by the coil rather than cleanly transforming through it).
 
 ### 11.2 Sub-tab: Transmatch
 
@@ -550,6 +548,8 @@ Designs a tapped-coil (autotransformer-style) matching network — a classic "Tr
 | Winding spacing | Spacing between turns | `1.0` mm |
 | Reference winding (turns) | Number of turns used as the Z0 reference tap | empty (blank) |
 | **Auto reference** checkbox | When checked, the reference winding length above is computed automatically instead of manually entered | checked by default |
+
+> **Important engineering note built into this tool:** a tapped/wound coil only behaves as an ideal autotransformer *below* its own self-resonant frequency (SRF). Above the SRF, the winding becomes capacitively dominated and the simple turns-ratio model no longer applies — yet earlier, naive designs could silently report a plausible-looking (but wrong) VSWR for a band that actually sits above the winding's SRF. This tool checks the winding's SRF and will shorten/adjust the automatic reference winding until the SRF clears the highest requested band by a safety margin (1.5×), and it flags rows where the winding's own reactance is not comfortably larger than the antenna impedance (a sign the tap is being "loaded" by the coil rather than cleanly transforming through it).
 
 #### 11.2.2 "Taps" table
 
@@ -795,7 +795,7 @@ If the report warns that the wire (or counterpoise) length "may need to be longe
 | The "No-counterpoise return path" section is greyed out | "Use counterpoise" is checked | This section only applies when there is *no* counterpoise; it activates automatically when you uncheck "Use counterpoise". |
 | The winning wire/CP length equals the min or max of the search window | The true optimum may lie outside the searched range | Widen `wire-min`/`wire-max` (or `cp-min`/`cp-max`), or set **Maximum retries** > 0 and re-run. |
 | UnUn/Transmatch tab shows "no data loaded" | No optimizer run has produced a CSV yet, or it's in a different folder than expected | Run the optimizer first, or click the **Reload** button on the UnUn sub-tab after pointing the Output Files' working directory at the folder containing `optimizer_best.csv`. |
-| A UnUn band shows a suspicious VSWR that doesn't seem to track the antenna's real reactance | The winding may be operating above its own self-resonant frequency (SRF) | Check the Results panel for an SRF warning; with **Auto** checked, the tool already shortens the reference winding to keep the SRF above your highest band by margin, but a manually-entered reference winding can still be too long. |
+| A Transmatch band shows a suspicious VSWR that doesn't seem to track the antenna's real reactance | The winding may be operating above its own self-resonant frequency (SRF) | Check the Winding results table for an SRF warning; with **Auto reference** checked, the tool already shortens the reference winding to keep the SRF above your highest band by margin, but a manually-entered reference winding can still be too long. |
 | No PNG output is produced | `matplotlib` (or, for radiation diagrams specifically, `numpy`) is not installed | `pip install matplotlib numpy`, then re-run. |
 | PDF is generated but a diagram section says "(unavailable)" | `Pillow` (`PIL`) is not installed | `pip install pillow`, then re-run — this does not require redoing the search, since it only affects PDF image embedding. |
 | GUI's command preview shows something unexpected | A field was left with stale text, or a checkbox state doesn't match what you intended | Everything shown in the command preview box is exactly what will be executed — inspect it before running, and adjust the corresponding field. |
