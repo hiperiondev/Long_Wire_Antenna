@@ -203,6 +203,19 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "Falló el recálculo — las impedancias siguen siendo las del barrido grueso.",
         "it": 'Il ricalcolo è fallito — le impedenze sono ancora quelle della scansione grossolana.',
     },
+    "swap_stale_candidate": {
+        "en": "Internal: candidate wire {0:.3f} m / cp {1:.3f} m is not in the "
+              "result set — refinement not published (state desync).",
+        "es": "Interno: el candidato hilo {0:.3f} m / cp {1:.3f} m no está en el "
+              "conjunto de resultados — recálculo no publicado (desincronización).",
+        "it": 'Interno: il candidato filo {0:.3f} m / cp {1:.3f} m non è nel '
+              'set dei risultati — ricalcolo non pubblicato (desincronizzazione).',
+    },
+    "swap_stale_candidate_note": {
+        "en": "[stale-candidate]",
+        "es": "[candidato-obsoleto]",
+        "it": '[candidato-obsoleto]',
+    },
     "converge_header": {
         "en": "  Segmentation convergence check (base {0} seg/half wave, plus {1}) …",
         "es": "  Comprobación de convergencia de segmentación (base {0} seg/media onda, más {1}) …",
@@ -11372,7 +11385,13 @@ def main() -> None:
 
     def _converge_unun() -> None:
         """Alternate ranking ↔ transformer ratio until the two agree."""
-        nonlocal unun_ratio, results, ranked, pareto_ranked
+        # `pareto` MUST be rebound here too.  _rescore_all() returns fresh
+        # objects, so every view derived from `results` has to be rebuilt in
+        # lock step; leaving the enclosing `pareto` pointing at pre-rescore
+        # objects makes the refinement stage walk candidates that are no
+        # longer members of `results`, and the identity-based swap then
+        # appends them as duplicates.
+        nonlocal unun_ratio, results, ranked, pareto, pareto_ranked
         nonlocal unun_result, best_run_h
         _seen_ratios = {unun_ratio}
         for _pass in range(AUTO_UNUN_PASSES):
@@ -11397,8 +11416,9 @@ def main() -> None:
                     for _cr in calc_rows:
                         _cr.unun_ratio = unun_ratio
                     results = _rescore_all(results, unun_ratio)
-                    ranked = rank_results(results)
-                    pareto_ranked = sorted(pareto_front(results),
+                    ranked  = rank_results(results)
+                    pareto  = pareto_front(results)
+                    pareto_ranked = sorted(pareto,
                                            key=lambda r: r.score_combined)
                 break
             print(T("unun_auto_pass").format(_pass + 1, unun_ratio, _recommended))
@@ -11407,8 +11427,9 @@ def main() -> None:
             for _cr in calc_rows:
                 _cr.unun_ratio = unun_ratio
             results = _rescore_all(results, unun_ratio)
-            ranked = rank_results(results)
-            pareto_ranked = sorted(pareto_front(results),
+            ranked  = rank_results(results)
+            pareto  = pareto_front(results)
+            pareto_ranked = sorted(pareto,
                                    key=lambda r: r.score_combined)
         for _cr in calc_rows:
             _cr.unun_ratio = unun_ratio
@@ -11490,13 +11511,22 @@ def main() -> None:
         def _swap_in_results(old_cand, new_cand):
             """Replace `old_cand` with `new_cand` inside `results` (by identity),
             so `results` never holds a stale copy of a candidate that has since
-            been refined. Falls back to appending if the old object can't be
-            found (should not normally happen)."""
+            been refined.
+
+            A miss means the caller handed us an object that is no longer a
+            member of `results` — i.e. some view (`pareto`, `ranked`, a
+            caller-held reference) survived a re-score that rebuilt the
+            candidates.  Appending in that situation does not repair the
+            desynchronisation, it publishes it as a duplicate row.  So the
+            anomaly is reported and `results` is left untouched."""
             for _i, _r in enumerate(results):
                 if _r is old_cand:
                     results[_i] = new_cand
-                    return
-            results.append(new_cand)
+                    return True
+            new_cand.note = (new_cand.note + " " + T("swap_stale_candidate_note")).strip()
+            print(f"  {Fore.YELLOW}" + T("swap_stale_candidate").format(
+                old_cand.wire_len_m, old_cand.cp_len_m) + f"{Style.RESET_ALL}")
+            return False
 
         def _refine_and_sync(cand):
             """Refine one candidate at the fine density and keep `results`
@@ -11773,7 +11803,11 @@ def main() -> None:
                             # cannot move a lobe).
                             results = _rescore_all(results, unun_ratio)
                             ranked  = _order_with_pattern(rank_results(results))
-                            pareto_ranked = sorted(pareto_front(results),
+                            # Same lock-step rule as everywhere else: `pareto`
+                            # is a view on `results` and must never outlive the
+                            # objects it points at.
+                            pareto  = pareto_front(results)
+                            pareto_ranked = sorted(pareto,
                                                    key=lambda r: r.score_combined)
                             _ref4, _fine_run4 = _publish(ranked[0])
                             if _fine_run4 is not None:
