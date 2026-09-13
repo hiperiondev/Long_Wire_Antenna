@@ -1051,10 +1051,16 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "ROE",
         "it": 'ROS',
     },
+    # NOTE: despite the generic key name, this column (used only in the
+    # BEST CANDIDATE detailed-breakdown table) also renders the resonance-
+    # avoidance star rating (_avoidance_rating), not a VSWR-quality verdict —
+    # the VSWR verdict is the separate vlabel embedded in the VSWR column.
+    # "Quality" is even more misleading here than "Rating" was in the
+    # per-band table, so it gets the same clarified label.
     "construction_col_quality": {
-        "en": "Quality",
-        "es": "Calidad",
-        "it": 'Qualità',
+        "en": "Avoidance Rating",
+        "es": "Calificación de Evitación",
+        "it": 'Valutazione di Evitamento',
     },
     "matplotlib_missing": {
         "en": "  matplotlib not available — skipping plot.",
@@ -2158,7 +2164,12 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "pdf_col_band": {"en": "Band", "es": "Banda", "it": 'Banda'},
     "pdf_col_freq": {"en": "Freq (MHz)", "es": "Frec (MHz)", "it": 'Freq (MHz)'},
     "pdf_col_vswr": {"en": "VSWR", "es": "ROE", "it": 'ROS'},
-    "pdf_col_rating": {"en": "Rating", "es": "Calificación", "it": 'Valutazione'},
+    # NOTE: this column shows the resonance-avoidance score's star label
+    # (_avoidance_rating), NOT a VSWR-quality verdict. A plain "Rating" here
+    # let two bands with near-identical VSWR (e.g. 2.50 vs 2.51) show
+    # different star counts, which reads as "one has better VSWR" when in
+    # fact it's the avoidance metric disagreeing. See _avoidance_rating().
+    "pdf_col_rating": {"en": "Avoidance Rating", "es": "Calificación de Evitación", "it": 'Valutazione di Evitamento'},
     "pdf_col_r_ant": {"en": "R_ant (Ω)", "es": "R_ant (Ω)", "it": 'R_ant (Ω)'},
     "pdf_col_x_ant": {"en": "X_ant (Ω)", "es": "X_ant (Ω)", "it": 'X_ant (Ω)'},
     "pdf_col_z_ant": {"en": "|Z_ant| (Ω)", "es": "|Z_ant| (Ω)", "it": '|Z_ant| (Ω)'},
@@ -6664,7 +6675,7 @@ def write_report(
         lines.append("")
 
         ln(T("report_per_band"))
-        _hdr_b = f"  {'Band':>8}  {'Active':>6}  {'VSWR(Tx)':>9}  {'Avoid':>8}  {'Rating':>22}  VSWR"
+        _hdr_b = f"  {'Band':>8}  {'Active':>6}  {'VSWR(Tx)':>9}  {'Avoid':>8}  {'AvoidRating':>22}  VSWR"
         ln(_hdr_b)
         ln("  " + "─" * 80)
 
