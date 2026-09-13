@@ -1753,27 +1753,34 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                " simulation for each candidate.  Without NEC2, the empirical formulas"
                " R = 50·80^cos²(π·L/λ½) and X = -1500·sin(2π·L/λ½) are used as a free-space,"
                " no-ground, no-counterpoise approximation for SCREENING GEOMETRIES ONLY."
-               " Against NEC2 with a real ground and counterpoise, R can be off by 60x or more"
-               " near L = λ/4-type points, and X is unreliable in both magnitude and sign —"
-               " the formula predicts zero reactance at every half-wave multiple, while NEC2"
-               " typically shows large negative reactance there because ground and counterpoise"
-               " losses dominate X, and free-space wire formulas do not model them at all."
-               " Never use the empirical X value to design a matching network.  NEC2 results"
-               " are always preferred; install nec2c (see below) whenever accuracy matters,"
-               " and cross-validate the final geometry with a VNA on the bench."),
+               " Against NEC2 with a real ground and counterpoise, measured across a full"
+               " 8-band run, empirical R typically lands within roughly 2-3x of NEC2 — annoying,"
+               " but not the main danger.  The real problem is X: on about a third of bands the"
+               " empirical formula gets the SIGN of X wrong, not just the magnitude, because it"
+               " predicts zero reactance at every half-wave multiple while NEC2 typically shows"
+               " a large reactance of either sign there — ground and counterpoise coupling"
+               " dominate X and the free-space wire formula does not model them at all."
+               " A wrong-signed X will send a matching-network design in exactly the wrong"
+               " direction.  Never use the empirical X value to design a matching network."
+               " NEC2 results are always preferred; install nec2c (see below) whenever accuracy"
+               " matters, and cross-validate the final geometry with a VNA on the bench."),
         "es": ("Cuando nec2c está disponible, el optimizador ejecuta una simulación completa de"
                " tierra Sommerfeld-Norton para cada candidato.  Sin NEC2 se usan las fórmulas"
                " empíricas R = 50·80^cos²(π·L/λ½) y X = -1500·sin(2π·L/λ½) como una aproximación"
                " de hilo en espacio libre, sin tierra ni contrapeso, SÓLO PARA CRIBAR GEOMETRÍAS."
-               " Frente a NEC2 con tierra real y contrapeso, R puede errar por 60x o más cerca de"
-               " puntos tipo L = λ/4, y X no es confiable ni en magnitud ni en signo: la fórmula"
-               " predice reactancia nula en cada múltiplo de media onda, mientras que NEC2 suele"
-               " dar una reactancia negativa grande allí, porque las pérdidas de tierra y"
-               " contrapeso dominan X y las fórmulas de hilo en espacio libre no las modelan en"
-               " absoluto.  Nunca use el valor de X empírico para diseñar una red de adaptación."
-               " Los resultados NEC2 siempre son preferidos; instale nec2c (ver más abajo) cuando"
-               " la precisión importe, y valide la geometría final con un VNA en el banco."),
-        "it": "Quando nec2c è disponibile, l'ottimizzatore esegue una simulazione completa di terra Sommerfeld-Norton per ogni candidato.  Senza NEC2 si usano le formule empiriche R = 50·80^cos²(π·L/λ½) e X = -1500·sin(2π·L/λ½) come approssimazione di filo in spazio libero, senza terra né contrappeso, SOLO PER LA SELEZIONE DELLE GEOMETRIE. Rispetto a NEC2 con terra reale e contrappeso, R può sbagliare di 60x o più vicino a punti tipo L = λ/4, e X non è affidabile né in modulo né in segno — la formula prevede reattanza nulla a ogni multiplo di mezza onda, mentre NEC2 mostra tipicamente una grande reattanza negativa lì, perché le perdite di terra e contrappeso dominano X e le formule di filo in spazio libero non le modellano affatto. Non usare mai il valore X empirico per progettare una rete di adattamento.  I risultati NEC2 sono sempre preferiti; installare nec2c (vedi sotto) ogni volta che la precisione conta, e validare la geometria finale con un VNA in laboratorio.",
+               " Frente a NEC2 con tierra real y contrapeso, medido en una corrida completa de"
+               " 8 bandas, R empírico suele quedar dentro de aproximadamente 2-3x de NEC2:"
+               " molesto, pero no el peligro principal.  El problema real es X: en cerca de un"
+               " tercio de las bandas la fórmula empírica se equivoca en el SIGNO de X, no sólo"
+               " en la magnitud, porque predice reactancia nula en cada múltiplo de media onda,"
+               " mientras que NEC2 suele dar allí una reactancia grande de cualquier signo —"
+               " el acoplamiento de tierra y contrapeso domina X y la fórmula de hilo en espacio"
+               " libre no lo modela en absoluto.  Un signo de X equivocado enviará el diseño de"
+               " una red de adaptación exactamente en la dirección contraria.  Nunca use el valor"
+               " de X empírico para diseñar una red de adaptación.  Los resultados NEC2 siempre"
+               " son preferidos; instale nec2c (ver más abajo) cuando la precisión importe, y"
+               " valide la geometría final con un VNA en el banco."),
+        "it": "Quando nec2c è disponibile, l'ottimizzatore esegue una simulazione completa di terra Sommerfeld-Norton per ogni candidato.  Senza NEC2 si usano le formule empiriche R = 50·80^cos²(π·L/λ½) e X = -1500·sin(2π·L/λ½) come approssimazione di filo in spazio libero, senza terra né contrappeso, SOLO PER LA SELEZIONE DELLE GEOMETRIE. Rispetto a NEC2 con terra reale e contrappeso, misurato su un'esecuzione completa a 8 bande, R empirico resta tipicamente entro circa 2-3x di NEC2 — fastidioso, ma non il pericolo principale.  Il problema reale è X: in circa un terzo delle bande la formula empirica sbaglia il SEGNO di X, non solo la grandezza, perché prevede reattanza nulla a ogni multiplo di mezza onda, mentre NEC2 mostra tipicamente lì una grande reattanza di segno qualsiasi — l'accoppiamento di terra e contrappeso domina X e la formula di filo in spazio libero non lo modella affatto.  Un segno di X sbagliato manderà il progetto di una rete di adattamento esattamente nella direzione opposta.  Non usare mai il valore X empirico per progettare una rete di adattamento.  I risultati NEC2 sono sempre preferiti; installare nec2c (vedi sotto) ogni volta che la precisione conta, e validare la geometria finale con un VNA in laboratorio.",
     },
     "note5_title": {
         "en": "Next steps",
@@ -2430,7 +2437,6 @@ class CalcRow:
     vswr_no_cp:     float = 0.0    # VSWR without counterpoise
     vswr_with_cp:   float = 0.0    # VSWR with counterpoise correction
     Z_eff_ohm:      float = 0.0    # Z_wire + Zcp
-    Zcp_ohm:        float = 0.0    # counterpoise impedance (series)
     unun_ratio:     float = 1.0
     avoidance_score:float = 0.0
     quality_rating: str   = ""
@@ -6908,7 +6914,7 @@ def export_best_csv(
         "wire_len_m", "L_over_lhalf", "R_wire_ohm", "X_wire_ohm",
         "R_wire_source",
         "vswr_no_cp", "vswr_no_cp_source",
-        "vswr_with_cp", "Z_eff_ohm", "Zcp_ohm",
+        "vswr_with_cp", "Z_eff_ohm",
         "unun_ratio", "avoidance_score", "quality_rating",
         "cp_len_m", "cp_height_m", "num_radials",
     ]
@@ -7004,7 +7010,6 @@ def export_best_csv(
                 "vswr_with_cp":   _recompute_vswr(R, X, unun_ratio)
                                   if cr.active else "",
                 "Z_eff_ohm":      round(math.hypot(R, X), 2),
-                "Zcp_ohm":        "",
                 "unun_ratio":     unun_ratio,
                 "avoidance_score":round(avoid, 4),
                 "quality_rating": rating,
