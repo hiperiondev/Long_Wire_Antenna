@@ -2234,15 +2234,30 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     },
     "ap_rerank_top": {
         "en": ("How many of the best VSWR candidates are re-simulated with a full "
-               "radiation pattern before the winner is declared."),
+               "radiation pattern before the winner is declared. 0 disables the "
+               "pattern pass entirely (--gain-weight and --target-toa then have "
+               "no effect)."),
         "es": ("Cuántos de los mejores candidatos por ROE se vuelven a simular con "
-               "diagrama de radiación completo antes de declarar el ganador."),
-        "it": 'Quanti dei migliori candidati per ROS vengono nuovamente simulati con un diagramma di radiazione completo prima di dichiarare il vincitore.',
+               "diagrama de radiación completo antes de declarar el ganador. 0 "
+               "desactiva por completo el paso de patrón (--gain-weight y "
+               "--target-toa dejan de tener efecto)."),
+        "it": ('Quanti dei migliori candidati per ROS vengono nuovamente simulati con '
+               'un diagramma di radiazione completo prima di dichiarare il vincitore. '
+               '0 disattiva completamente il passaggio del diagramma '
+               '(--gain-weight e --target-toa non hanno più effetto).'),
     },
     "gain_rerank_header": {
         "en": "Re-evaluating the {0} best candidates with a full radiation pattern (target TOA {1:.0f}°)…",
         "es": "Reevaluando los {0} mejores candidatos con diagrama de radiación completo (TOA objetivo {1:.0f}°)…",
         "it": 'Rivalutazione dei {0} migliori candidati con diagramma di radiazione completo (TOA obiettivo {1:.0f}°)…',
+    },
+    "gain_rerank_disabled": {
+        "en": ("  Radiation re-ranking disabled ({0}) — ranking by VSWR only; "
+               "--gain-weight and --target-toa have no effect."),
+        "es": ("  Reordenación por radiación desactivada ({0}) — se ordena sólo por ROE; "
+               "--gain-weight y --target-toa no tienen efecto."),
+        "it": ('  Riclassificazione per radiazione disattivata ({0}) — classifica solo per '
+               'ROS; --gain-weight e --target-toa non hanno effetto.'),
     },
     "gain_rerank_progress": {
         "en": "  pattern {0}/{1}: wire {2:.3f} m  cp {3:.3f} m",
@@ -5777,13 +5792,19 @@ def check_segmentation_convergence(
             if X_other is None:
                 continue
             drift = abs(X_other - X_fine)
-            rep.max_x_drift_ohm = max(rep.max_x_drift_ohm, drift)
             # Judge X against its OWN tolerance, band by band, scaled to that
             # band's |Z|.  A verdict driven by R alone signs off on a reactance
             # that may still be moving by hundreds of ohm.
             tol_b = convergence_x_tol_ohm(
                 math.hypot(fine_row.band_R.get(b, 0.0), X_fine))
-            rep.x_tol_ohm = max(rep.x_tol_ohm, tol_b)
+            if drift > rep.max_x_drift_ohm:
+                # Carry the tolerance ALONGSIDE the drift that set the new
+                # worst-case, not the largest tolerance seen so far — those
+                # can come from different bands, and printing them together
+                # would quote a tolerance the flagged band was never judged
+                # against (see B-1).
+                rep.max_x_drift_ohm = drift
+                rep.x_tol_ohm = tol_b
             if drift > tol_b and b not in rep.x_drift_bands:
                 rep.x_drift_bands.append(b)
             if X_other * X_fine < 0.0 and b not in rep.sign_flip_bands:
@@ -11100,7 +11121,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--gain-weight", metavar="W", type=_nonneg_gain_weight,
                    default=DEFAULT_GAIN_WEIGHT,
                    help=T("ap_gain_weight"))
-    p.add_argument("--rerank-top", metavar="N", type=int,
+    def _nonneg_int(value):
+        ivalue = int(value)
+        if ivalue < 0:
+            raise argparse.ArgumentTypeError(
+                f"--rerank-top must be >= 0 (got {value})")
+        return ivalue
+
+    p.add_argument("--rerank-top", metavar="N", type=_nonneg_int,
                    default=DEFAULT_RERANK_TOP_N,
                    help=T("ap_rerank_top"))
     def _positive_int(value):
@@ -12275,6 +12303,14 @@ def main() -> None:
         _rerank_n = max(0, int(getattr(args, "rerank_top", DEFAULT_RERANK_TOP_N)))
         _gain_w   = float(getattr(args, "gain_weight", DEFAULT_GAIN_WEIGHT))
         _tgt_toa  = float(getattr(args, "target_toa", DEFAULT_TARGET_TOA_DEG))
+        if mode == "nec2" and nec2c_bin and (_rerank_n == 0 or _gain_w <= 0.0):
+            # Announce the disable up front: score_final silently collapses
+            # to score_combined and --gain-weight/--target-toa become inert
+            # otherwise, with no signal to the user beyond a later "no
+            # radiation-pattern data" note that reads like a failure rather
+            # than a requested skip (see B-3).
+            _why = "--rerank-top 0" if _rerank_n == 0 else "--gain-weight 0"
+            print(T("gain_rerank_disabled").format(_why))
         if (mode == "nec2" and nec2c_bin and _rerank_n > 0 and _gain_w > 0.0):
             _shortlist = [r for r in ranked[:_rerank_n] if r.nec2_ok]
             if _shortlist:
