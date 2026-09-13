@@ -3291,6 +3291,21 @@ SEGS_PER_HALF_WAVE_MAX = 400    # sanity cap (deck size / runtime)
 CONVERGENCE_FACTORS = (0.5, 2.0)
 CONVERGENCE_R_TOL_PCT = 3.0     # R drift above this is flagged in the report
 
+# ── Thin-wire kernel validity (segment length / wire radius) ───────────────
+# NEC-2's thin-wire approximation requires the segment length Delta to stay
+# comfortably larger than the wire radius a: Delta/a >= ~8 is the usual
+# working rule, and below ~2 the kernel is not even approximately valid (the
+# "extended kernel" that relaxes this does not exist in nec2c). nec2c does
+# not check this itself — it returns R/X for a Delta/a of 2 exactly as
+# quietly as for a Delta/a of 30 — so every wire this tool writes is checked
+# here instead. The default 2 mm wire is never at risk (Delta/a = 29 even at
+# the 360 seg/half-wave convergence ceiling); the exposure is fat conductors
+# (--wire-diameter for tubing, a cage, ladder-line) combined with high
+# segment density, and --converge is the worst offender because its whole
+# purpose is to multiply segment density by up to 4x — it walks toward the
+# violation by design (see the factor cap in check_segmentation_convergence).
+KERNEL_MIN_SEG_TO_RADIUS_RATIO = 8.0
+
 # R and X do NOT converge together.  Measured on a 19 m radiator + 2 m
 # counterpoise at 90 / 180 / 360 seg per half wave: R moved 0.4 % while X moved
 # 304 ohm and had not settled its sign at the finest density.  A verdict built
@@ -3790,6 +3805,63 @@ def junction_seg_len_m(wire_len_m: float, highest_freq_mhz: float,
     return (wire_len_m / n) if n else 0.0
 
 
+def seg_to_radius_ratio(seg_len_m: float, wire_radius_m: float) -> float:
+    """Delta/a for one segment — the thin-wire kernel validity ratio.
+
+    Returns +inf for a zero/negative radius (a degenerate deck already
+    rejected elsewhere) so callers never divide by zero.
+    """
+    a = float(wire_radius_m)
+    if a <= 0.0:
+        return float("inf")
+    return float(seg_len_m) / a
+
+
+def _retract_kernel_kind(g: "DeckGeometry", kind: str) -> None:
+    """Undo a prior `_check_kernel_ratio` verdict for `kind`.
+
+    Used when a GW card that was already kernel-checked (radiator,
+    counterpoise) is superseded later in `build_deck_geometry` — the
+    straddle/fused-feed rebuild replaces both with a single continuous wire,
+    so their individual verdicts no longer describe anything on the deck.
+    """
+    g.kernel_bad_kinds.discard(kind)
+    stale = g.kernel_warning_by_kind.pop(kind, None)
+    if stale is not None and stale in g.warnings:
+        g.warnings.remove(stale)
+
+
+def _check_kernel_ratio(g: "DeckGeometry", what: str,
+                        seg_len_m: float, wire_radius_m: float) -> None:
+    """Flag `g` when a wire's segment length falls below the thin-wire limit.
+
+    Uses the same idiom as the ground-proximity checks elsewhere in
+    `build_deck_geometry`: append a human-readable warning (which also ends
+    up as a CM WARNING card in the written deck). `g.kernel_bad_kinds` is
+    folded into `g.ok` once, at the end of build_deck_geometry(), alongside
+    every other validity flag — so the result is carried downstream as
+    UNRELIABLE rather than silently trusted. nec2c itself prints nothing
+    when this ratio is violated.
+    """
+    ratio = seg_to_radius_ratio(seg_len_m, wire_radius_m)
+    kind = what.lower()
+    if ratio >= KERNEL_MIN_SEG_TO_RADIUS_RATIO:
+        return
+    g.kernel_bad_kinds.add(kind)
+    severity = "INVALID" if ratio < 2.0 else "marginal"
+    msg = (
+        f"{what}: segment length {seg_len_m * 1000.0:.1f} mm is only "
+        f"{ratio:.1f}x the wire radius ({wire_radius_m * 1000.0:.1f} mm); "
+        f"NEC-2's thin-wire kernel needs Delta/a >= {KERNEL_MIN_SEG_TO_RADIUS_RATIO:.0f} "
+        f"(usual working rule) and is {severity} below that. nec2c prints no "
+        f"warning and returns a result anyway — it is marked UNRELIABLE here. "
+        f"Reduce the segmentation density, increase the wire length, or use a "
+        f"thinner --wire-diameter to restore the ratio."
+    )
+    g.kernel_warning_by_kind[kind] = msg
+    g.warnings.append(msg)
+
+
 def estimated_imp_uncertainty_pct(segs_per_half_wave: Optional[int] = None) -> float:
     """Estimated segmentation error on R, in percent, for a given density.
 
@@ -4109,6 +4181,19 @@ class DeckGeometry:
     ground_model: str  = DEFAULT_GROUND_MODEL
     clearance_floor_m: float = 0.0
     seg_len_ref_m: float = 0.0        # radiator segment length at the junction
+    # Thin-wire kernel validity (Delta/a) — see _check_kernel_ratio(). Kept
+    # separate from `ok`/`warnings` text so the straddle/fused-feed rebuild
+    # can cleanly retract a superseded card's verdict instead of pattern-
+    # matching warning strings; `ok` folds this in once, at the end of
+    # build_deck_geometry(), alongside every other validity flag.
+    kernel_bad_kinds: Set[str] = field(default_factory=set)
+    kernel_warning_by_kind: Dict[str, str] = field(default_factory=dict)
+    # Ground-proximity validity, tracked separately from `ok` for the same
+    # reason as kernel_bad_kinds: `ok` is derived from both at the very end
+    # of build_deck_geometry(), so a check that gets superseded later in the
+    # function (kernel) can be retracted without accidentally reviving a
+    # ground violation, and vice versa.
+    ground_invalid: bool = False
 
 
 def build_deck_geometry(
@@ -4221,7 +4306,7 @@ def build_deck_geometry(
                 return 0.0
             return z_req
         if z_req < hard_m:
-            g.ok = False
+            g.ground_invalid = True
             if result_is_final:
                 g.warnings.append(
                     f"{what}: requested {z_req:.3f} m is below {GROUND_CLEAR_FRAC_HARD:.2f}·λ "
@@ -4279,6 +4364,7 @@ def build_deck_geometry(
     seg_len_ref = (wire_len_m / segs_ant) if segs_ant else 0.0
     g.seg_len_ref_m = seg_len_ref
     g.segs_ant = segs_ant
+    _check_kernel_ratio(g, "Radiator", seg_len_ref, wire_radius_m)
     g.gw_lines.append(
         f"GW 1 {segs_ant} 0.0 0.0 {z_near:.3f} "
         f"{x_far:.3f} 0.0 {z_far:.4f} {wire_radius_m:.5f}\n"
@@ -4317,7 +4403,7 @@ def build_deck_geometry(
         # below is a safety net, not a correction: it flags the candidate
         # instead of reshaping it.
         if not perfect and cp_z_end < hard_m:
-            g.ok = False
+            g.ground_invalid = True
             g.warnings.append(
                 f"Counterpoise far end resolved to {cp_z_end:.3f} m, below "
                 f"{GROUND_CLEAR_FRAC_HARD:.2f}·lambda ({hard_m:.2f} m); NEC-2's "
@@ -4335,6 +4421,9 @@ def build_deck_geometry(
         segs_cp = _segs_at_length(_cp_len_deck, seg_len_ref)
         g.segs_cp = segs_cp
         g.cp_len_deck_m = _cp_len_deck
+        _check_kernel_ratio(g, "Counterpoise",
+                            (_cp_len_deck / segs_cp) if segs_cp else 0.0,
+                            wire_radius_m)
         g.gw_lines.append(
             f"GW 2 {segs_cp} 0.0 0.0 {z_near:.3f} "
             f"{cp_x_neg:.3f} 0.0 {cp_z_end:.4f} {wire_radius_m:.5f}\n"
@@ -4364,6 +4453,9 @@ def build_deck_geometry(
             )
         segs_rod = _segs_at_length(rod_len, seg_len_ref)
         g.cp_x_end, g.cp_z_end, g.cp_angle_deg = 0.0, 0.0, 0.0
+        _check_kernel_ratio(g, "Ground rod",
+                            (rod_len / segs_rod) if segs_rod else 0.0,
+                            wire_radius_m)
         g.gw_lines.append(
             f"GW 2 {segs_rod} 0.0 0.0 {z_near:.3f} "
             f"0.0 0.0 0.0 {wire_radius_m:.5f}\n"
@@ -4386,6 +4478,9 @@ def build_deck_geometry(
             )
         segs_stub = _segs_at_length(max(stub_len, 1e-3), seg_len_ref)
         g.cp_x_end, g.cp_z_end, g.cp_angle_deg = 0.0, z_stub, 0.0
+        _check_kernel_ratio(g, "Coax-braid stub",
+                            (max(stub_len, 1e-3) / segs_stub) if segs_stub else 0.0,
+                            wire_radius_m)
         g.gw_lines.append(
             f"GW 2 {segs_stub} 0.0 0.0 {z_near:.3f} "
             f"0.0 0.0 {z_stub:.4f} {wire_radius_m:.5f}\n"
@@ -4455,6 +4550,17 @@ def build_deck_geometry(
                     f"GW 1 {_n} {_cp_x_start:.3f} 0.0 {_cp_z_start:.4f} "
                     f"{x_far:.3f} 0.0 {z_far:.4f} {wire_radius_m:.5f}\n"
                 ]
+                # The fused card's segment length (_total / _n) replaces the
+                # separate radiator/counterpoise cards just checked above,
+                # which no longer exist on the deck — retract those two
+                # kernel verdicts (ground-proximity warnings are untouched,
+                # since they are tracked separately) and re-check the single
+                # fused wire, since straddle_segmentation can pick a
+                # different n than the two independent cards did.
+                _retract_kernel_kind(g, "radiator")
+                _retract_kernel_kind(g, "counterpoise")
+                _check_kernel_ratio(g, "Straddle-fed wire",
+                                    (_total / _n) if _n else 0.0, wire_radius_m)
                 g.ex_line = f"EX 0 1 {_k} 0 1.0 0.0\n"
                 g.fused_feed = True
                 g.feed_seg = _k
@@ -4479,6 +4585,12 @@ def build_deck_geometry(
             "CM Feed model: JUNCTION - EX on segment 1 of wire 1, which also "
             "carries the junction with wire 2 (slower convergence in NEC-2)"
         )
+    # Fold every validity check into `ok` here, once, at the end: kernel and
+    # ground-proximity are tracked separately (kernel_bad_kinds /
+    # ground_invalid) precisely so the straddle/fused-feed rebuild above can
+    # retract a superseded card's kernel verdict without also reviving (or
+    # silently clearing) an unrelated ground-proximity violation.
+    g.ok = g.ok and not g.ground_invalid and not g.kernel_bad_kinds
     return g
 
 
@@ -5673,12 +5785,51 @@ def check_segmentation_convergence(
     # de-duplicated, sorted ascending.  Factors below 1.0 are legal and are now
     # the default — with the publishing density at 180, refining by 4x only
     # reaches the cap and would compare two nearly identical rows.
+    #
+    # This loop is also where B-6 bites hardest: --converge exists to push
+    # segmentation UP, and a fat --wire-diameter can walk Delta/a below the
+    # thin-wire kernel limit (see KERNEL_MIN_SEG_TO_RADIUS_RATIO) well before
+    # SEGS_PER_HALF_WAVE_MAX is reached.  build_deck_geometry() flags any deck
+    # that crosses that limit (geo.ok=False) and the row-acceptance check
+    # below now honours that flag, but a density that is invalid before it is
+    # even run is better dropped here: it costs an nec2c invocation for a
+    # result nobody can use, and — if EVERY density in the run turns out
+    # invalid — silently returns the coarsest available reading, which is a
+    # confusing failure mode for a density the caller could have skipped in
+    # the first place. Estimate Delta/a directly from spw (segment length
+    # scales as 1/spw for a fixed wire length) and drop densities that would
+    # already be under the limit at the FEEDPOINT wire's own length; a
+    # boundary case that only shows up once the real geometry is resolved is
+    # still caught by geo.ok below.
+    _highest_lambda_half = C_MHZ / (2.0 * highest_f) if highest_f else 10.0
     spws: List[int] = []
+    _skipped_kernel: List[int] = []
     for f in (1.0,) + tuple(factors):
         spw = max(5, min(int(round(base_spw * float(f))), SEGS_PER_HALF_WAVE_MAX))
-        if spw not in spws:
-            spws.append(spw)
+        if spw in spws or spw in _skipped_kernel:
+            continue
+        _seg_n = _segs(best.wire_len_m, highest_f, spw)
+        _seg_len_est = (best.wire_len_m / _seg_n) if _seg_n else 0.0
+        if seg_to_radius_ratio(_seg_len_est, WIRE_RADIUS_M) < KERNEL_MIN_SEG_TO_RADIUS_RATIO:
+            _skipped_kernel.append(spw)
+            continue
+        spws.append(spw)
     spws.sort()
+    if not spws:
+        rep.note = (
+            "convergence check skipped: every candidate segmentation density "
+            f"violates the thin-wire kernel limit (Delta/a < "
+            f"{KERNEL_MIN_SEG_TO_RADIUS_RATIO:.0f}) for the current "
+            f"--wire-diameter; use a thinner wire or a lower base density."
+        )
+        return rep
+    if _skipped_kernel and verbose:
+        print(
+            f"  {Fore.YELLOW}WARNING: convergence densities "
+            f"{sorted(_skipped_kernel)} skipped — thin-wire kernel limit "
+            f"(Delta/a < {KERNEL_MIN_SEG_TO_RADIUS_RATIO:.0f}) would be "
+            f"violated at the current --wire-diameter{Style.RESET_ALL}"
+        )
 
     with tempfile.TemporaryDirectory(prefix="nec2conv_") as tmpdir:
         for spw in spws:
@@ -5708,6 +5859,17 @@ def check_segmentation_convergence(
             except (ValueError, NoReturnPathError) as err:
                 rep.note = f"convergence check aborted: {err}"
                 return rep
+
+            if not geo.ok:
+                # Safety net for the pre-filter above: that estimate only
+                # checks the radiator, so a counterpoise/ground-rod/coax-stub
+                # segment (or a ground-proximity issue) that only shows up
+                # once the real geometry is resolved is still caught here.
+                # Skip the nec2c run entirely rather than publish a number
+                # from a deck already known to be invalid.
+                row.ok = False
+                rep.rows.append(row)
+                continue
 
             # Under a fused (straddle) feed the deck holds ONE wire carrying
             # both conductors, so the per-side counts and the segment length
@@ -5770,7 +5932,15 @@ def check_segmentation_convergence(
 
     good = [r for r in rep.rows if r.ok and r.band_R]
     if len(good) < 2:
-        rep.note = "convergence check incomplete (NEC2 run failed at one density)"
+        _bad = [r for r in rep.rows if not r.ok]
+        if _bad and len(_bad) == len(rep.rows):
+            rep.note = (
+                "convergence check incomplete (every density failed — check "
+                "NEC2 run errors and, for a fat --wire-diameter, the "
+                "thin-wire kernel limit)"
+            )
+        else:
+            rep.note = "convergence check incomplete (NEC2 run failed at one density)"
         rep.rows = rep.rows or []
         return rep
 
