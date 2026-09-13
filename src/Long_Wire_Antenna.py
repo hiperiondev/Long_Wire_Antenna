@@ -9635,13 +9635,14 @@ def unun_design(freq_mhz: float,
 
         if mu_p == mu_p and mu_pp and mu_pp > 0:       # NaN-safe
             q_core = mu_p / mu_pp
-            # NOTE (scope): this deliberately keeps the AL/initial-µ
-            # reactance, which is what this expression has always used.
-            # Physically Rp = ω·L0·µ′·(µ′/µ″), i.e. it should read xlp
-            # (µ′-corrected) — but the thermal rating below is calibrated
-            # around the present figure, so swapping it here would rewrite
-            # every published power number as a side effect of a magnetics
-            # fix. That belongs to the power-rating item, not to this one.
+            # Rp = ω·L(f)·(Q + 1/Q) requires the µ′(f)-CORRECTED reactance
+            # (xlp), not the AL/initial-permeability figure (xlp_nominal).
+            # Using xlp_nominal here silently assumed the core still had its
+            # 10 kHz permeability at the working frequency, which overstated
+            # Rp — and therefore the power rating — by up to ~13x on mix 31
+            # above ~5 MHz (a choke material at HF), and more mildly on
+            # mix 43. The power-code bands below are calibrated against this
+            # corrected figure.
             #
             # Exact series->parallel transform for a lossy inductor:
             #   Rp = Rs*(1 + Q^2) = X_L * (Q + 1/Q)
@@ -9649,7 +9650,7 @@ def unun_design(freq_mhz: float,
             # ferrite Q commonly falls below 1 (the very regime this loss
             # table exists to cover) -- so the exact form is used here.
             if q_core > 0:
-                rp_core = xlp_nominal * (q_core + 1.0 / q_core)  # Ω, primary side
+                rp_core = xlp * (q_core + 1.0 / q_core)  # Ω, primary side
             else:
                 rp_core = float("nan")
             core_loss_frac = r_in / (r_in + rp_core)    # of input power
@@ -9669,6 +9670,12 @@ def unun_design(freq_mhz: float,
                         else "heat")
 
         # Thresholds describe real continuous power, not saturation headroom.
+        # Checked against the µ′(f)-corrected rp_core (see above): mix 31/43
+        # above ~5 MHz now correctly falls to "insufficient" instead of the
+        # inflated "limited"/"ok" the uncorrected Rp produced, and healthy
+        # transformer-regime cases (low-band, mix 61, iron powder) still land
+        # "ok"/"high" as before — the bands themselves didn't need to move,
+        # only the p_thermal feeding them.
         # With no loss data for the material there IS no power rating — the
         # flux figure alone would announce "high power" for a core that
         # might cook at 20 W.  Say "unknown" instead of guessing.
