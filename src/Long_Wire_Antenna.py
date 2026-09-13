@@ -157,13 +157,13 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "help_segs_per_half_wave": {
         "en": ("NEC2 segments per half wavelength: overrides both the sweep "
                "(default {0}) and the final runs (default {1}).  21 is "
-               "pattern-grade only: it leaves R ~14%% low and gets the sign "
+               "pattern-grade only: it leaves R ~30%% low and gets the sign "
                "of X wrong."),
         "es": ("Segmentos NEC2 por media onda: anula tanto el barrido (por "
                "defecto {0}) como las corridas finales (por defecto {1}).  21 "
-               "sirve sólo para diagramas: deja R un 14%% baja y equivoca el "
+               "sirve sólo para diagramas: deja R un 30%% baja y equivoca el "
                "signo de X."),
-        "it": 'Segmenti NEC2 per mezza onda: sostituisce sia la scansione (predefinito {0}) sia le esecuzioni finali (predefinito {1}).  21 serve solo per i diagrammi: lascia R circa il 14%% basso e sbaglia il segno di X.',
+        "it": 'Segmenti NEC2 per mezza onda: sostituisce sia la scansione (predefinito {0}) sia le esecuzioni finali (predefinito {1}).  21 serve solo per i diagrammi: lascia R circa il 30%% basso e sbaglia il segno di X.',
     },
     "help_fast": {
         "en": ("Sweep with coarse segmentation ({0} seg/half wave).  The ranking "
@@ -175,11 +175,11 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "it": 'Scansione con segmentazione grossolana ({0} seg/mezza onda).  La classifica lo tollera; la geometria vincente viene ricalcolata comunque con la segmentazione fine.',
     },
     "help_converge": {
-        "en": ("Re-run the winning geometry at 2x and 4x segmentation and report "
-               "how far R and X still move."),
-        "es": ("Reejecuta la geometria ganadora a 2x y 4x la segmentacion e "
-               "informa cuanto se siguen moviendo R y X."),
-        "it": 'Riesegue la geometria vincente a 2x e 4x la segmentazione e riporta quanto R e X si spostano ancora.',
+        "en": ("Re-run the winning geometry at half and twice the working "
+               "segmentation and report how far R and X still move."),
+        "es": ("Reejecuta la geometria ganadora a la mitad y al doble de la "
+               "segmentacion de trabajo e informa cuanto se siguen moviendo R y X."),
+        "it": 'Riesegue la geometria vincente a meta e al doppio della segmentazione di lavoro e riporta quanto R e X si spostano ancora.',
     },
     "segs_msg": {
         "en": "Segmentation: sweep {0} seg/half wave, published results {1} seg/half wave (R uncertainty ~{2:.0f}%)",
@@ -353,6 +353,42 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "onda) dalla giunzione radiatore/contrappeso, non nel gap di alimentazione.  Le "
                "lunghezze dei segmenti sono pareggiate ai due lati della giunzione, ma questa "
                "asimmetria residua rimane e altera leggermente X_ant."),
+    },
+    "report_source_offset_note_straddle": {
+        "en": ("  Source position: the radiator and the counterpoise are written as ONE "
+               "continuous wire and EX excites segment {2}, the segment that CONTAINS "
+               "the feed node ({0:.2f} electrical degrees off its centre at {1} "
+               "seg/half wave).  No wire junction sits under the source, which is what "
+               "lets the impedance converge at this density."),
+        "es": ("  Posición de la fuente: el radiador y el contrapeso se escriben como UN "
+               "solo hilo continuo y EX excita el segmento {2}, el que CONTIENE el punto "
+               "de alimentación ({0:.2f} grados eléctricos respecto de su centro con {1} "
+               "seg/media onda).  No hay unión de hilos bajo la fuente, que es lo que "
+               "permite que la impedancia converja a esta densidad."),
+        "it": ("  Posizione della sorgente: radiatore e contrappeso sono scritti come UN "
+               "unico filo continuo e EX eccita il segmento {2}, quello che CONTIENE il "
+               "punto di alimentazione ({0:.2f} gradi elettrici dal suo centro con {1} "
+               "seg/mezza onda).  Nessuna giunzione di fili sotto la sorgente: è questo "
+               "che permette all'impedenza di convergere a questa densità."),
+    },
+    "help_feed_model": {
+        "en": ("Where the source sits: 'straddle' (default) writes a collinear radiator "
+               "and counterpoise as one continuous wire and feeds the segment containing "
+               "the feed node; 'junction' keeps the two-wire model with EX on segment 1, "
+               "which converges much more slowly."),
+        "es": ("Dónde va la fuente: 'straddle' (por defecto) escribe el radiador y el "
+               "contrapeso colineales como un único hilo continuo y alimenta el segmento "
+               "que contiene el punto de alimentación; 'junction' mantiene el modelo de "
+               "dos hilos con EX en el segmento 1, que converge mucho más lento."),
+        "it": ("Dove sta la sorgente: 'straddle' (predefinito) scrive radiatore e "
+               "contrappeso collineari come un unico filo continuo e alimenta il segmento "
+               "che contiene il punto di alimentazione; 'junction' mantiene il modello a "
+               "due fili con EX sul segmento 1, che converge molto più lentamente."),
+    },
+    "feed_model_msg": {
+        "en": "Feed model: {0} (collinear geometries only; others fall back to the junction feed)",
+        "es": "Modelo de alimentación: {0} (sólo geometrías colineales; el resto usa la unión)",
+        "it": "Modello di alimentazione: {0} (solo geometrie collineari; le altre usano la giunzione)",
     },
     "report_converge_section": {
         "en": "SEGMENTATION CONVERGENCE CHECK",
@@ -2667,9 +2703,28 @@ def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run,
 
     wires = []
     slope_end_z: Optional[float] = None
+    cm_cp_len: Optional[float] = None
+    cm_cp_angle: Optional[float] = None
     try:
         with open(nec_path, 'r', errors='replace') as fh:
             for line in fh:
+                # Straddle-fed decks carry ONE GW card holding both conductors,
+                # so the counterpoise cannot be recovered from the geometry
+                # cards; the builder's own CM card is then the only record.
+                cm_cp = re.match(
+                    r'CM\s+Counterpoise:\s*([\d.Ee+\-]+)\s*m', line, re.IGNORECASE)
+                if cm_cp:
+                    try:
+                        cm_cp_len = float(cm_cp.group(1))
+                    except ValueError:
+                        pass
+                cm_ang = re.search(
+                    r'([\d.Ee+\-]+)\s*deg\s+from\s+vertical', line, re.IGNORECASE)
+                if cm_ang:
+                    try:
+                        cm_cp_angle = float(cm_ang.group(1))
+                    except ValueError:
+                        pass
                 # Detect slope comment written by write_nec_deck / write_best_nec_deck
                 cm_slope = re.match(
                     r'CM\s+Wire\s+slope\s+end\s+z:\s*([\d.Ee+\-]+)\s*m',
@@ -2702,15 +2757,22 @@ def _parse_cp_from_nec_deck(out_filepath: str, run: NEC2Run,
 
     cp_wires = [w for w in wires if w['tag'] != 1]
     if not cp_wires:
-        return
-
-    cp = max(cp_wires, key=lambda w: w['length'])
-    run.cp_len_m = round(cp['length'], 3)
-
-    if cp['length'] > 0 and cp['dz'] / cp['length'] > 0.6:
-        run.cp_type = 'vertical'
+        # Single-wire (straddle-fed) deck: fall back to the CM record.
+        if cm_cp_len is None:
+            return
+        run.cp_len_m = round(cm_cp_len, 3)
+        # dz/len > 0.6 is the same criterion as below, expressed as the angle
+        # from vertical the builder prints: cos(angle) > 0.6 → angle < 53.13°.
+        run.cp_type = ('vertical' if (cm_cp_angle is not None and cm_cp_angle < 53.13)
+                       else 'horizontal')
     else:
-        run.cp_type = 'horizontal'
+        cp = max(cp_wires, key=lambda w: w['length'])
+        run.cp_len_m = round(cp['length'], 3)
+
+        if cp['length'] > 0 and cp['dz'] / cp['length'] > 0.6:
+            run.cp_type = 'vertical'
+        else:
+            run.cp_type = 'horizontal'
 
     # Store slope metadata so callers can record it in CandidateResult
     if slope_end_z is not None:
@@ -3180,15 +3242,38 @@ DEFAULT_GROUND_DIEL = 13.0  # relative permittivity
 #   SWEEP : default density of the search — the RANKING is robust to it
 #   FINE  : every number that gets published (best-candidate run, exported
 #           deck, report, CSV) is recomputed at this density
+#
+# FINE was 90 and that was NOT enough.  Measured on the reference geometry
+# (19 m radiator + 4.5 m counterpoise at 8 m, SN ground, copper LD card), R at
+# the feedpoint against segments per half wave:
+#
+#     21 -> 1054.6   45 -> 1234.1   90 -> 1336.3
+#    180 -> 1392.4  360 -> 1424.5  720 -> 1441.6   (ohm, 40 m)
+#
+# The successive differences (56.1, 32.1, 17.1) form a near-geometric sequence
+# of ratio ~0.55, so R(inf) ~ 1441.6 + 17.1*0.55/(1-0.55) ~ 1462 ohm: 90
+# seg/half wave publishes a value ~8.6 % LOW and 180 publishes ~4.8 % low.
+# With the straddle feed below (which removes the junction under the source)
+# the same geometry is already inside ~1-2 % at 180.  180 is therefore the
+# publishing density; the sweep stays coarse, so the extra cost falls only on
+# the handful of final runs and the pattern re-rank, not on the search.
 SEGS_PER_HALF_WAVE_FAST  = 21   # pattern-grade only
 SEGS_PER_HALF_WAVE_SWEEP = 45   # default search density
-SEGS_PER_HALF_WAVE_FINE  = 90   # default for published impedances
+SEGS_PER_HALF_WAVE_FINE  = 180  # default for published impedances
 SEGS_PER_HALF_WAVE = SEGS_PER_HALF_WAVE_FINE   # module default for all decks
 SEGS_PER_HALF_WAVE_MAX = 400    # sanity cap (deck size / runtime)
 
 # Convergence self-check (--converge): the winning geometry is re-run at these
 # multiples of the working segmentation and the drift of R/X is reported.
-CONVERGENCE_FACTORS = (2.0, 4.0)
+# The factors are relative to the working density and are clamped to
+# SEGS_PER_HALF_WAVE_MAX.  They straddle it (0.5x, 1x, 2x) instead of only
+# refining it (1x, 2x, 4x): with the publishing density now at 180, 4x would
+# clamp to the 400 cap and produce two almost identical rows, i.e. a
+# convergence check that cannot see any drift.  0.5x/2x keeps the same 4:1
+# span of densities inside the cap, and the drift is measured from EVERY row
+# against the finest one, so the verdict does not depend on which row is
+# called "base".
+CONVERGENCE_FACTORS = (0.5, 2.0)
 CONVERGENCE_R_TOL_PCT = 3.0     # R drift above this is flagged in the report
 
 # R and X do NOT converge together.  Measured on a 19 m radiator + 2 m
@@ -3247,13 +3332,64 @@ RP_RERANK_N_PHI        = PUBLISHED_RP_N_PHI     # kept as an alias; see above
 HIGH_TOA_WARN_DEG      = 60.0   # above this the antenna is a cloud-warmer
 
 # Segmentation-induced impedance uncertainty, as a percentage of R.
-# Fitted to the measured table above, taking the 120 seg/half-wave run as the
-# reference: the error is ~14 % at 21, ~5.5 % at 45 and ~1.2 % at 90.  K=250
-# tracks the coarse end and stays deliberately conservative at the fine end.
-# It exists so R/X can be printed with the precision they actually have when
-# no explicit --converge measurement is available.
-SEGS_UNCERTAINTY_K = 294.0
+#
+# The previous fit (K=294 over a plain 1/spw law) was calibrated against the
+# 120 seg/half-wave run TAKEN AS THE CONVERGED VALUE.  It is not converged:
+# R is still climbing at 1297 segments, so the reference was itself ~7 % low
+# and every error derived from it was compressed by the same amount.  The
+# result was a published interval that did not contain the answer: 1336 +/-44
+# ohm -> [1292, 1380] against a converged ~1462 ohm.
+#
+# Re-fitted against the RICHARDSON-EXTRAPOLATED limit (R(inf) ~ 1462 ohm, see
+# the table at SEGS_PER_HALF_WAVE_FINE) the error does not fall as 1/spw; it
+# falls as spw**-0.86:
+#
+#     seg/half wave :   21     45     90    180    360    720
+#     measured err% : 27.9   15.6    8.6    4.8    2.6    1.4
+#     err% * spw    :  585    701    774    857    923   1005   <- not constant
+#     err% * spw^.86:  382    412    412    414    405    400   <- constant
+#
+# K = 420 is the upper edge of that fit, so the published interval brackets
+# the converged value at every density in 21...720 instead of only at the one
+# the constant was fitted to.  This is still a MODEL, not a measurement: it is
+# used only when no --converge run is available, and it is deliberately
+# conservative for the straddle feed, whose error at a given density is
+# smaller than the junction-feed data it was fitted to.
+SEGS_UNCERTAINTY_K = 420.0
+SEGS_UNCERTAINTY_EXP = 0.86     # err% = K / spw**EXP  (NOT K / spw)
 SEGS_UNCERTAINTY_FLOOR_PCT = 1.0
+
+# ── Feed model ─────────────────────────────────────────────────────────────
+# Where the EX card is placed relative to the radiator/counterpoise junction.
+#
+#   junction : the historical model — two GW cards meeting at the feed node,
+#              EX on segment 1 of wire 1.  The source singularity and the
+#              junction charge-matching condition then land on the SAME
+#              segment, which is a known slow-convergence configuration in
+#              NEC-2: R was still climbing at 1297 segments (see the table at
+#              SEGS_PER_HALF_WAVE_FINE).
+#   straddle : when the return conductor is collinear with, and opposite to,
+#              the radiator (the usual horizontal radiator + horizontal
+#              counterpoise), both are written as ONE continuous GW card and
+#              the source is put on the segment that CONTAINS the feed node.
+#              There is then no junction at all under the source.  Same
+#              physical structure — same endpoints, same radius, same total
+#              length — reached by 180 seg/half wave instead of still moving
+#              at 1297, and it removes the half-segment feed offset that the
+#              junction model has to apologise for in the report.
+#
+# Geometries whose return conductor is NOT collinear (hanging counterpoise,
+# ground rod, coax stub, sloping radiator with a horizontal counterpoise)
+# cannot be fused without changing the shape near the feed, so they silently
+# fall back to the junction model.
+FEED_MODEL_CHOICES = ("straddle", "junction")
+DEFAULT_FEED_MODEL = "straddle"
+FEED_MODEL = DEFAULT_FEED_MODEL   # module default; set once from the CLI
+# Collinearity test tolerance (normalised cross product of the two directions).
+FEED_COLLINEAR_TOL = 1e-6
+# How far either side of the nominal segment count the straddle search looks
+# for a count that puts the feed node nearest a segment CENTRE.
+FEED_STRADDLE_SEARCH = 8
 
 # ── Ground-proximity limits (NEC-2 Sommerfeld-Norton ground) ───────────────
 # NEC-2's SN ground is singular as a wire approaches z=0: the impedance does
@@ -3642,13 +3778,20 @@ def junction_seg_len_m(wire_len_m: float, highest_freq_mhz: float,
 def estimated_imp_uncertainty_pct(segs_per_half_wave: Optional[int] = None) -> float:
     """Estimated segmentation error on R, in percent, for a given density.
 
-    Derived from the measured convergence table above (≈14 % at 21 segments per
-    half wave).  This is a rough scale, not a bound: it exists so the report
-    can state the precision it actually has instead of printing 0.1 Ω.
+    ``err% = SEGS_UNCERTAINTY_K / spw**SEGS_UNCERTAINTY_EXP`` — fitted to the
+    measured convergence table against the EXTRAPOLATED limit, not against the
+    finest run available (see SEGS_UNCERTAINTY_K).  ≈30 % at 21 segments per
+    half wave, ≈8.6 % at 90, ≈4.8 % at 180.
+
+    This is a conservative scale, not a bound, and it is one-sided in practice:
+    NEC-2 approaches the converged R from below, so the true value is expected
+    near the TOP of the published interval.  It exists so the report can state
+    the precision it actually has instead of printing 0.1 Ω.
     """
     spw = int(segs_per_half_wave or SEGS_PER_HALF_WAVE)
     spw = max(5, min(spw, SEGS_PER_HALF_WAVE_MAX))
-    return max(SEGS_UNCERTAINTY_FLOOR_PCT, SEGS_UNCERTAINTY_K / float(spw))
+    return max(SEGS_UNCERTAINTY_FLOOR_PCT,
+               SEGS_UNCERTAINTY_K / (float(spw) ** SEGS_UNCERTAINTY_EXP))
 
 
 def convergence_x_tol_ohm(z_mag_ohm: float) -> float:
@@ -3857,6 +4000,66 @@ def validate_feedpoint_height(
     return z
 
 
+def _dirs_collinear_opposite(ax: float, az: float,
+                             bx: float, bz: float,
+                             tol: float = FEED_COLLINEAR_TOL) -> bool:
+    """True when vectors a and b are antiparallel (same line, opposite ways).
+
+    Both are taken from the feed node, so antiparallel means the radiator and
+    the return conductor form ONE straight wire through the feedpoint, which
+    is the only case the straddle feed may fuse: any other angle would have to
+    be replaced by a chord and that is a different antenna.
+    """
+    la = math.hypot(ax, az)
+    lb = math.hypot(bx, bz)
+    if la <= 1e-12 or lb <= 1e-12:
+        return False
+    cross = abs(ax * bz - az * bx) / (la * lb)
+    dot = (ax * bx + az * bz) / (la * lb)
+    return cross <= tol and dot <= -1.0 + 1e-6
+
+
+def straddle_segmentation(len_cp_m: float, len_ant_m: float,
+                          seg_len_ref_m: float,
+                          search: int = FEED_STRADDLE_SEARCH):
+    """Segment count / source segment for a fused (single-wire) feed.
+
+    The wire runs from the counterpoise far end to the radiator far end, so the
+    feed node sits at the fraction ``len_cp/(len_cp+len_ant)`` of it.  A
+    uniformly segmented GW card puts segment k between (k-1)/N and k/N, and the
+    source excites the CENTRE of its segment, so N is chosen — within ``search``
+    of the count that reproduces the reference segment length — to land the feed
+    node as close as possible to the centre of a segment.
+
+    Returns ``(n_segs, feed_seg, offset_m)`` or None when the geometry cannot
+    carry a straddle feed (degenerate lengths, or a feed that would fall on an
+    end segment).  ``offset_m`` is the signed residual distance from the source
+    segment centre to the true feed node, positive towards the radiator.
+    """
+    total = float(len_cp_m) + float(len_ant_m)
+    if total <= 0.0 or seg_len_ref_m <= 0.0 or len_cp_m <= 0.0 or len_ant_m <= 0.0:
+        return None
+    n0 = int(round(total / seg_len_ref_m))
+    best = None
+    for n in range(max(3, n0 - int(search)), n0 + int(search) + 1):
+        if n < 3:
+            continue
+        u = (len_cp_m / total) * n          # feed node, in segments from the CP end
+        k = min(max(int(math.floor(u)) + 1, 1), n)
+        if k <= 1 or k >= n:
+            continue                        # source would sit on an end segment
+        seg_len = total / n
+        err_seg = abs(u - (k - 0.5))        # distance to the segment centre
+        # Tie-break on staying near the reference segment length so the fused
+        # card keeps the density the caller asked for.
+        pen = err_seg + 0.05 * abs(seg_len - seg_len_ref_m) / seg_len_ref_m
+        if best is None or pen < best[0]:
+            best = (pen, n, k, (u - (k - 0.5)) * seg_len)
+    if best is None:
+        return None
+    return best[1], best[2], best[3]
+
+
 @dataclass
 class DeckGeometry:
     """Resolved geometry + NEC cards shared by every deck writer."""
@@ -3878,6 +4081,14 @@ class DeckGeometry:
     cp_angle_deg: float = 0.0
     segs_cp:     int = 0   # segments actually written on the GW 2 card
     cp_len_deck_m: float = 0.0   # straight-line length of the GW 2 card as written
+    # Feed model actually used for this deck
+    feed_model:  str   = DEFAULT_FEED_MODEL   # straddle | junction
+    fused_feed:  bool  = False   # True → one GW card carries both conductors
+    feed_seg:    int   = 1       # segment number the EX card excites
+    feed_segs_total: int = 0     # segments on the fused card (0 when not fused)
+    feed_offset_m: float = 0.0   # source-centre → feed-node residual offset
+    feed_offset_frac_seg: float = 0.5   # |offset| as a fraction of one segment
+    segs_ant:    int = 0   # segments on the radiator side of the feed
     # Bookkeeping
     segs_per_half_wave: int = SEGS_PER_HALF_WAVE
     ground_model: str  = DEFAULT_GROUND_MODEL
@@ -3901,6 +4112,7 @@ def build_deck_geometry(
     cp_stub_len_m: float = DEFAULT_CP_STUB_LEN_M,
     ground_model: str = DEFAULT_GROUND_MODEL,
     segs_per_half_wave: Optional[int] = None,
+    feed_model: Optional[str] = None,   # None → module FEED_MODEL
 ) -> DeckGeometry:
     """
     Resolve the complete NEC-2 geometry (GW/GE/GN/EX cards) for one candidate.
@@ -3924,6 +4136,10 @@ def build_deck_geometry(
        Under `ground_model="perfect"` (GN 1) the restriction does not apply:
        ends at or below the floor are snapped to exactly z=0, which is the
        correct NEC-2 idiom for a galvanic ground connection.
+    3. The SOURCE must not share its segment with a wire junction when that can
+       be avoided.  With `feed_model="straddle"` a collinear radiator +
+       counterpoise pair is emitted as one continuous GW card and the EX card
+       excites the segment containing the feed node — see FEED_MODEL_CHOICES.
     """
     g = DeckGeometry()
     g.ground_model = ground_model if ground_model in GROUND_MODEL_CHOICES else DEFAULT_GROUND_MODEL
@@ -4047,6 +4263,7 @@ def build_deck_geometry(
     # meets wire 1 there is segmented to match it (see _segs_at_length).
     seg_len_ref = (wire_len_m / segs_ant) if segs_ant else 0.0
     g.seg_len_ref_m = seg_len_ref
+    g.segs_ant = segs_ant
     g.gw_lines.append(
         f"GW 1 {segs_ant} 0.0 0.0 {z_near:.3f} "
         f"{x_far:.3f} 0.0 {z_far:.4f} {wire_radius_m:.5f}\n"
@@ -4194,7 +4411,59 @@ def build_deck_geometry(
             f"CM Ground model: Sommerfeld-Norton (GN 2), eps={ground_diel:.1f} "
             f"sigma={ground_cond:.4f} S/m; wire-end floor {floor_m:.2f} m"
         )
+    # ── Feed model ───────────────────────────────────────────────────────
+    # Default: EX on segment 1 of wire 1, i.e. the segment that also carries
+    # the junction with wire 2.
+    _fm = (feed_model or FEED_MODEL)
+    if _fm not in FEED_MODEL_CHOICES:
+        _fm = DEFAULT_FEED_MODEL
+    g.feed_model = _fm
+    g.feed_seg = 1
     g.ex_line = "EX 0 1 1 0 1.0 0.0\n"
+
+    if _fm == "straddle" and use_cp and len(g.gw_lines) == 2 and g.cp_x_end is not None:
+        _cp_x_start = -g.cp_x_end if g.cp_x_end > 1e-9 else 0.0
+        _cp_z_start = g.cp_z_end if g.cp_z_end is not None else z_near
+        _ant_dx, _ant_dz = x_far, z_far - z_near
+        _cp_dx,  _cp_dz  = _cp_x_start, _cp_z_start - z_near
+        if _dirs_collinear_opposite(_ant_dx, _ant_dz, _cp_dx, _cp_dz):
+            _len_ant = math.hypot(_ant_dx, _ant_dz)
+            _len_cp  = math.hypot(_cp_dx, _cp_dz)
+            _res = straddle_segmentation(_len_cp, _len_ant, seg_len_ref)
+            if _res is not None:
+                _n, _k, _off = _res
+                _total = _len_cp + _len_ant
+                # One continuous conductor: counterpoise far end -> radiator far
+                # end.  Same two endpoints, same radius, same total length as the
+                # two-card version - only the junction disappears.
+                g.gw_lines = [
+                    f"GW 1 {_n} {_cp_x_start:.3f} 0.0 {_cp_z_start:.4f} "
+                    f"{x_far:.3f} 0.0 {z_far:.4f} {wire_radius_m:.5f}\n"
+                ]
+                g.ex_line = f"EX 0 1 {_k} 0 1.0 0.0\n"
+                g.fused_feed = True
+                g.feed_seg = _k
+                g.feed_segs_total = _n
+                g.feed_offset_m = _off
+                g.feed_offset_frac_seg = abs(_off) / (_total / _n) if _n else 0.0
+                g.segs_cp = max(1, _k - 1)
+                g.segs_ant = max(1, _n - _k + 1)
+                g.comments.append(
+                    f"CM Feed model: STRADDLE - radiator and counterpoise written "
+                    f"as one continuous wire; EX on segment {_k} of {_n}, the one "
+                    f"containing the feed node (no junction under the source)"
+                )
+                g.comments.append(
+                    f"CM Feed node offset from the source segment centre: "
+                    f"{abs(_off) * 1000.0:.1f} mm "
+                    f"({abs(_off) / _total * 100.0:.3f}% of the wire, "
+                    f"{abs(_off) / (_total / _n) * 100.0:.1f}% of a segment)"
+                )
+    if not g.fused_feed:
+        g.comments.append(
+            "CM Feed model: JUNCTION - EX on segment 1 of wire 1, which also "
+            "carries the junction with wire 2 (slower convergence in NEC-2)"
+        )
     return g
 
 
@@ -4279,6 +4548,7 @@ def write_nec_deck(
     rp_n_theta: int = RP_RERANK_N_THETA,
     rp_n_phi:   int = RP_RERANK_N_PHI,
     wire_conductivity: Optional[float] = None,  # None → WIRE_CONDUCTIVITY
+    feed_model: Optional[str] = None,           # None → module FEED_MODEL
 ) -> DeckGeometry:
     """
     Write a minimal NEC2 input deck for an end-fed long wire with one
@@ -4307,7 +4577,9 @@ def write_nec_deck(
     `no_cp_return` (ground rod or coax-braid stub) — a fed wire with no return
     conductor is an open circuit in NEC-2, not an antenna.
 
-    Source (EX): first segment of Wire 1 (the near/feedpoint end).
+    Source (EX): see build_deck_geometry() — the segment containing the feed
+    node on the fused card under the straddle feed model, otherwise segment 1
+    of Wire 1.
     """
     geo = build_deck_geometry(
         wire_len_m=wire_len_m,
@@ -4325,6 +4597,7 @@ def write_nec_deck(
         cp_stub_len_m=cp_stub_len_m,
         ground_model=ground_model,
         segs_per_half_wave=segs_per_half_wave,
+        feed_model=feed_model,
     )
 
     with open(nec_path, "w") as fh:
@@ -4475,6 +4748,11 @@ class CandidateResult:
     segs_per_half_wave: Optional[int] = None
     conv_r_drift_pct: Optional[float] = None   # |R(spw) − R(finest)| / R(finest)
     conv_x_drift_ohm: Optional[float] = None   # |X(spw) − X(finest)|, worst band
+
+    # Feed model that produced these impedances (see FEED_MODEL_CHOICES).
+    feed_fused: bool = False          # True → straddle feed, single GW card
+    feed_seg:   Optional[int] = None  # segment the EX card excited
+    feed_offset_frac_seg: float = 0.5 # |source centre − feed node| in segments
 
 
 def _vswr_score_single(vswr: float) -> float:
@@ -5035,6 +5313,9 @@ def nec2_sweep(
                 )
                 cand.wire_slope_end_m = wire_slope_end_m
                 cand.segs_per_half_wave = _geo.segs_per_half_wave
+                cand.feed_fused = _geo.fused_feed
+                cand.feed_seg = _geo.feed_seg
+                cand.feed_offset_frac_seg = _geo.feed_offset_frac_seg
                 if not _geo.ok:
                     # Geometry sat inside the NEC-2 ground singularity: nec2c
                     # returns numbers without complaining, so flag them here.
@@ -5372,11 +5653,16 @@ def check_segmentation_convergence(
         return rep
 
     highest_f = max(freqs_all)
-    spws: List[int] = [int(base_spw)]
-    for f in factors:
-        spw = min(int(round(base_spw * f)), SEGS_PER_HALF_WAVE_MAX)
-        if spw > spws[-1]:
+    # Densities to run: the working one plus every factor, clamped to the cap,
+    # de-duplicated, sorted ascending.  Factors below 1.0 are legal and are now
+    # the default — with the publishing density at 180, refining by 4x only
+    # reaches the cap and would compare two nearly identical rows.
+    spws: List[int] = []
+    for f in (1.0,) + tuple(factors):
+        spw = max(5, min(int(round(base_spw * float(f))), SEGS_PER_HALF_WAVE_MAX))
+        if spw not in spws:
             spws.append(spw)
+    spws.sort()
 
     with tempfile.TemporaryDirectory(prefix="nec2conv_") as tmpdir:
         for spw in spws:
@@ -5407,8 +5693,16 @@ def check_segmentation_convergence(
                 rep.note = f"convergence check aborted: {err}"
                 return rep
 
-            row.segs_wire = _segs(best.wire_len_m, highest_f, spw)
-            row.seg_len_wire_m = (best.wire_len_m / row.segs_wire) if row.segs_wire else 0.0
+            # Under a fused (straddle) feed the deck holds ONE wire carrying
+            # both conductors, so the per-side counts and the segment length
+            # come from the geometry rather than from a fresh _segs() of the
+            # radiator alone.
+            row.segs_wire = geo.segs_ant or _segs(best.wire_len_m, highest_f, spw)
+            if geo.fused_feed and geo.feed_segs_total:
+                _tot_len = (geo.cp_len_deck_m or best.cp_len_m) + best.wire_len_m
+                row.seg_len_wire_m = _tot_len / geo.feed_segs_total
+            else:
+                row.seg_len_wire_m = (best.wire_len_m / row.segs_wire) if row.segs_wire else 0.0
             if use_counterpoise and best.cp_len_m > 1e-9:
                 # Use the deck's actual counterpoise geometry (which the
                 # vertical-hang branch can resolve to a different reach than
@@ -5420,7 +5714,8 @@ def check_segmentation_convergence(
                     # height, which is not always the requested wire_height_m.
                     _cp_len_deck = (geo.cp_len_deck_m if geo.cp_len_deck_m > 0.0
                                     else best.cp_len_m)
-                    row.seg_len_cp_m = _cp_len_deck / row.segs_cp
+                    row.seg_len_cp_m = (row.seg_len_wire_m if geo.fused_feed
+                                        else _cp_len_deck / row.segs_cp)
                 else:
                     row.segs_cp = _segs_at_length(best.cp_len_m, row.seg_len_wire_m)
                     row.seg_len_cp_m = best.cp_len_m / row.segs_cp
@@ -5464,30 +5759,35 @@ def check_segmentation_convergence(
         return rep
 
     rep.ran = True
-    base_row, fine_row = good[0], good[-1]
-    rep.base_spw   = base_row.segs_per_half_wave
+    fine_row = good[-1]
+    rep.base_spw   = good[0].segs_per_half_wave
     rep.finest_spw = fine_row.segs_per_half_wave
-    for b, R_fine in fine_row.band_R.items():
-        R_base = base_row.band_R.get(b)
-        if R_base is None or abs(R_fine) < 1e-9:
-            continue
-        rep.max_r_drift_pct = max(rep.max_r_drift_pct,
-                                  abs(R_base - R_fine) / abs(R_fine) * 100.0)
-    for b, X_fine in fine_row.band_X.items():
-        X_base = base_row.band_X.get(b)
-        if X_base is None:
-            continue
-        drift = abs(X_base - X_fine)
-        rep.max_x_drift_ohm = max(rep.max_x_drift_ohm, drift)
-        # Judge X against its OWN tolerance, band by band, scaled to that
-        # band's |Z|.  A verdict driven by R alone signs off on a reactance
-        # that may still be moving by hundreds of ohm.
-        tol_b = convergence_x_tol_ohm(math.hypot(fine_row.band_R.get(b, 0.0), X_fine))
-        rep.x_tol_ohm = max(rep.x_tol_ohm, tol_b)
-        if drift > tol_b:
-            rep.x_drift_bands.append(b)
-        if X_base * X_fine < 0.0:
-            rep.sign_flip_bands.append(b)
+    # Every density is compared against the FINEST one, not just the coarsest
+    # against the finest: the densities now straddle the working one, and a
+    # drift that is only visible on the middle row is still a drift.
+    for row in good[:-1]:
+        for b, R_fine in fine_row.band_R.items():
+            R_other = row.band_R.get(b)
+            if R_other is None or abs(R_fine) < 1e-9:
+                continue
+            rep.max_r_drift_pct = max(rep.max_r_drift_pct,
+                                      abs(R_other - R_fine) / abs(R_fine) * 100.0)
+        for b, X_fine in fine_row.band_X.items():
+            X_other = row.band_X.get(b)
+            if X_other is None:
+                continue
+            drift = abs(X_other - X_fine)
+            rep.max_x_drift_ohm = max(rep.max_x_drift_ohm, drift)
+            # Judge X against its OWN tolerance, band by band, scaled to that
+            # band's |Z|.  A verdict driven by R alone signs off on a reactance
+            # that may still be moving by hundreds of ohm.
+            tol_b = convergence_x_tol_ohm(
+                math.hypot(fine_row.band_R.get(b, 0.0), X_fine))
+            rep.x_tol_ohm = max(rep.x_tol_ohm, tol_b)
+            if drift > tol_b and b not in rep.x_drift_bands:
+                rep.x_drift_bands.append(b)
+            if X_other * X_fine < 0.0 and b not in rep.sign_flip_bands:
+                rep.sign_flip_bands.append(b)
     rep.converged_r = rep.max_r_drift_pct <= CONVERGENCE_R_TOL_PCT
     rep.converged_x = not rep.x_drift_bands and not rep.sign_flip_bands
     rep.converged = rep.converged_r and rep.converged_x
@@ -6211,12 +6511,19 @@ def write_report(
                 ln(T("report_imp_precision_note_x").format(_unc_tab_x))
             else:
                 ln(T("report_imp_precision_note_x_none"))
-            # The deck feeds the centre of segment 1, which is half a segment
-            # away from the junction the rest of the pipeline works so hard to
-            # keep symmetric.  Half a segment is (lambda/2)/spw / 2 = lambda/(4·spw),
-            # i.e. 90/spw electrical degrees, independent of the band.
-            ln(T("report_source_offset_note").format(
-                (90.0 / _spw_tab) if _spw_tab else float("nan"), _spw_tab))
+            # One segment is (lambda/2)/spw, i.e. 180/spw electrical degrees,
+            # independent of the band.  The junction feed excites the centre of
+            # segment 1, half a segment (90/spw degrees) from the junction; the
+            # straddle feed excites the segment that CONTAINS the feed node, so
+            # only the residual fraction of a segment is left.
+            if getattr(best, "feed_fused", False):
+                ln(T("report_source_offset_note_straddle").format(
+                    (180.0 / _spw_tab * best.feed_offset_frac_seg)
+                    if _spw_tab else float("nan"),
+                    _spw_tab, best.feed_seg or 0))
+            else:
+                ln(T("report_source_offset_note").format(
+                    (90.0 / _spw_tab) if _spw_tab else float("nan"), _spw_tab))
         ln(f"  {'Band':>8}  {'freq MHz':>9}  "
            f"{'R_ant Ω':>14}  {'X_ant Ω':>14}  {'|Z_ant|Ω':>10}  "
            f"{'R_tx Ω':>8}  {'X_tx Ω':>8}  {'|Z_tx|Ω':>9}  "
@@ -6599,7 +6906,11 @@ def write_best_nec_deck(
         fh.write(f"GE {geo.ge_flag}\n")
         fh.write(ld_card(wire_conductivity))
         fh.write(geo.gn_line)
-        fh.write("EX 0 1 1 0 1.0 0.0\n")
+        # NOT a hardcoded "EX 0 1 1 0": the source segment is decided by the
+        # geometry builder (straddle feed), and hardcoding it here would export
+        # a deck that feeds a different point than the one the published
+        # impedances came from.
+        fh.write(geo.ex_line)
 
         d_theta = 90.0  / max(1, n_elevation - 1)
         # 360° must divide evenly by the number of GRID STEPS (n_azimuth
@@ -10736,6 +11047,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ground-model", choices=list(GROUND_MODEL_CHOICES),
                    default=DEFAULT_GROUND_MODEL, dest="ground_model",
                    help=T("ap_ground_model"))
+    p.add_argument("--feed-model", choices=list(FEED_MODEL_CHOICES),
+                   default=DEFAULT_FEED_MODEL, dest="feed_model",
+                   help=T("help_feed_model"))
     p.add_argument("--ground-cond", metavar="S/M", type=float,
                    default=DEFAULT_GROUND_COND,
                    help=T("ap_ground_cond").format(DEFAULT_GROUND_COND))
@@ -10824,7 +11138,7 @@ def _build_parser() -> argparse.ArgumentParser:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
-    global WIRE_RADIUS_M, WIRE_CONDUCTIVITY
+    global WIRE_RADIUS_M, WIRE_CONDUCTIVITY, FEED_MODEL
     print()
     print(f"{Fore.CYAN}{'═'*70}")
 
@@ -11287,7 +11601,15 @@ def main() -> None:
     else:
         print(f"{Fore.YELLOW}" + T("wire_loss_perfect") + f"{Style.RESET_ALL}")
 
+    # ── Feed model ───────────────────────────────────────────────────────
+    # Applied once, here, exactly like WIRE_RADIUS_M / WIRE_CONDUCTIVITY: every
+    # deck writer reads the module default, so the sweep, the exported deck,
+    # the radiation run and the convergence check cannot end up disagreeing.
+    _fm_arg = getattr(args, "feed_model", DEFAULT_FEED_MODEL)
+    FEED_MODEL = _fm_arg if _fm_arg in FEED_MODEL_CHOICES else DEFAULT_FEED_MODEL
+
     if mode == "nec2":
+        print("  " + T("feed_model_msg").format(FEED_MODEL))
         print("  " + T("segs_msg").format(
             segs_sweep, segs_final, estimated_imp_uncertainty_pct(segs_final)))
         if segs_sweep < SEGS_PER_HALF_WAVE_SWEEP:
@@ -11766,6 +12088,9 @@ def main() -> None:
             _r.nec2_used          = cand.nec2_used
             _r.nec2_ok            = cand.nec2_ok
             _r.note               = cand.note
+            _r.feed_fused         = cand.feed_fused
+            _r.feed_seg           = cand.feed_seg
+            _r.feed_offset_frac_seg = cand.feed_offset_frac_seg
             _r.segs_per_half_wave = segs_final
             return _r, _run
 
@@ -12525,6 +12850,18 @@ def _launch_gui() -> None:
             "ground_model_hint":  ("NEC-2 is singular near a Sommerfeld-Norton ground; a wire end at 1 mm "
                                    "gives garbage without any error message. A galvanic ground connection "
                                    "needs GN 1 (or NEC-4)."),
+            "feed_model_lf":      "Feed Model (source placement)",
+            "feed_model_straddle": ("Straddle — radiator and counterpoise as ONE continuous wire, "
+                                    "source on the segment containing the feed node (recommended)"),
+            "feed_model_junction": ("Junction — two wires meeting at the feedpoint, source on segment 1 "
+                                    "of wire 1 (the historical model)"),
+            "feed_model_hint":    ("A source sharing its segment with a wire junction converges very slowly "
+                                   "in NEC-2: R was still climbing at 1297 segments. The straddle feed "
+                                   "removes the junction from under the source and is converged at the "
+                                   "published density."),
+            "feed_model_fallback": ("This geometry is not collinear, so the straddle feed does not apply to "
+                                    "it: the deck falls back to the junction model and R/X carry the larger "
+                                    "segmentation error."),
             "wire_conductor_lf":  "Conductor",
             "wire_diam_lbl":      "Wire diameter:",
             "wire_diam_hint":     "For an HF end-fed, diameter moves R and especially Q.",
@@ -12922,6 +13259,18 @@ def _launch_gui() -> None:
             "ground_model_hint":  ("NEC-2 es singular cerca de una tierra Sommerfeld-Norton; un extremo a 1 mm "
                                    "da basura sin emitir ningún error. Una conexión galvánica a tierra requiere "
                                    "GN 1 (o NEC-4)."),
+            "feed_model_lf":      "Modelo de Alimentación (ubicación de la fuente)",
+            "feed_model_straddle": ("Straddle — radiador y contrapeso como UN solo hilo continuo, fuente en "
+                                    "el segmento que contiene el punto de alimentación (recomendado)"),
+            "feed_model_junction": ("Unión — dos hilos que se encuentran en el punto de alimentación, fuente "
+                                    "en el segmento 1 del hilo 1 (modelo histórico)"),
+            "feed_model_hint":    ("Una fuente que comparte segmento con una unión de hilos converge muy "
+                                   "lento en NEC-2: R seguía subiendo con 1297 segmentos. El modelo straddle "
+                                   "quita la unión de debajo de la fuente y ya está convergido a la densidad "
+                                   "de publicación."),
+            "feed_model_fallback": ("Esta geometría no es colineal, así que el modelo straddle no se le "
+                                    "aplica: el deck vuelve al modelo de unión y R/X arrastran el error de "
+                                    "segmentación mayor."),
             "wire_conductor_lf":  "Conductor",
             "wire_diam_lbl":      "Diámetro del hilo:",
             "wire_diam_hint":     "En un end-fed de HF, el diámetro afecta R y sobre todo la Q.",
@@ -13315,6 +13664,11 @@ def _launch_gui() -> None:
             "ground_model_som": 'Sommerfeld-Norton (terra reale) — estremi del filo mantenuti a 0,05·λ dal suolo',
             "ground_model_per": 'Terra perfetta (GN 1) — gli estremi del filo possono trovarsi esattamente a z=0 (connessione reale a terra)',
             "ground_model_hint": 'NEC-2 è singolare vicino a una terra Sommerfeld-Norton; un estremo di filo a 1 mm restituisce valori insensati senza alcun messaggio di errore. Una connessione galvanica a terra richiede GN 1 (o NEC-4).',
+            "feed_model_lf": 'Modello di Alimentazione (posizione della sorgente)',
+            "feed_model_straddle": 'Straddle — radiatore e contrappeso come UN unico filo continuo, sorgente sul segmento che contiene il punto di alimentazione (consigliato)',
+            "feed_model_junction": 'Giunzione — due fili che si incontrano nel punto di alimentazione, sorgente sul segmento 1 del filo 1 (modello storico)',
+            "feed_model_hint": 'Una sorgente che condivide il segmento con una giunzione di fili converge molto lentamente in NEC-2: R stava ancora salendo a 1297 segmenti. Il modello straddle toglie la giunzione da sotto la sorgente ed è gia convergito alla densita di pubblicazione.',
+            "feed_model_fallback": 'Questa geometria non è collineare, quindi il modello straddle non le si applica: il deck torna al modello a giunzione e R/X portano l\'errore di segmentazione maggiore.',
             "wire_conductor_lf": 'Conduttore',
             "wire_diam_lbl": 'Diametro del filo:',
             "wire_diam_hint": 'Per un end-fed HF, il diametro influisce su R e soprattutto su Q.',
@@ -13663,6 +14017,7 @@ def _launch_gui() -> None:
             "help_ground_cond": "Ground conductivity in Siemens/meter used by NEC2's Sommerfeld ground model. Typical average ground is around 0.005 S/m.",
             "help_ground_diel": "Relative dielectric constant (permittivity) of the ground, used together with conductivity in NEC2's ground model. Typical average ground is about 13.",
             "help_ground_model": "Which ground model NEC2 uses for the simulation: perfect (lossless, fastest), average real ground, or a custom conductivity/permittivity pair you enter yourself.",
+            "help_feed_model": "Where the NEC2 source is placed. Straddle writes a collinear radiator and counterpoise as one continuous wire and feeds the segment holding the feed node, which converges far faster; junction keeps the older two-wire model with the source next to the wire junction. Non-collinear geometries always use the junction model.",
             "help_wire_diam": "Physical diameter of the antenna wire in millimeters. Thicker wire slightly broadens bandwidth and changes the exact resonant length.",
             "help_wire_material": "Conductor material of the antenna wire (copper, copperweld, aluminum, etc.), used to look up its electrical conductivity for loss calculations.",
             "help_wire_conductivity": "Electrical conductivity of the wire material in Siemens/meter, used directly when 'custom' material is selected instead of a preset.",
@@ -13735,6 +14090,7 @@ def _launch_gui() -> None:
             "help_ground_cond": "Conductividad del terreno en Siemens/metro usada por el modelo de tierra de Sommerfeld de NEC2. Un terreno promedio ronda 0.005 S/m.",
             "help_ground_diel": "Constante dieléctrica relativa (permitividad) del terreno, usada junto con la conductividad en el modelo de tierra de NEC2. Un terreno promedio ronda 13.",
             "help_ground_model": "Qué modelo de tierra usa NEC2 para la simulación: perfecto (sin pérdidas, más rápido), tierra real promedio, o un par personalizado de conductividad/permitividad que usted mismo introduce.",
+            "help_feed_model": "Dónde se coloca la fuente NEC2. Straddle escribe el radiador y el contrapeso colineales como un único hilo continuo y alimenta el segmento que contiene el punto de alimentación, lo que converge mucho más rápido; unión mantiene el modelo anterior de dos hilos con la fuente junto a la unión. Las geometrías no colineales usan siempre el modelo de unión.",
             "help_wire_diam": "Diámetro físico del hilo de la antena en milímetros. Un hilo más grueso amplía levemente el ancho de banda y cambia la longitud de resonancia exacta.",
             "help_wire_material": "Material conductor del hilo de la antena (cobre, copperweld, aluminio, etc.), usado para obtener su conductividad eléctrica en los cálculos de pérdidas.",
             "help_wire_conductivity": "Conductividad eléctrica del material del hilo en Siemens/metro, usada directamente cuando se selecciona el material 'personalizado' en lugar de un preajuste.",
@@ -13807,6 +14163,7 @@ def _launch_gui() -> None:
             "help_ground_cond": "Conducibilità del terreno in Siemens/metro usata dal modello di terra di Sommerfeld di NEC2. Un terreno medio è circa 0.005 S/m.",
             "help_ground_diel": "Costante dielettrica relativa (permittività) del terreno, usata insieme alla conducibilità nel modello di terra di NEC2. Un terreno medio è circa 13.",
             "help_ground_model": "Quale modello di terra usa NEC2 per la simulazione: perfetto (senza perdite, più veloce), terra reale media, oppure una coppia personalizzata di conducibilità/permittività inserita dall'utente.",
+            "help_feed_model": "Dove viene collocata la sorgente NEC2. Straddle scrive radiatore e contrappeso collineari come un unico filo continuo e alimenta il segmento che contiene il punto di alimentazione, convergendo molto più rapidamente; giunzione mantiene il vecchio modello a due fili con la sorgente accanto alla giunzione. Le geometrie non collineari usano sempre il modello a giunzione.",
             "help_wire_diam": "Diametro fisico del filo dell'antenna in millimetri. Un filo più spesso allarga leggermente la banda passante e cambia la lunghezza di risonanza esatta.",
             "help_wire_material": "Materiale conduttore del filo dell'antenna (rame, copperweld, alluminio, ecc.), usato per ricavarne la conducibilità elettrica nei calcoli delle perdite.",
             "help_wire_conductivity": "Conducibilità elettrica del materiale del filo in Siemens/metro, usata direttamente quando si seleziona il materiale 'personalizzato' invece di un preset.",
@@ -14964,6 +15321,34 @@ def _launch_gui() -> None:
                         _show(cp_lbl, "\n\n".join(cp_msgs))
                     else:
                         _hide(cp_lbl)
+
+                    # ── Straddle feed applicability ───────────────────────
+                    # The fusion needs the return conductor to be collinear
+                    # with, and opposite to, the radiator: a counterpoise at
+                    # the feedpoint height, no slope on the radiator, and a
+                    # counterpoise actually present.  Anything else silently
+                    # falls back to the junction feed inside
+                    # build_deck_geometry(), so say so here instead.
+                    fm_lbl = getattr(self, "_feed_model_fallback_lbl", None)
+                    if fm_lbl is not None:
+                        _fm_sel = (self._feed_model_var.get().strip()
+                                   if hasattr(self, "_feed_model_var")
+                                   else DEFAULT_FEED_MODEL)
+                        _collinear = use_cp
+                        if _collinear and slope_raw:
+                            _collinear = False
+                        if _collinear:
+                            _cp_end_raw2 = (self._cp_end_height_var.get().strip()
+                                            if hasattr(self, "_cp_end_height_var") else "")
+                            if _cp_end_raw2:
+                                try:
+                                    _collinear = abs(float(_cp_end_raw2) - height) <= 1e-9
+                                except ValueError:
+                                    _collinear = False
+                        if _fm_sel == "straddle" and not _collinear:
+                            _show(fm_lbl, T("feed_model_fallback"))
+                        else:
+                            _hide(fm_lbl)
                 finally:
                     _LANG = _prev_lang
             except Exception:
@@ -15103,6 +15488,37 @@ def _launch_gui() -> None:
             _gm_hint.grid(row=2, column=0, sticky="w", pady=(4, 0))
             self._reg(_gm_hint, "ground_model_hint")
             self._help(gm_lf, "help_ground_model").grid(row=2, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+
+            # ── Feed model ───────────────────────────────────────────────
+            # Same shape as the ground-model selector above.  Until this
+            # existed the GUI could not reach --feed-model at all and every
+            # run silently took the module default.
+            fm_lf = ttk.LabelFrame(t, padding=8)
+            fm_lf.pack(fill="x", pady=(0, 8))
+            self._reg(fm_lf, "feed_model_lf")
+            self._feed_model_var = tk.StringVar(value=DEFAULT_FEED_MODEL)
+            for _r, (_val, _key) in enumerate((
+                ("straddle", "feed_model_straddle"),
+                ("junction", "feed_model_junction"),
+            )):
+                _rb = ttk.Radiobutton(fm_lf, value=_val,
+                                      variable=self._feed_model_var,
+                                      command=self._on_setting_changed)
+                _rb.grid(row=_r, column=0, sticky="w", pady=2)
+                self._reg(_rb, _key)
+            _fm_hint = ttk.Label(fm_lf, foreground=_ACCENT, wraplength=760,
+                                 justify="left")
+            _fm_hint.grid(row=2, column=0, sticky="w", pady=(4, 0))
+            self._reg(_fm_hint, "feed_model_hint")
+            self._help(fm_lf, "help_feed_model").grid(row=2, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+            # Shown only when the current geometry cannot carry a straddle
+            # feed, so "straddle" selected + junction feed actually written is
+            # never a silent surprise in the report.
+            self._feed_model_fallback_lbl = ttk.Label(
+                fm_lf, foreground=_WARN, wraplength=760, justify="left")
+            self._feed_model_fallback_lbl.grid(row=3, column=0, columnspan=2,
+                                               sticky="w", pady=(4, 0))
+            self._feed_model_fallback_lbl.grid_remove()
 
             # ── Conductor (wire diameter + material) ────────────────────
             # Previously WIRE_RADIUS_M and WIRE_MATERIALS were only settable
@@ -16821,6 +17237,10 @@ def _launch_gui() -> None:
             _gm = self._ground_model_var.get().strip()
             if _gm and _gm != DEFAULT_GROUND_MODEL:
                 cmd += ["--ground-model", _gm]
+            _fm = (self._feed_model_var.get().strip()
+                   if hasattr(self, "_feed_model_var") else DEFAULT_FEED_MODEL)
+            if _fm and _fm != DEFAULT_FEED_MODEL:
+                cmd += ["--feed-model", _fm]
             _sm = self._segs_mode_var.get().strip()
             if _sm == "fast":
                 cmd += ["--fast"]
