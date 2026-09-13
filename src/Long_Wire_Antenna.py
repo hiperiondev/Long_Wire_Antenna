@@ -2969,11 +2969,16 @@ def parse_nec2_output(filepath: str, debug: bool = False,
             rp_gains.append((theta, phi, gain))
 
         if rp_gains:
-            best_rp = max(rp_gains, key=lambda t: t[2])
-            fp.gain_dbi = best_rp[2]
-            # best_rp[0] is NEC's theta (from the zenith); toa_deg is stored
-            # as ELEVATION above the horizon: 0 = horizon, 90 = zenith.
-            fp.toa_deg = 90.0 - best_rp[0]
+            # Parabolic refinement around the discrete grid maximum instead
+            # of the raw grid sample: a bare max() reports a different peak
+            # gain/TOA for the SAME antenna depending only on how coarse the
+            # theta grid a particular caller asked for was (see
+            # refine_peak_gain_toa docstring). This is what published TOA/
+            # gain is now built from everywhere in the program, so a report,
+            # a PNG and an exported deck that all sample the same underlying
+            # pattern converge on the same number instead of each reporting
+            # whichever grid node happened to be nearest the true peak.
+            fp.gain_dbi, fp.toa_deg = refine_peak_gain_toa(rp_gains)
             # Keep the whole table: the global maximum alone cannot tell the
             # optimiser what the antenna does at a low take-off angle.
             fp.rp_rows = rp_gains
@@ -3202,8 +3207,31 @@ SEGS_X_UNCERTAINTY_FLOOR_OHM = 1.0  # never publish X as better than +/-1 ohm
 DEFAULT_TARGET_TOA_DEG = 25.0   # elevation at which the gain term is read
 DEFAULT_GAIN_WEIGHT    = 0.20   # dB⁻¹ — 5 dB of gain ≈ 1.0 of score
 DEFAULT_RERANK_TOP_N   = 6      # candidates re-simulated with a full pattern
-RP_RERANK_N_THETA      = 19     # θ = 0…90° in 5° steps
-RP_RERANK_N_PHI        = 24     # φ = 0…345° in 15° steps
+
+# One run used to publish three different TOA/gain readings for the SAME
+# winning geometry because evaluate_pattern() (report/console), the
+# exported best_antenna.nec deck and the radiation PNG each swept a
+# different theta grid AND a different segmentation density and took the
+# raw grid maximum as "the" peak. That maximum moves with the grid alone —
+# it is a sampling artifact, not a change in the antenna — and on top of
+# that, a coarse grid can put DEFAULT_TARGET_TOA_DEG exactly on a node and
+# make "gain at target TOA" misreport as "gain at the peak".
+#
+# Fix: PUBLISHED_RP_N_THETA / PUBLISHED_RP_N_PHI / SEGS_PER_HALF_WAVE_FINE
+# are now the one grid+segmentation every consumer of a published TOA/gain
+# figure uses — evaluate_pattern() (report/console/PDF), the radiation PNG
+# and the exported deck all resolve to the same values (see their call
+# sites in main()). refine_peak_gain_toa() then fits a parabola around the
+# discrete grid maximum so the residual grid spacing itself does not shift
+# the reported peak by a fraction of a degree/dB between runs of the same
+# candidate. PNG-only knobs (n_elevation/n_azimuth on plot_radiation_diagrams)
+# may still render a denser CURVE than this for a nicer polar plot, but the
+# printed TOA/dBi number always comes from this shared grid, not from the
+# denser curve's own maximum — see plot_radiation_diagrams().
+PUBLISHED_RP_N_THETA   = 37     # θ = 0…90° in 2.5° steps — matches write_best_nec_deck()
+PUBLISHED_RP_N_PHI     = 72     # φ = 0…355° in 5° steps  — matches write_best_nec_deck()
+RP_RERANK_N_THETA      = PUBLISHED_RP_N_THETA   # kept as an alias; see above
+RP_RERANK_N_PHI        = PUBLISHED_RP_N_PHI     # kept as an alias; see above
 HIGH_TOA_WARN_DEG      = 60.0   # above this the antenna is a cloud-warmer
 
 # Segmentation-induced impedance uncertainty, as a percentage of R.
@@ -5005,6 +5033,73 @@ def nec2_sweep(
 # RADIATION PERFORMANCE:  GAIN AT THE TARGET TAKE-OFF ANGLE
 # ═══════════════════════════════════════════════════════════════════════════
 
+def refine_peak_gain_toa(
+    rp_rows: List[Tuple[float, float, float]],
+) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Peak gain and its take-off angle, refined off the RP sampling grid.
+
+    `max(rp_rows, key=...)` — the previous approach — returns whichever grid
+    node happened to be sampled closest to the true peak. That value (both
+    the dBi figure AND the angle) changes with theta-grid spacing alone, with
+    no change to the antenna: a 5 deg grid, a 1.25 deg grid and a 2.5 deg grid
+    each "discover" a different peak for the exact same pattern, and the
+    coarsest grid can even hide the true maximum behind a grid node it is not
+    aligned with.
+
+    This fits a parabola (in dB) through the discrete maximum and its two
+    neighbouring theta samples, at the phi of that maximum, and returns the
+    interpolated vertex instead of the raw sample. That removes the grid
+    itself as a source of disagreement between two callers who sampled the
+    same underlying pattern at different densities; it does not by itself
+    make two DIFFERENT densities agree exactly (a coarser grid still starts
+    from lower-resolution data), but it removes the artificial multi-degree,
+    sub-dB jumps a bare grid maximum introduces on top of that.
+
+    Returns (gain_dbi, toa_deg), both None when `rp_rows` is empty.
+    """
+    if not rp_rows:
+        return None, None
+
+    best_row = max(rp_rows, key=lambda r: r[2])
+    best_theta, best_phi, best_gain = best_row
+
+    # Neighbouring samples at the SAME azimuth as the discrete peak — a
+    # parabola across theta only makes sense holding phi fixed.
+    same_phi = sorted(
+        ((t, g) for (t, p, g) in rp_rows if abs(p - best_phi) < 1e-6),
+        key=lambda tg: tg[0],
+    )
+    idx = next((i for i, (t, _) in enumerate(same_phi) if t == best_theta), None)
+    if idx is None or len(same_phi) < 3 or idx == 0 or idx == len(same_phi) - 1:
+        # Peak sits at a grid edge (0 deg / 90 deg) or too few points to fit
+        # a parabola: fall back to the raw grid sample rather than guessing.
+        return best_gain, 90.0 - best_theta
+
+    t0, g0 = same_phi[idx - 1]
+    t1, g1 = same_phi[idx]
+    t2, g2 = same_phi[idx + 1]
+    # Vertex of the parabola through (t0,g0), (t1,g1), (t2,g2), for a grid
+    # that need not be evenly spaced (nec2c's theta step always is in this
+    # program, but the fit degrades gracefully either way).
+    denom = (t0 - t1) * (t0 - t2) * (t1 - t2)
+    if abs(denom) < 1e-9:
+        return best_gain, 90.0 - best_theta
+    a = (t2 * (g1 - g0) + t1 * (g0 - g2) + t0 * (g2 - g1)) / denom
+    b = (t2 * t2 * (g0 - g1) + t1 * t1 * (g2 - g0) + t0 * t0 * (g1 - g2)) / denom
+    if abs(a) < 1e-9:
+        return best_gain, 90.0 - best_theta
+    t_vertex = -b / (2.0 * a)
+    # Never extrapolate outside the bracketing samples.
+    t_vertex = max(t0, min(t2, t_vertex))
+    c = g0 - a * t0 * t0 - b * t0
+    g_vertex = a * t_vertex * t_vertex + b * t_vertex + c
+    # The parabola is a local fit: never report a "peak" gain lower than the
+    # measured sample it is supposed to refine.
+    g_vertex = max(g_vertex, best_gain)
+    return g_vertex, 90.0 - t_vertex
+
+
 def gain_at_elevation(rp_rows: List[Tuple[float, float, float]],
                       elev_deg: float) -> Optional[float]:
     """
@@ -6398,8 +6493,8 @@ def write_best_nec_deck(
     ground_cond: float = DEFAULT_GROUND_COND,
     ground_diel: float = DEFAULT_GROUND_DIEL,
     wire_radius_m: float = WIRE_RADIUS_M,
-    n_elevation: int = 37,
-    n_azimuth: int = 72,
+    n_elevation: int = PUBLISHED_RP_N_THETA,
+    n_azimuth: int = PUBLISHED_RP_N_PHI,
     use_counterpoise: bool = True,
     no_cp_return: str = DEFAULT_NO_CP_RETURN,
     cp_stub_len_m: float = DEFAULT_CP_STUB_LEN_M,
@@ -6534,13 +6629,20 @@ def plot_radiation_diagrams(
     no_cp_return: str = DEFAULT_NO_CP_RETURN,
     cp_stub_len_m: float = DEFAULT_CP_STUB_LEN_M,
     ground_model: str = DEFAULT_GROUND_MODEL,
-    segs_per_half_wave: Optional[int] = None,   # None → SEGS_PER_HALF_WAVE_FAST
+    segs_per_half_wave: Optional[int] = None,   # None → SEGS_PER_HALF_WAVE_FINE
     wire_conductivity: Optional[float] = None,  # None → WIRE_CONDUCTIVITY
 ) -> None:
     """
     Run NEC2 with a full RP pattern for each active band, parse the
     radiation pattern output, and save elevation + azimuth diagrams
     for all active bands to a single PNG.
+
+    n_elevation/n_azimuth here may still be denser than PUBLISHED_RP_N_THETA/
+    PUBLISHED_RP_N_PHI purely so the plotted CURVE looks smooth — that is
+    cosmetic. The printed TOA/dBi figure on each panel is NOT read off this
+    denser grid: it reuses `best.band_toa` / `best.band_gain_max`, the same
+    values the report/console/PDF already published from evaluate_pattern(),
+    so the number on the picture always matches the number in the text.
     """
     if not HAS_MPL:
         print("  matplotlib not available — skipping radiation diagrams.")
@@ -6567,9 +6669,15 @@ def plot_radiation_diagrams(
         nec_path = os.path.join(tmpdir, "best_radiation.nec")
         out_path_nec = os.path.join(tmpdir, "best_radiation.out")
 
-        # Patterns converge with far less segmentation than impedances, and RP
-        # runs are the expensive ones, so the coarse density is the default here.
-        _spw_rad = int(segs_per_half_wave or SEGS_PER_HALF_WAVE_FAST)
+        # Segmentation here now defaults to the FINE density (matching
+        # evaluate_pattern() and write_best_nec_deck()) rather than the fast
+        # sweep density: this PNG is a published artifact, not part of the
+        # search, and reusing SEGS_PER_HALF_WAVE_FAST by default was one of
+        # the three independent causes of one run publishing three different
+        # TOA/gain readings for the same winning geometry. Callers that
+        # still want the old fast behaviour can pass segs_per_half_wave
+        # explicitly.
+        _spw_rad = int(segs_per_half_wave or SEGS_PER_HALF_WAVE_FINE)
 
         # Same geometry builder as the sweep: the pattern is computed on the
         # exact model that produced the impedances, return conductor included.
@@ -6704,6 +6812,10 @@ def plot_radiation_diagrams(
             if rows:
                 all_db  = [db for (_, _, db) in rows]
                 max_db  = max(all_db)
+                # Refined peak, on THIS band's grid — used only as a fallback
+                # below when the authoritative (evaluate_pattern) value for
+                # this band is unavailable. See refine_peak_gain_toa().
+                _refined_gain, _refined_toa = refine_peak_gain_toa(rows)
 
                 _phis = sorted({round(p % 360.0, 2) for (_, p, _) in rows})
 
@@ -6783,15 +6895,31 @@ def plot_radiation_diagrams(
                     az_data.append((_pk, _val))
                 az_data.sort(key=lambda x: x[0])
             else:
-                max_db     = -999.0
-                az_data    = []
-                best_theta = None
-                elev_front = []
-                elev_back  = []
+                max_db        = -999.0
+                az_data       = []
+                best_theta    = None
+                elev_front    = []
+                elev_back     = []
+                _refined_gain = None
+                _refined_toa  = None
 
-            # Elevation above the horizon (0 = horizon, 90 = zenith), the same
-            # convention FreqPoint.toa_deg uses.  No pattern rows → 0.0.
-            toa = 90.0 - (best_theta if best_theta is not None else 90.0)
+            # Published TOA / peak-gain figure shown on the PNG. Reuses the
+            # value `evaluate_pattern()` already computed for this candidate
+            # (report, console and PDF all read the same `best.band_toa` /
+            # `best.band_gain_max`) instead of letting this function derive
+            # its own number off a differently-sampled grid — that mismatch,
+            # not the plotted curve, was what made one run publish three
+            # disagreeing TOA/gain readings for the same antenna. The curve
+            # itself is still drawn from this function's own (denser) grid;
+            # only the printed number is unified. Falls back to this band's
+            # own refined peak only when the shared value was never computed
+            # (e.g. pattern re-ranking was skipped or failed for this band).
+            _shared_toa  = best.band_toa.get(cr.band) if best.pattern_ok else None
+            _shared_gain = best.band_gain_max.get(cr.band) if best.pattern_ok else None
+            toa     = _shared_toa if _shared_toa is not None else (
+                _refined_toa if _refined_toa is not None else 0.0)
+            max_db  = _shared_gain if _shared_gain is not None else (
+                _refined_gain if _refined_gain is not None else max_db)
 
             band_patterns[cr.band] = {
                 "freq_mhz": freq,
@@ -11040,15 +11168,24 @@ def main() -> None:
     # ── Segmentation policy ──────────────────────────────────────────────
     # The sweep may run coarse (--fast) because the RANKING is robust to
     # segmentation, but every number that gets published — the best-candidate
-    # run, the exported deck, the report — is recomputed at the fine density,
-    # because the IMPEDANCES are not.
+    # run, the exported deck, the report, the radiation re-ranking pass and
+    # the radiation PNG — is recomputed at the fine density, because the
+    # IMPEDANCES (and, for the same reason, the radiation pattern) are not.
+    # segs_pattern used to default to SEGS_PER_HALF_WAVE_FAST here and get
+    # handed to plot_radiation_diagrams(); that — together with
+    # evaluate_pattern() separately defaulting to the fast density too — was
+    # one of the causes of a single run publishing disagreeing TOA/gain
+    # figures across the report, the PNG and the exported deck for the same
+    # winning geometry. All three now share segs_final; segs_pattern is kept
+    # only as an alias so any external caller of this module's globals sees
+    # the same (now-fine) value under either name.
     if args.segs_per_half_wave is not None:
         _spw_user  = max(5, min(int(args.segs_per_half_wave), SEGS_PER_HALF_WAVE_MAX))
         segs_sweep = segs_final = _spw_user
     else:
         segs_sweep = SEGS_PER_HALF_WAVE_FAST if args.fast else SEGS_PER_HALF_WAVE_SWEEP
         segs_final = SEGS_PER_HALF_WAVE_FINE
-    segs_pattern = segs_final if args.segs_per_half_wave is not None else SEGS_PER_HALF_WAVE_FAST
+    segs_pattern = segs_final
 
     # ── Wire diameter ────────────────────────────────────────────────────
     # Every deck writer, the counterpoise clamp (_cp_end_z) and the
@@ -11741,7 +11878,17 @@ def main() -> None:
             if _shortlist:
                 print("\n" + T("gain_rerank_header").format(len(_shortlist), _tgt_toa))
                 _h_rr = args.height if args.height is not None else DEFAULT_HEIGHT_M
-                _spw_rr = max(SEGS_PER_HALF_WAVE_FAST, int(segs_sweep or SEGS_PER_HALF_WAVE_FAST))
+                # This is the value later published in the report, console,
+                # PDF and (via band_toa/band_gain_max) the radiation PNG, so
+                # it is computed at the SAME fine segmentation as the
+                # exported deck and the winning candidate's own impedances
+                # (segs_final) rather than the fast sweep density — the
+                # segmentation-policy comment above ("every number that gets
+                # published... recomputed at the fine density") already
+                # covers this pass; it just wasn't wired up to obey it. See
+                # PUBLISHED_RP_N_THETA / refine_peak_gain_toa() for the
+                # matching theta-grid/peak-finding half of the same fix.
+                _spw_rr = int(segs_final)
                 _any_pattern = False
                 for _i, _cand in enumerate(_shortlist, 1):
                     if verbose:
