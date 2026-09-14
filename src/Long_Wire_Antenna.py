@@ -15265,6 +15265,41 @@ def _launch_gui() -> None:
             self._wire_empty_lbl.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
             self._reg(self._wire_empty_lbl, "leave_empty_wire")
 
+            # ── Radiator geometry: feedpoint height + far-end height ─────
+            # One height for the whole antenna: radiator and counterpoise both
+            # hang from the feedpoint, so they always share the same value.
+            # The counterpoise far end lives with the CP range fields below.
+            self._height_var         = tk.StringVar(value=f"{DEFAULT_HEIGHT_M:.1f}")
+            self._wire_slope_end_var = tk.StringVar(value="")   # empty = horizontal
+            for row_i, (key_lbl, var, key_hint, help_key) in enumerate([
+                ("height_lbl",         self._height_var,         "height_hint",         "help_height"),
+                ("wire_slope_end_lbl", self._wire_slope_end_var, "wire_slope_end_hint", "help_wire_slope_end"),
+            ], start=4):
+                lbl = ttk.Label(wr_lf)
+                lbl.grid(row=row_i, column=0, sticky="w", pady=3)
+                self._reg(lbl, key_lbl)
+                ttk.Entry(wr_lf, textvariable=var, width=10).grid(
+                    row=row_i, column=1, padx=6, pady=3, sticky="w")
+                ttk.Label(wr_lf, text="m", style="Muted.TLabel").grid(
+                    row=row_i, column=2, sticky="w")
+                hl = ttk.Label(wr_lf, foreground=_ACCENT)
+                hl.grid(row=row_i, column=3, sticky="w", padx=(8, 0))
+                self._reg(hl, key_hint)
+                self._help(wr_lf, help_key).grid(
+                    row=row_i, column=4, sticky="w", padx=(6, 0))
+
+            # Live ground-proximity warnings for the two fields just above.
+            # These mirror the CLI's own validation (build_deck_geometry and
+            # validate_feedpoint_height) so a value that would make nec2c emit
+            # garbage is flagged in the GUI BEFORE the run starts, not buried
+            # in the console log after.  The counterpoise-reach warning is a
+            # separate label inside the CP range frame.
+            self._geom_warn_lbl = ttk.Label(
+                wr_lf, foreground=_WARN, wraplength=760, justify="left")
+            self._geom_warn_lbl.grid(
+                row=6, column=0, columnspan=5, sticky="w", pady=(6, 0))
+            self._geom_warn_lbl.grid_remove()   # hidden until there is something to say
+
             # ── Counterpoise on/off ──────────────────────────────────────
             # Unchecking this models an antenna WITHOUT a counterpoise: every
             # counterpoise field below (and the CP length on the Input tab)
@@ -15281,6 +15316,62 @@ def _launch_gui() -> None:
             self._use_cp_hint_lbl.pack(side="left", padx=(8, 0))
             self._reg(self._use_cp_hint_lbl, "use_cp_hint")
             self._help(usecp_f, "help_use_cp").pack(side="left", padx=(6, 0))
+
+            # ── Counterpoise length range + antenna geometry ───────────
+            # Kept immediately under the "Use counterpoise" check box: these
+            # are the fields that box enables/disables, so they belong next
+            # to it rather than further down the tab.
+            cp_lf = ttk.LabelFrame(t, padding=8)
+            cp_lf.pack(fill="x", pady=(0, 8))
+            self._reg(cp_lf, "cp_range_lf")
+            self._cp_min_var  = tk.StringVar()
+            self._cp_max_var  = tk.StringVar()
+            self._cp_step_var = tk.StringVar(value="0.25")
+            for row_i, (flag, var, hk) in enumerate([
+                ("cp-min:",  self._cp_min_var,  "hint_cp_min"),
+                ("cp-max:",  self._cp_max_var,  "hint_cp_max"),
+                ("cp-step:", self._cp_step_var, "hint_cp_step"),
+            ]):
+                ttk.Label(cp_lf, text=flag).grid(row=row_i, column=0, sticky="w", pady=3)
+                _cp_ent = ttk.Entry(cp_lf, textvariable=var, width=10)
+                _cp_ent.grid(row=row_i, column=1, padx=6, pady=3, sticky="w")
+                self._cp_widgets.append(_cp_ent)
+                ttk.Label(cp_lf, text="m", style="Muted.TLabel").grid(row=row_i, column=2, sticky="w")
+                _h = ttk.Label(cp_lf, foreground=_ACCENT)
+                _h.grid(row=row_i, column=3, sticky="w", padx=(8, 0))
+                self._reg(_h, hk)
+                self._help(cp_lf, "help_cp_range").grid(
+                    row=row_i, column=4, sticky="w", padx=(6, 0))
+            self._cp_empty_lbl = ttk.Label(cp_lf, style="Muted.TLabel")
+            self._cp_empty_lbl.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
+            self._reg(self._cp_empty_lbl, "leave_empty_cp")
+
+            # Counterpoise far-end height: geometry, but driven by the same
+            # check box and the same range as the fields above, so it lives
+            # here rather than in a separate geometry frame.
+            self._cp_end_height_var = tk.StringVar(value="")   # empty = antenna height
+            _cp_end_lbl = ttk.Label(cp_lf)
+            _cp_end_lbl.grid(row=4, column=0, sticky="w", pady=3)
+            self._reg(_cp_end_lbl, "cp_end_height_lbl")
+            _cp_end_ent = ttk.Entry(cp_lf, textvariable=self._cp_end_height_var, width=10)
+            _cp_end_ent.grid(row=4, column=1, padx=6, pady=3, sticky="w")
+            self._cp_widgets.append(_cp_end_ent)
+            ttk.Label(cp_lf, text="m", style="Muted.TLabel").grid(row=4, column=2, sticky="w")
+            _cp_end_hint = ttk.Label(cp_lf, foreground=_ACCENT)
+            _cp_end_hint.grid(row=4, column=3, sticky="w", padx=(8, 0))
+            self._reg(_cp_end_hint, "cp_end_height_hint")
+            self._help(cp_lf, "help_cp_end_height").grid(
+                row=4, column=4, sticky="w", padx=(6, 0))
+
+            # Live "no cp length in range can reach the requested far-end
+            # height" warning — depends on cp-min/cp-max, on cp-end-height
+            # just above AND on the antenna height in the wire frame, so it is
+            # recomputed by the same _refresh_geom_warnings() that feeds the
+            # ground-clearance label there.
+            self._cp_range_warn_lbl = ttk.Label(
+                cp_lf, foreground=_WARN, wraplength=760, justify="left")
+            self._cp_range_warn_lbl.grid(row=5, column=0, columnspan=5, sticky="w", pady=(4, 0))
+            self._cp_range_warn_lbl.grid_remove()
 
             # ── Return path when there is NO counterpoise ────────────────
             # Mutually exclusive models, so radio buttons rather than
@@ -15346,78 +15437,6 @@ def _launch_gui() -> None:
                                   justify="left")
             _rad_hint.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
             self._reg(_rad_hint, "rad_hint")
-
-            cp_lf = ttk.LabelFrame(t, padding=8)
-            cp_lf.pack(fill="x", pady=(0, 8))
-            self._reg(cp_lf, "cp_range_lf")
-            self._cp_min_var  = tk.StringVar()
-            self._cp_max_var  = tk.StringVar()
-            self._cp_step_var = tk.StringVar(value="0.25")
-            for row_i, (flag, var, hk) in enumerate([
-                ("cp-min:",  self._cp_min_var,  "hint_cp_min"),
-                ("cp-max:",  self._cp_max_var,  "hint_cp_max"),
-                ("cp-step:", self._cp_step_var, "hint_cp_step"),
-            ]):
-                ttk.Label(cp_lf, text=flag).grid(row=row_i, column=0, sticky="w", pady=3)
-                _cp_ent = ttk.Entry(cp_lf, textvariable=var, width=10)
-                _cp_ent.grid(row=row_i, column=1, padx=6, pady=3, sticky="w")
-                self._cp_widgets.append(_cp_ent)
-                ttk.Label(cp_lf, text="m", style="Muted.TLabel").grid(row=row_i, column=2, sticky="w")
-                _h = ttk.Label(cp_lf, foreground=_ACCENT)
-                _h.grid(row=row_i, column=3, sticky="w", padx=(8, 0))
-                self._reg(_h, hk)
-                self._help(cp_lf, "help_cp_range").grid(
-                    row=row_i, column=4, sticky="w", padx=(6, 0))
-            self._cp_empty_lbl = ttk.Label(cp_lf, style="Muted.TLabel")
-            self._cp_empty_lbl.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
-            self._reg(self._cp_empty_lbl, "leave_empty_cp")
-            # Live "no cp length in range can reach the requested far-end
-            # height" warning — depends on cp-min/cp-max AND on the height /
-            # cp-end-height fields below, so it is recomputed by the same
-            # _refresh_geom_warnings() that the height frame's label uses.
-            self._cp_range_warn_lbl = ttk.Label(
-                cp_lf, foreground=_WARN, wraplength=760, justify="left")
-            self._cp_range_warn_lbl.grid(row=4, column=0, columnspan=4, sticky="w", pady=(4, 0))
-            self._cp_range_warn_lbl.grid_remove()
-
-            hgt_lf = ttk.LabelFrame(t, padding=8)
-            hgt_lf.pack(fill="x", pady=(0, 8))
-            self._reg(hgt_lf, "antenna_geom_lf")
-            # One height for the whole antenna: radiator and counterpoise both
-            # hang from the feedpoint, so they always share the same value.
-            self._height_var           = tk.StringVar(value=f"{DEFAULT_HEIGHT_M:.1f}")
-            self._wire_slope_end_var   = tk.StringVar(value="")   # empty = horizontal
-            self._cp_end_height_var    = tk.StringVar(value="")   # empty = antenna height
-            for row_i, (key_lbl, var, key_hint, help_key) in enumerate([
-                ("height_lbl",         self._height_var,         "height_hint",         "help_height"),
-                ("wire_slope_end_lbl", self._wire_slope_end_var, "wire_slope_end_hint", "help_wire_slope_end"),
-                ("cp_end_height_lbl",  self._cp_end_height_var,  "cp_end_height_hint",  "help_cp_end_height"),
-            ]):
-                lbl = ttk.Label(hgt_lf)
-                lbl.grid(row=row_i, column=0, sticky="w", pady=3)
-                self._reg(lbl, key_lbl)
-                _geo_ent = ttk.Entry(hgt_lf, textvariable=var, width=10)
-                _geo_ent.grid(row=row_i, column=1, padx=6, pady=3, sticky="w")
-                if key_lbl == "cp_end_height_lbl":
-                    self._cp_widgets.append(_geo_ent)
-                ttk.Label(hgt_lf, text="m", style="Muted.TLabel").grid(row=row_i, column=2, sticky="w")
-                hl = ttk.Label(hgt_lf, foreground=_ACCENT)
-                hl.grid(row=row_i, column=3, sticky="w", padx=(8, 0))
-                self._reg(hl, key_hint)
-                self._help(hgt_lf, help_key).grid(
-                    row=row_i, column=4, sticky="w", padx=(6, 0))
-
-            # Live ground-proximity / unreachable-counterpoise warnings.
-            # These mirror the CLI's own validation (build_deck_geometry,
-            # validate_feedpoint_height, and the cp-end-height reach check)
-            # so a value that would make nec2c emit garbage — or that would
-            # silently make --cp-end-height a no-op — is flagged in the GUI
-            # BEFORE the run starts, not buried in the console log after.
-            self._geom_warn_lbl = ttk.Label(
-                hgt_lf, foreground=_WARN, wraplength=760, justify="left")
-            self._geom_warn_lbl.grid(
-                row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
-            self._geom_warn_lbl.grid_remove()   # hidden until there is something to say
 
             rt_lf = ttk.LabelFrame(t, padding=8)
             rt_lf.pack(fill="x", pady=(0, 8))
