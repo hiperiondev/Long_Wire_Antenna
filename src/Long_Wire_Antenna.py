@@ -823,6 +823,57 @@ _STRINGS: Dict[str, Dict[str, str]] = {
               "      está agotado — reejecute con --retry mayor o una ventana más amplia.",
         "it": "  ℹ  Limite ancora raggiunto con l'UnUn finale, ma il budget di --retry\n      è esaurito — rieseguire con --retry maggiore o una finestra più ampia.",
     },
+    # ── window-refinement messages (--test-window) ───────────────────
+    "refine_mode_banner": {
+        "en": "  🔎  --test-window: retries refine around the top {0} candidates "
+              "(steps halved each pass, floor {1:.2f} m).",
+        "es": "  🔎  --test-window: los reintentos refinan alrededor de los {0} mejores "
+              "candidatos (pasos a la mitad en cada pasada, piso {1:.2f} m).",
+        "it": "  🔎  --test-window: i tentativi raffinano attorno ai {0} migliori "
+              "candidati (passi dimezzati a ogni passata, minimo {1:.2f} m).",
+    },
+    "refine_pass": {
+        "en": "\n  🔁  --test-window: refine pass {0}/{1} — wire-step = {2:.3f} m, "
+              "cp-step = {3:.3f} m",
+        "es": "\n  🔁  --test-window: pasada de refinamiento {0}/{1} — wire-step = {2:.3f} m, "
+              "cp-step = {3:.3f} m",
+        "it": "\n  🔁  --test-window: passata di raffinamento {0}/{1} — wire-step = {2:.3f} m, "
+              "cp-step = {3:.3f} m",
+    },
+    "refine_window": {
+        "en": "      window: wire [{0:.3f}, {1:.3f}] m   CP [{2:.3f}, {3:.3f}] m   "
+              "(from the top {4} candidates of the last pass)",
+        "es": "      ventana: hilo [{0:.3f}, {1:.3f}] m   CP [{2:.3f}, {3:.3f}] m   "
+              "(de los {4} mejores candidatos de la pasada anterior)",
+        "it": "      finestra: filo [{0:.3f}, {1:.3f}] m   CP [{2:.3f}, {3:.3f}] m   "
+              "(dai {4} migliori candidati della passata precedente)",
+    },
+    "refine_new_best": {
+        "en": "  ✔  --test-window: new best — wire = {0:.3f} m   cp = {1:.3f} m   score = {2:.4f}",
+        "es": "  ✔  --test-window: nuevo mejor — hilo = {0:.3f} m   cp = {1:.3f} m   puntuación = {2:.4f}",
+        "it": "  ✔  --test-window: nuovo migliore — filo = {0:.3f} m   cp = {1:.3f} m   punteggio = {2:.4f}",
+    },
+    "refine_no_improvement": {
+        "en": "  ℹ  --test-window: no improvement at this resolution — keeping "
+              "wire = {0:.3f} m, cp = {1:.3f} m.",
+        "es": "  ℹ  --test-window: sin mejora a esta resolución — se mantiene "
+              "hilo = {0:.3f} m, cp = {1:.3f} m.",
+        "it": "  ℹ  --test-window: nessun miglioramento a questa risoluzione — si mantiene "
+              "filo = {0:.3f} m, cp = {1:.3f} m.",
+    },
+    "refine_floor": {
+        "en": "  ✔  --test-window: step floor reached ({0:.2f} m) after {1} refine pass(es) — stopping.",
+        "es": "  ✔  --test-window: piso de paso alcanzado ({0:.2f} m) tras {1} pasada(s) — fin.",
+        "it": "  ✔  --test-window: minimo del passo raggiunto ({0:.2f} m) dopo {1} passata/e — stop.",
+    },
+    "refine_budget_spent": {
+        "en": "  ℹ  --test-window: retry budget spent at wire-step = {0:.3f} m, cp-step = {1:.3f} m "
+              "— re-run with a larger --retry to refine further.",
+        "es": "  ℹ  --test-window: presupuesto de reintentos agotado con wire-step = {0:.3f} m, "
+              "cp-step = {1:.3f} m — reejecute con --retry mayor para refinar más.",
+        "it": "  ℹ  --test-window: budget dei tentativi esaurito con wire-step = {0:.3f} m, "
+              "cp-step = {1:.3f} m — rieseguire con --retry maggiore per raffinare ancora.",
+    },
     # ── conductor losses ────────────────────────────────────────────────
     "ap_wire_diameter": {
         "en": "Wire diameter in mm (default {0:.1f} mm). Affects radiation "
@@ -2080,6 +2131,34 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "mayor', mejor-margen para 'puede ser menor').  Por defecto: 0 (desactivado)."),
         "it": "Se il miglior candidato tocca un limite di ricerca (filo o CP al minimo/massimo), riesegue automaticamente la scansione fino a N volte, spostando la finestra nella direzione suggerita dall'avviso (migliore+margine per 'potrebbe essere maggiore', migliore-margine per 'potrebbe essere minore').  Predefinito: 0 (disattivato).",
     },
+    "ap_test_window": {
+        "en": ("Change what --retry does.  Default (omitted = 'Test All') keeps the "
+               "historic behaviour: a retry SHIFTS the search window outwards when the "
+               "best candidate sits on a boundary.  With --test-window each retry instead "
+               "REFINES: the next pass covers only the bounding box of the top "
+               "--refine-top candidates of the previous pass, with --wire-step and "
+               "--cp-step halved, until both reach {0:.2f} m or --retry is exhausted."),
+        "es": ("Cambia qué hace --retry.  Por defecto (omitido = 'Probar todo') mantiene el "
+               "comportamiento histórico: el reintento DESPLAZA la ventana hacia afuera cuando "
+               "el mejor candidato queda en un límite.  Con --test-window cada reintento en "
+               "cambio REFINA: la siguiente pasada cubre sólo la caja de los --refine-top "
+               "mejores candidatos de la pasada previa, con --wire-step y --cp-step a la mitad, "
+               "hasta llegar a {0:.2f} m o agotar --retry."),
+        "it": ("Cambia il comportamento di --retry.  Per impostazione predefinita (omesso = "
+               "'Prova tutto') resta il comportamento storico: il tentativo SPOSTA la finestra "
+               "verso l'esterno quando il miglior candidato tocca un limite.  Con --test-window "
+               "ogni tentativo RAFFINA: la passata successiva copre solo il rettangolo dei "
+               "--refine-top migliori candidati della passata precedente, con --wire-step e "
+               "--cp-step dimezzati, fino a {0:.2f} m o all'esaurimento di --retry."),
+    },
+    "ap_refine_top": {
+        "en": ("Number of top candidates of the previous pass whose bounding box defines "
+               "the next, finer window when --test-window is active.  Default: {0}."),
+        "es": ("Cantidad de mejores candidatos de la pasada previa cuya caja define la "
+               "siguiente ventana más fina cuando --test-window está activo.  Por defecto: {0}."),
+        "it": ("Numero di migliori candidati della passata precedente il cui rettangolo "
+               "definisce la finestra più fine successiva con --test-window.  Predefinito: {0}."),
+    },
     "ap_no_interactive": {
         "en": "Do not prompt interactively for missing inputs; exit with error instead.",
         "es": "No solicitar entradas faltantes de forma interactiva; salir con error en su lugar.",
@@ -3238,6 +3317,16 @@ TRANSMATCH_SHUNT_SWR_MAX = 1.5
 # Shortest radiator the search is allowed to consider, in metres.  Also the
 # clamp applied when the wire window is derived from --wire-len ± --margin.
 WIRE_LEN_FLOOR_M = 1.0
+
+# ── Window-refinement mode (--test-window / GUI "Test All / Test Window") ──
+# Finest grid step the refinement loop is allowed to reach, in metres.  Each
+# retry halves the wire and CP steps; once both are at this floor the loop
+# stops (further halving is below any physically meaningful cutting accuracy
+# and would only multiply NEC2 runs).
+REFINE_STEP_FLOOR_M = 0.01
+# Default number of top candidates whose bounding box defines the next,
+# finer window when --test-window is active.
+DEFAULT_REFINE_TOP_N = 5
 
 DEFAULT_HEIGHT_M = 8.0      # antenna height above ground (radiator + counterpoise)
 AUTO_UNUN_SEED = 9.0        # seed ratio for the first sweep; the optimiser
@@ -11413,6 +11502,11 @@ def _build_parser() -> argparse.ArgumentParser:
                    help=T("ap_out_pdf"))
     p.add_argument("--retry", metavar="N", type=int, default=0,
                    help=T("ap_retry"))
+    p.add_argument("--test-window", action="store_true", dest="test_window",
+                   help=T("ap_test_window").format(REFINE_STEP_FLOOR_M))
+    p.add_argument("--refine-top", metavar="N", type=int,
+                   default=DEFAULT_REFINE_TOP_N, dest="refine_top",
+                   help=T("ap_refine_top").format(DEFAULT_REFINE_TOP_N))
     p.add_argument("--no-interactive", action="store_true",
                    help=T("ap_no_interactive"))
     p.add_argument("--quiet", "-q", action="store_true",
@@ -11481,6 +11575,13 @@ def main() -> None:
                          ("--cp-step", args.cp_step)):
         if _val is not None and _val <= 0:
             _bad.append(f"{_name} must be > 0 (got {_val})")
+
+    # --refine-top only matters in --test-window mode, but a nonsensical value
+    # is rejected either way so the error surfaces at parse time rather than
+    # halfway through a long sweep.
+    _refine_top = int(getattr(args, "refine_top", DEFAULT_REFINE_TOP_N) or 0)
+    if _refine_top < 1:
+        _bad.append(f"--refine-top must be ≥ 1 (got {_refine_top})")
 
     if args.wire_min is not None and args.wire_max is not None \
             and args.wire_min > args.wire_max:
@@ -11910,9 +12011,15 @@ def main() -> None:
                 + f"{Style.RESET_ALL}")
 
     # ── Helper: run one sweep and return (results, ranked, pareto_ranked) ─
-    def _run_sweep(w_min: float, w_max: float, cp_min: float, cp_max: float):
-        _grid = build_search_grid(w_min, w_max, args.wire_step,
-                                  cp_min, cp_max, args.cp_step,
+    def _run_sweep(w_min: float, w_max: float, cp_min: float, cp_max: float,
+                   w_step: "float | None" = None,
+                   cp_step: "float | None" = None):
+        # w_step / cp_step default to the command-line grid steps; the
+        # --test-window refinement loop passes progressively halved values.
+        _w_step  = args.wire_step if w_step  is None else w_step
+        _cp_step = args.cp_step   if cp_step is None else cp_step
+        _grid = build_search_grid(w_min, w_max, _w_step,
+                                  cp_min, cp_max, _cp_step,
                                   use_counterpoise=use_counterpoise)
         print()
         print(T("sweep_starting").format(mode.upper()))
@@ -11998,6 +12105,130 @@ def main() -> None:
 
     _retry_used  = 0
 
+    # ── "Test All" vs "Test Window" ──────────────────────────────────────
+    # Default (args.test_window False = GUI check box ON, "Test All") keeps
+    # the historic behaviour untouched: a retry SHIFTS the window outwards
+    # when the best candidate sits on a search boundary, at the original grid
+    # steps.  With --test-window (check box OFF) a retry instead REFINES: the
+    # next pass covers only the bounding box of the top N candidates of the
+    # previous pass, with both grid steps halved, until they reach
+    # REFINE_STEP_FLOOR_M or the retry budget runs out.
+    _test_window  = bool(getattr(args, "test_window", False))
+    _refine_top_n = max(1, int(getattr(args, "refine_top",
+                                       DEFAULT_REFINE_TOP_N)
+                               or DEFAULT_REFINE_TOP_N))
+    _cur_w_step   = float(args.wire_step)
+    _cur_cp_step  = float(args.cp_step)
+
+    if _test_window and _retry_max > 0:
+        print(f"\n  {Fore.CYAN}"
+              + T("refine_mode_banner").format(_refine_top_n, REFINE_STEP_FLOOR_M)
+              + f"{Style.RESET_ALL}")
+
+    def _halved_step(step: float) -> float:
+        """Halve a grid step, clamped at REFINE_STEP_FLOOR_M.
+
+        Returns the step unchanged once it already sits on the floor, which is
+        how the refinement loop detects that there is nothing left to refine.
+        """
+        if step <= REFINE_STEP_FLOOR_M + 1e-12:
+            return REFINE_STEP_FLOOR_M
+        return max(REFINE_STEP_FLOOR_M, round(step / 2.0, 6))
+
+    def _refine_window() -> bool:
+        """--test-window retry loop: zoom in instead of shifting outwards.
+
+        Each pass takes the top `--refine-top` candidates of the ranking in
+        hand, uses their bounding box (padded by one CURRENT step, clamped to
+        the window actually swept so far) as the new window, halves both grid
+        steps, and re-runs the sweep.  Unlike the expansion loop this does not
+        depend on a boundary being hit: it simply buys resolution with the
+        retry budget.  The best-so-far ranking is never replaced by a worse
+        one, and a pass that fails to improve does not abort the loop — a
+        finer grid can still land on a better point inside the same cluster.
+        """
+        nonlocal results, ranked, pareto_ranked, pareto, _retry_used
+        nonlocal _cur_w_min, _cur_w_max, _cur_cp_min, _cur_cp_max
+        nonlocal _cur_w_step, _cur_cp_step
+        _improved = False
+        if not ranked:
+            return False
+
+        _hit_floor = False
+        while _retry_used < _retry_max:
+            _new_w_step  = _halved_step(_cur_w_step)
+            _new_cp_step = _halved_step(_cur_cp_step)
+            if (abs(_new_w_step - _cur_w_step) < 1e-12
+                    and abs(_new_cp_step - _cur_cp_step) < 1e-12):
+                _hit_floor = True
+                print(f"\n  {Fore.GREEN}"
+                      + T("refine_floor").format(REFINE_STEP_FLOOR_M, _retry_used)
+                      + f"{Style.RESET_ALL}")
+                break
+
+            _top = ranked[:_refine_top_n]
+
+            # Wire window: bounding box of the top N, padded by one current
+            # step so the finer grid can also probe just outside the cluster,
+            # then clamped to the window that was actually swept.
+            _w_lo = max(_cur_w_min, round(min(r.wire_len_m for r in _top) - _cur_w_step, 6))
+            _w_hi = min(_cur_w_max, round(max(r.wire_len_m for r in _top) + _cur_w_step, 6))
+            _w_lo = max(WIRE_LEN_FLOOR_M, _w_lo)
+            _w_hi = max(_w_hi, _w_lo)
+
+            if use_counterpoise:
+                _c_lo = max(_cur_cp_min, round(min(r.cp_len_m for r in _top) - _cur_cp_step, 6))
+                _c_hi = min(_cur_cp_max, round(max(r.cp_len_m for r in _top) + _cur_cp_step, 6))
+                _c_hi = max(_c_hi, _c_lo)
+            else:
+                _c_lo, _c_hi = _cur_cp_min, _cur_cp_max
+
+            _retry_used += 1
+            print(f"  {Fore.YELLOW}"
+                  + T("refine_pass").format(_retry_used, _retry_max,
+                                            _new_w_step, _new_cp_step)
+                  + f"{Style.RESET_ALL}")
+            print(f"  {Fore.YELLOW}"
+                  + T("refine_window").format(_w_lo, _w_hi, _c_lo, _c_hi,
+                                              len(_top))
+                  + f"{Style.RESET_ALL}")
+
+            _new_results, _new_ranked, _new_pareto_ranked = _run_sweep(
+                _w_lo, _w_hi, _c_lo, _c_hi,
+                w_step=_new_w_step, cp_step=_new_cp_step,
+            )
+
+            # The window and the resolution advance whatever the outcome; only
+            # the ranking itself is kept on a strict improvement.
+            _cur_w_min, _cur_w_max   = _w_lo, _w_hi
+            _cur_cp_min, _cur_cp_max = _c_lo, _c_hi
+            _cur_w_step, _cur_cp_step = _new_w_step, _new_cp_step
+
+            if (_new_ranked
+                    and _new_ranked[0].score_combined < ranked[0].score_combined):
+                results       = _new_results
+                ranked        = _new_ranked
+                pareto_ranked = _new_pareto_ranked
+                pareto        = pareto_front(results)
+                _improved     = True
+                print(f"  {Fore.GREEN}"
+                      + T("refine_new_best").format(
+                          ranked[0].wire_len_m, ranked[0].cp_len_m,
+                          ranked[0].score_combined)
+                      + f"{Style.RESET_ALL}")
+            else:
+                print(f"  {Fore.CYAN}"
+                      + T("refine_no_improvement").format(
+                          ranked[0].wire_len_m, ranked[0].cp_len_m)
+                      + f"{Style.RESET_ALL}")
+
+        if (not _hit_floor) and _retry_used >= _retry_max and _retry_max > 0:
+            print(f"\n  {Fore.YELLOW}"
+                  + T("refine_budget_spent").format(_cur_w_step, _cur_cp_step)
+                  + f"{Style.RESET_ALL}")
+
+        return _improved
+
     def _expand_window() -> bool:
         """Run the --retry expansion loop from the CURRENT window and scores.
 
@@ -12010,6 +12241,10 @@ def main() -> None:
         nonlocal results, ranked, pareto_ranked, pareto, _retry_used
         nonlocal _cur_w_min, _cur_w_max, _cur_cp_min, _cur_cp_max
         _improved = False
+
+        # "Test Window" mode: retries refine instead of expanding.
+        if _test_window:
+            return _refine_window()
 
         while _retry_used < _retry_max:
             (w_at_max, w_at_min,
@@ -12091,11 +12326,19 @@ def main() -> None:
         return _improved
 
     def _publish_bounds() -> None:
-        """Copy the working window back onto args (final boundary warnings)."""
-        args.wire_min = _cur_w_min
-        args.wire_max = _cur_w_max
-        args.cp_min   = _cur_cp_min
-        args.cp_max   = _cur_cp_max
+        """Copy the working window back onto args (final boundary warnings).
+
+        The grid steps are published as well: in --test-window mode they shrink
+        with every refine pass, and the report/plot legends must quote the
+        resolution the winning candidate was actually found at, not the one
+        typed on the command line.
+        """
+        args.wire_min  = _cur_w_min
+        args.wire_max  = _cur_w_max
+        args.cp_min    = _cur_cp_min
+        args.cp_max    = _cur_cp_max
+        args.wire_step = _cur_w_step
+        args.cp_step   = _cur_cp_step
 
     _expand_window()
     _publish_bounds()
@@ -13191,6 +13434,12 @@ def _launch_gui() -> None:
                                    "re-ordered by score_combined − weight × gain at the target take-off "
                                    "angle. Set the weight to 0 to rank by VSWR alone."),
             "leave_empty_cp":     "Leave min/max empty to use margin.",
+            "test_all_chk":       "Test All / Test Window",
+            "test_all_hint":       "checked = Test All (retries widen the window, as before)",
+            "refine_top_lbl":     "Test Window — top N candidates:",
+            "refine_top_hint":    ("Unchecked: each retry re-tests only around the top N candidates "
+                                   "of the previous pass, halving wire-step and cp-step every pass "
+                                   "down to 0.01 m or until the retry budget runs out."),
             "retry_lf":           "Auto-retry on Boundary Hit",
             "max_retries":        "Max retries:",
             "retry_hint":         "If best candidate hits min/max, shift window and re-run (0 = disabled).",
@@ -13600,6 +13849,12 @@ def _launch_gui() -> None:
                                    "y se reordenan por score_combined − peso × ganancia al ángulo de despegue "
                                    "objetivo. Poné el peso en 0 para ordenar sólo por ROE."),
             "leave_empty_cp":     "Dejar mín/máx vacío para usar el margen.",
+            "test_all_chk":       "Probar Todo / Probar Ventana",
+            "test_all_hint":      "marcado = Probar Todo (los reintentos amplían la ventana, como antes)",
+            "refine_top_lbl":     "Probar Ventana — N mejores candidatos:",
+            "refine_top_hint":    ("Sin marcar: cada reintento prueba sólo alrededor de los N mejores "
+                                   "candidatos de la pasada previa, reduciendo wire-step y cp-step a la "
+                                   "mitad en cada pasada hasta 0,01 m o hasta agotar los reintentos."),
             "retry_lf":           "Reintento Automático al Alcanzar el Límite",
             "max_retries":        "Reintentos máximos:",
             "retry_hint":         "Si el mejor candidato alcanza el mín/máx, desplazar ventana y re-ejecutar (0 = desactivado).",
@@ -13990,6 +14245,12 @@ def _launch_gui() -> None:
             "rad_rerank_top_lbl": 'Candidati riesaminati con diagramma:',
             "rad_hint": "La scansione valuta solo l'impedenza, quindi un'antenna che irradia dritto verso l'alto ottiene lo stesso punteggio di una che concentra la potenza a un angolo basso. I migliori N candidati vengono quindi risimulati con un diagramma di radiazione completo e riordinati per score_combined − peso × guadagno all'angolo di decollo obiettivo. Impostare il peso a 0 per classificare solo per ROS.",
             "leave_empty_cp": 'Lasciare min/max vuoti per usare il margine.',
+            "test_all_chk": 'Prova Tutto / Prova Finestra',
+            "test_all_hint": 'selezionato = Prova Tutto (i tentativi allargano la finestra, come prima)',
+            "refine_top_lbl": 'Prova Finestra — N migliori candidati:',
+            "refine_top_hint": ("Non selezionato: ogni tentativo prova solo attorno agli N migliori "
+                                "candidati della passata precedente, dimezzando wire-step e cp-step a "
+                                "ogni passata fino a 0,01 m o all'esaurimento dei tentativi."),
             "retry_lf": 'Nuovo Tentativo Automatico al Raggiungimento del Limite',
             "max_retries": 'Tentativi massimi:',
             "retry_hint": 'Se il miglior candidato tocca il minimo/massimo, sposta la finestra e riesegue (0 = disattivato).',
@@ -14312,6 +14573,8 @@ def _launch_gui() -> None:
             "help_height": "Feed-point height above ground, in meters. Both the radiator and the counterpoise hang from this same point, so it affects both.",
             "help_wire_slope_end": "Height in meters of the far end of the radiator wire. Leave empty for a horizontal wire; set lower than the feed height for a sloping (inverted-V-like) run.",
             "help_cp_end_height": "Height in meters of the far end of the counterpoise wire. Leave empty to use the same height as the feed point.",
+            "help_test_all": "Checked (Test All) keeps the historic retry behaviour: when the best candidate lands on a search boundary the window is shifted outwards and the whole grid is swept again at the same step sizes. Unchecked (Test Window) turns every retry into a refinement instead: the next pass covers only the bounding box of the top N candidates of the previous pass, with wire-step and cp-step halved each time, until both reach 0.01 m or the retry count is exhausted. Each pass logs the new step values.",
+            "help_refine_top": "How many of the previous pass's best candidates define the next, finer search window in Test Window mode. Small values (3-5) zoom in aggressively; larger values keep more of the window and cost more NEC2 runs per pass. Ignored while Test All is checked.",
             "help_retry": "Number of times to automatically retry a failed nec2c run (e.g. after a transient solver error) before giving up on that candidate.",
             "help_topn": "How many top-ranked candidate geometries to keep and report at the end of the search, ordered by aggregate score.",
             "help_ground_cond": "Ground conductivity in Siemens/meter used by NEC2's Sommerfeld ground model. Typical average ground is around 0.005 S/m.",
@@ -14385,6 +14648,8 @@ def _launch_gui() -> None:
             "help_height": "Altura del punto de alimentación sobre el suelo, en metros. Tanto el radiador como el contrapeso cuelgan de este mismo punto, por lo que afecta a ambos.",
             "help_wire_slope_end": "Altura en metros del extremo lejano del hilo radiante. Dejar vacío para un hilo horizontal; poner un valor menor que la altura de alimentación para un tendido inclinado (tipo V invertida).",
             "help_cp_end_height": "Altura en metros del extremo lejano del hilo de contrapeso. Dejar vacío para usar la misma altura que el punto de alimentación.",
+            "help_test_all": "Marcado (Probar Todo) mantiene el comportamiento histórico de los reintentos: si el mejor candidato queda en un límite de búsqueda, la ventana se desplaza hacia afuera y se barre toda la grilla otra vez con los mismos pasos. Sin marcar (Probar Ventana) cada reintento pasa a ser un refinamiento: la siguiente pasada cubre sólo la caja de los N mejores candidatos de la pasada previa, con wire-step y cp-step a la mitad cada vez, hasta llegar a 0,01 m o agotar los reintentos. Cada pasada registra los nuevos valores de paso.",
+            "help_refine_top": "Cuántos de los mejores candidatos de la pasada previa definen la siguiente ventana más fina en modo Probar Ventana. Valores chicos (3-5) hacen un zoom agresivo; valores mayores conservan más ventana y cuestan más corridas de NEC2 por pasada. Se ignora con Probar Todo marcado.",
             "help_retry": "Cantidad de veces que se reintenta automáticamente una corrida de nec2c fallida (p. ej. tras un error transitorio del solver) antes de descartar ese candidato.",
             "help_topn": "Cuántas geometrías candidatas mejor clasificadas se conservan e informan al final de la búsqueda, ordenadas por puntaje agregado.",
             "help_ground_cond": "Conductividad del terreno en Siemens/metro usada por el modelo de tierra de Sommerfeld de NEC2. Un terreno promedio ronda 0.005 S/m.",
@@ -14458,6 +14723,8 @@ def _launch_gui() -> None:
             "help_height": "Altezza del punto di alimentazione da terra, in metri. Sia il radiatore sia il contrappeso pendono da questo stesso punto, quindi influisce su entrambi.",
             "help_wire_slope_end": "Altezza in metri dell'estremità lontana del filo radiante. Lasciare vuoto per un filo orizzontale; impostare un valore inferiore all'altezza di alimentazione per una posa inclinata (tipo V invertita).",
             "help_cp_end_height": "Altezza in metri dell'estremità lontana del filo di contrappeso. Lasciare vuoto per usare la stessa altezza del punto di alimentazione.",
+            "help_test_all": "Selezionato (Prova Tutto) mantiene il comportamento storico dei tentativi: se il miglior candidato tocca un limite di ricerca, la finestra viene spostata verso l'esterno e l'intera griglia viene riesaminata con gli stessi passi. Non selezionato (Prova Finestra) ogni tentativo diventa un raffinamento: la passata successiva copre solo il rettangolo degli N migliori candidati della passata precedente, con wire-step e cp-step dimezzati ogni volta, fino a 0,01 m o all'esaurimento dei tentativi. Ogni passata registra i nuovi valori dei passi.",
+            "help_refine_top": "Quanti dei migliori candidati della passata precedente definiscono la finestra più fine successiva in modalità Prova Finestra. Valori piccoli (3-5) ingrandiscono in modo aggressivo; valori maggiori conservano più finestra e costano più esecuzioni NEC2 per passata. Ignorato con Prova Tutto selezionato.",
             "help_retry": "Numero di tentativi automatici di ripetizione di un'esecuzione nec2c fallita (es. dopo un errore transitorio del solver) prima di scartare quel candidato.",
             "help_topn": "Quante geometrie candidate meglio classificate vengono conservate e riportate al termine della ricerca, ordinate per punteggio complessivo.",
             "help_ground_cond": "Conducibilità del terreno in Siemens/metro usata dal modello di terra di Sommerfeld di NEC2. Un terreno medio è circa 0.005 S/m.",
@@ -15242,6 +15509,42 @@ def _launch_gui() -> None:
             self._reg(_mg, "hint_margin")
             self._help(mf, "help_margin").pack(side="left", padx=(6, 0))
 
+            # ── Test All / Test Window ───────────────────────────
+            # Checked (default) = "Test All": retries behave exactly as they
+            # always have, shifting the search window outwards at the grid
+            # steps typed below.  Unchecked = "Test Window": each retry keeps
+            # only the bounding box of the top N candidates of the previous
+            # pass and halves both grid steps, down to 0.01 m or until the
+            # retry budget is spent.
+            twf = ttk.Frame(mg_lf)
+            twf.pack(anchor="w", pady=(6, 0))
+            self._test_all_var = tk.BooleanVar(value=True)
+            self._test_all_chk = ttk.Checkbutton(
+                twf, variable=self._test_all_var,
+                command=self._toggle_test_window)
+            self._test_all_chk.pack(side="left")
+            self._reg(self._test_all_chk, "test_all_chk")
+            self._test_all_hint_lbl = ttk.Label(twf, style="Muted.TLabel")
+            self._test_all_hint_lbl.pack(side="left", padx=(8, 0))
+            self._reg(self._test_all_hint_lbl, "test_all_hint")
+            self._help(twf, "help_test_all").pack(side="left", padx=(6, 0))
+
+            rtf2 = ttk.Frame(mg_lf)
+            rtf2.pack(anchor="w", pady=(4, 0))
+            self._refine_top_lbl = ttk.Label(rtf2)
+            self._refine_top_lbl.pack(side="left")
+            self._reg(self._refine_top_lbl, "refine_top_lbl")
+            self._refine_top_var = tk.StringVar(value=str(DEFAULT_REFINE_TOP_N))
+            self._refine_top_spin = ttk.Spinbox(
+                rtf2, from_=1, to=50, textvariable=self._refine_top_var, width=5)
+            self._refine_top_spin.pack(side="left", padx=6)
+            self._refine_top_hint_lbl = ttk.Label(rtf2, foreground=_ACCENT,
+                                                  wraplength=700, justify="left")
+            self._refine_top_hint_lbl.pack(side="left", padx=(8, 0))
+            self._reg(self._refine_top_hint_lbl, "refine_top_hint")
+            self._help(rtf2, "help_refine_top").pack(side="left", padx=(6, 0))
+            self._toggle_test_window()
+
             wr_lf = ttk.LabelFrame(t, padding=8)
             wr_lf.pack(fill="x", pady=(0, 8))
             self._reg(wr_lf, "wire_range_lf")
@@ -15699,6 +16002,25 @@ def _launch_gui() -> None:
                 except Exception:
                     pass
             # The command preview depends on this flag as well.
+            try:
+                self._on_setting_changed()
+            except Exception:
+                pass
+
+        def _toggle_test_window(self):
+            """Grey out the refine-top spin box while "Test All" is checked.
+
+            In Test All mode the retry loop never looks at the top-N window,
+            so the field would be misleading if it stayed editable.
+            """
+            _state = "disabled" if bool(self._test_all_var.get()) else "normal"
+            for _w in (getattr(self, "_refine_top_spin", None),):
+                if _w is not None:
+                    try:
+                        _w.configure(state=_state)
+                    except Exception:
+                        pass
+            # Keep the command preview in step with the mode switch.
             try:
                 self._on_setting_changed()
             except Exception:
@@ -17523,6 +17845,13 @@ def _launch_gui() -> None:
             margin = self._margin_var.get().strip()
             if margin:
                 cmd += ["--margin", margin]
+            # Test All (checked) is the default CLI behaviour, so it adds no
+            # flag at all; only Test Window has to be requested explicitly.
+            if not self._test_all_var.get():
+                cmd += ["--test-window"]
+                _rtop = self._refine_top_var.get().strip()
+                if _rtop:
+                    cmd += ["--refine-top", _rtop]
             _range_flags = [
                 ("--wire-min",  self._wire_min_var),
                 ("--wire-max",  self._wire_max_var),
