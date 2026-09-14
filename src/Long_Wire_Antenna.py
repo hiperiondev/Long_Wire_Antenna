@@ -49,6 +49,7 @@ import re
 import sys
 import csv
 import math
+import errno
 import shutil
 import argparse
 import textwrap
@@ -4789,6 +4790,34 @@ def write_nec_deck(
 # RUN NEC2C
 # ═══════════════════════════════════════════════════════════════════════════
 
+class Nec2WorkspaceError(RuntimeError):
+    """Raised when the scratch filesystem cannot hold the NEC2 working files."""
+
+
+def _is_disk_full_error(err: BaseException) -> bool:
+    """True for 'no space left' / 'disk quota exceeded' style OS errors."""
+    _no = getattr(err, "errno", None)
+    return _no in {getattr(errno, "ENOSPC", None),
+                   getattr(errno, "EDQUOT", None),
+                   getattr(errno, "EFBIG", None)}
+
+
+def _unlink_quiet(path: Optional[str]) -> None:
+    """Delete a scratch file, ignoring the fact that it may not exist.
+
+    The sweep writes one deck and one nec2c output per grid point.  Both are
+    consumed immediately (parsed, then never reopened), so they are removed as
+    soon as the candidate is scored; a missing or already-removed file is not
+    an error worth interrupting a sweep for.
+    """
+    if not path:
+        return
+    try:
+        os.unlink(path)
+    except (FileNotFoundError, IsADirectoryError, PermissionError, OSError):
+        pass
+
+
 def run_nec2c(binary: str, nec_path: str, out_path: str,
               timeout: int = 60) -> bool:
     """
@@ -5361,112 +5390,142 @@ def nec2_sweep(
             nec_p = os.path.join(tmpdir, tag + ".nec")
             out_p = os.path.join(tmpdir, tag + ".out")
 
+            # The deck and its nec2c output are scratch files: each one is
+            # parsed immediately and never reopened.  They used to be left
+            # in the temporary directory until the whole sweep ended, so a
+            # 200x200 grid accumulated ~40 000 deck/output pairs and large
+            # runs died with 'Disk quota exceeded' (Errno 122) part-way
+            # through.  Each candidate now cleans up after itself, which
+            # keeps the sweep footprint at one deck plus one output no
+            # matter how big the grid is.
             try:
-                _geo = write_nec_deck(
-                    nec_path=nec_p,
-                    wire_len_m=w,
-                    cp_len_m=c,
-                    freqs_mhz=freqs,
-                    wire_height_m=wire_height_m,
-                    wire_slope_end_m=wire_slope_end_m,
-                    cp_height_m=cp_height_m,
-                    cp_end_height_m=cp_z_target,
-                    ground_cond=ground_cond,
-                    ground_diel=ground_diel,
-                    wire_radius_m=WIRE_RADIUS_M,
-                    use_counterpoise=use_counterpoise,
-                    no_cp_return=no_cp_return,
-                    cp_stub_len_m=cp_stub_len_m,
-                    ground_model=ground_model,
-                    segs_per_half_wave=segs_per_half_wave,
-                )
-                # The geometry builder may have clamped a wire end away from
-                # the ground singularity.  Report each DISTINCT message once,
-                # not once per point and not "only the first batch".
-                if _geo.warnings:
-                    _new_msgs = [m for m in _geo.warnings if m not in _warned_geom]
-                    if _new_msgs:
-                        _warned_geom.update(_new_msgs)
-                        print()
-                        for _wmsg in _new_msgs:
-                            print(f"  {Fore.YELLOW}WARNING: {_wmsg}{Style.RESET_ALL}")
-                # Always report the geometry that ended up in the deck: the
-                # builder may have raised a wire end off the ground, and a
-                # candidate whose printed end height differs from the simulated
-                # one is exactly the kind of silent mismatch this tool exists
-                # to avoid.
-                if _geo.cp_z_end is not None:
-                    _cp_z = _geo.cp_z_end
-                    _cp_x = (_geo.cp_x_end if _geo.cp_x_end is not None else _cp_x)
-                    cp_angle_deg = _geo.cp_angle_deg
-            except ValueError as _geom_err:
-                # Wire too short to reach the sloped far-end height — skip silently.
-                cand = CandidateResult(
-                    wire_len_m=w, cp_len_m=c, cp_angle_deg=cp_angle_deg,
-                    score_combined=999.0, score_vswr_raw=999.0,
-                    score_vswr=999.0, score_avoidance=0.0,
-                    nec2_used=False, nec2_ok=False,
-                    note=f"geometry invalid: {_geom_err}",
-                    wire_slope_end_m=wire_slope_end_m,
-                    cp_end_z_m=_cp_z, cp_reach_m=_cp_x,
-                )
-                results.append(cand)
-                continue
-
-            run: Optional[NEC2Run] = None
-            _parse_exc: Optional[BaseException] = None
-            if run_nec2c(nec2c_bin, nec_p, out_p):
                 try:
-                    # parse_deck=False: this runs once per grid candidate
-                    # (potentially thousands of times). The deck-derived
-                    # fields it would fill (cp_type, _has_rp_card,
-                    # _wire_slope_end_m, _cp_from_deck) are write-only —
-                    # score_candidate() below never reads them — so
-                    # skip the extra .nec re-open + regex pass here.
-                    _r = parse_nec2_output(out_p, debug=False,
-                                            explicit_nec_path=nec_p,
-                                            parse_deck=False)
-                    if _r is not None and not _r.freq_map():
-                        _r = None
-                    run = _r
-                except Exception as _e:
-                    _parse_exc = _e
+                    _geo = write_nec_deck(
+                        nec_path=nec_p,
+                        wire_len_m=w,
+                        cp_len_m=c,
+                        freqs_mhz=freqs,
+                        wire_height_m=wire_height_m,
+                        wire_slope_end_m=wire_slope_end_m,
+                        cp_height_m=cp_height_m,
+                        cp_end_height_m=cp_z_target,
+                        ground_cond=ground_cond,
+                        ground_diel=ground_diel,
+                        wire_radius_m=WIRE_RADIUS_M,
+                        use_counterpoise=use_counterpoise,
+                        no_cp_return=no_cp_return,
+                        cp_stub_len_m=cp_stub_len_m,
+                        ground_model=ground_model,
+                        segs_per_half_wave=segs_per_half_wave,
+                    )
+                    # The geometry builder may have clamped a wire end away from
+                    # the ground singularity.  Report each DISTINCT message once,
+                    # not once per point and not "only the first batch".
+                    if _geo.warnings:
+                        _new_msgs = [m for m in _geo.warnings if m not in _warned_geom]
+                        if _new_msgs:
+                            _warned_geom.update(_new_msgs)
+                            print()
+                            for _wmsg in _new_msgs:
+                                print(f"  {Fore.YELLOW}WARNING: {_wmsg}{Style.RESET_ALL}")
+                    # Always report the geometry that ended up in the deck: the
+                    # builder may have raised a wire end off the ground, and a
+                    # candidate whose printed end height differs from the simulated
+                    # one is exactly the kind of silent mismatch this tool exists
+                    # to avoid.
+                    if _geo.cp_z_end is not None:
+                        _cp_z = _geo.cp_z_end
+                        _cp_x = (_geo.cp_x_end if _geo.cp_x_end is not None else _cp_x)
+                        cp_angle_deg = _geo.cp_angle_deg
+                except OSError as _io_err:
+                    # A deck that cannot be written is not a property of this
+                    # candidate: the scratch filesystem is full (Errno 28 /
+                    # Errno 122) or otherwise unusable, and every remaining
+                    # grid point would fail the same way.  Stop with an
+                    # actionable message instead of unwinding a bare OSError
+                    # traceback after hours of sweeping.
+                    if _is_disk_full_error(_io_err):
+                        raise Nec2WorkspaceError(
+                            f"NEC2 scratch directory ran out of space after "
+                            f"{done}/{total} candidates ({tmpdir}): {_io_err.strerror}. "
+                            f"Free space on that filesystem or point TMPDIR at "
+                            f"one with room (roughly a few MB is enough — the "
+                            f"sweep keeps only one deck at a time)."
+                        ) from _io_err
+                    raise Nec2WorkspaceError(
+                        f"NEC2 scratch directory unusable ({tmpdir}): {_io_err}"
+                    ) from _io_err
+                except ValueError as _geom_err:
+                    # Wire too short to reach the sloped far-end height — skip silently.
+                    cand = CandidateResult(
+                        wire_len_m=w, cp_len_m=c, cp_angle_deg=cp_angle_deg,
+                        score_combined=999.0, score_vswr_raw=999.0,
+                        score_vswr=999.0, score_avoidance=0.0,
+                        nec2_used=False, nec2_ok=False,
+                        note=f"geometry invalid: {_geom_err}",
+                        wire_slope_end_m=wire_slope_end_m,
+                        cp_end_z_m=_cp_z, cp_reach_m=_cp_x,
+                    )
+                    results.append(cand)
+                    continue
 
-            if run is None:
-                _note = f"NEC2 failed: parser raised {_parse_exc!r}" if _parse_exc is not None else "NEC2 failed"
-                cand = CandidateResult(
-                    wire_len_m=w, cp_len_m=c, cp_angle_deg=cp_angle_deg,
-                    score_combined=999.0, score_vswr_raw=999.0,
-                    score_vswr=999.0, score_avoidance=0.0,
-                    nec2_used=False, nec2_ok=False, note=_note,
-                    wire_slope_end_m=wire_slope_end_m,
-                    cp_end_z_m=_cp_z, cp_reach_m=_cp_x,
-                )
-                results.append(cand)
-            else:
-                cand = score_candidate(
-                    wire_len_m=w,
-                    cp_len_m=c,
-                    calc_rows=calc_rows,
-                    unun_ratio=unun_ratio,
-                    run=run,
-                    cp_angle_deg=cp_angle_deg,
-                    cp_end_z_m=_cp_z,
-                    cp_reach_m=_cp_x,
-                    nec2_strict=True,
-                )
-                cand.wire_slope_end_m = wire_slope_end_m
-                cand.segs_per_half_wave = _geo.segs_per_half_wave
-                cand.feed_fused = _geo.fused_feed
-                cand.feed_seg = _geo.feed_seg
-                cand.feed_offset_frac_seg = _geo.feed_offset_frac_seg
-                if not _geo.ok:
-                    # Geometry sat inside the NEC-2 ground singularity: nec2c
-                    # returns numbers without complaining, so flag them here.
-                    cand.nec2_ok = False
-                    cand.note = (cand.note + " geometry too close to ground "
-                                             "(NEC2 result unreliable)").strip()
-                results.append(cand)
+                run: Optional[NEC2Run] = None
+                _parse_exc: Optional[BaseException] = None
+                if run_nec2c(nec2c_bin, nec_p, out_p):
+                    try:
+                        # parse_deck=False: this runs once per grid candidate
+                        # (potentially thousands of times). The deck-derived
+                        # fields it would fill (cp_type, _has_rp_card,
+                        # _wire_slope_end_m, _cp_from_deck) are write-only —
+                        # score_candidate() below never reads them — so
+                        # skip the extra .nec re-open + regex pass here.
+                        _r = parse_nec2_output(out_p, debug=False,
+                                                explicit_nec_path=nec_p,
+                                                parse_deck=False)
+                        if _r is not None and not _r.freq_map():
+                            _r = None
+                        run = _r
+                    except Exception as _e:
+                        _parse_exc = _e
+
+                if run is None:
+                    _note = f"NEC2 failed: parser raised {_parse_exc!r}" if _parse_exc is not None else "NEC2 failed"
+                    cand = CandidateResult(
+                        wire_len_m=w, cp_len_m=c, cp_angle_deg=cp_angle_deg,
+                        score_combined=999.0, score_vswr_raw=999.0,
+                        score_vswr=999.0, score_avoidance=0.0,
+                        nec2_used=False, nec2_ok=False, note=_note,
+                        wire_slope_end_m=wire_slope_end_m,
+                        cp_end_z_m=_cp_z, cp_reach_m=_cp_x,
+                    )
+                    results.append(cand)
+                else:
+                    cand = score_candidate(
+                        wire_len_m=w,
+                        cp_len_m=c,
+                        calc_rows=calc_rows,
+                        unun_ratio=unun_ratio,
+                        run=run,
+                        cp_angle_deg=cp_angle_deg,
+                        cp_end_z_m=_cp_z,
+                        cp_reach_m=_cp_x,
+                        nec2_strict=True,
+                    )
+                    cand.wire_slope_end_m = wire_slope_end_m
+                    cand.segs_per_half_wave = _geo.segs_per_half_wave
+                    cand.feed_fused = _geo.fused_feed
+                    cand.feed_seg = _geo.feed_seg
+                    cand.feed_offset_frac_seg = _geo.feed_offset_frac_seg
+                    if not _geo.ok:
+                        # Geometry sat inside the NEC-2 ground singularity: nec2c
+                        # returns numbers without complaining, so flag them here.
+                        cand.nec2_ok = False
+                        cand.note = (cand.note + " geometry too close to ground "
+                                                 "(NEC2 result unreliable)").strip()
+                    results.append(cand)
+            finally:
+                _unlink_quiet(nec_p)
+                _unlink_quiet(out_p)
 
     if verbose:
         print(T("sweep_nec2_done").format(total))
@@ -17790,4 +17849,12 @@ def _launch_gui() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Nec2WorkspaceError as _ws_err:
+        # The scratch filesystem gave out mid-sweep.  That is an environment
+        # problem, not a bug in the model, so print the actionable line
+        # instead of a traceback that buries it.
+        print()
+        print(f"{Fore.RED}ERROR: {_ws_err}{Style.RESET_ALL}")
+        sys.exit(1)
