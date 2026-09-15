@@ -304,6 +304,25 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "seg/media onda — NO dimensionar un acoplador con ella."),
         "it": '! X NON convergente: massima deriva di X {0:.1f} ohm contro una tolleranza di {1:.1f} ohm su {2}.  La reattanza si muove ancora a {3} seg/mezza onda — NON dimensionare un accoppiatore da essa.',
     },
+    "converge_x_trend_warn": {
+        "en": ("! X NOT converged (trend): successive refinements are not shrinking "
+               "(|dX| ratio {0:.2f}, needs < {1:.2f}) on {2}.  The endpoint spread is "
+               "inside tolerance only because the density window sampled is narrow — "
+               "re-run with a wider --converge range or a finer base segmentation "
+               "before sizing a matching network from X."),
+        "es": ("! X SIN convergir (tendencia): los refinamientos sucesivos no se "
+               "reducen (razón |dX| {0:.2f}, se requiere < {1:.2f}) en {2}.  La "
+               "dispersión entre extremos está dentro de tolerancia sólo porque la "
+               "ventana de densidad muestreada es estrecha — reejecutar con un rango "
+               "--converge más amplio o una segmentación base más fina antes de "
+               "dimensionar un acoplador con X."),
+        "it": ('! X NON convergente (andamento): i raffinamenti successivi non si '
+               'riducono (rapporto |dX| {0:.2f}, richiesto < {1:.2f}) su {2}.  La '
+               'dispersione fra estremi rientra nella tolleranza solo perché la '
+               'finestra di densità campionata è stretta — rieseguire con un '
+               'intervallo --converge più ampio o una segmentazione base più fine '
+               'prima di dimensionare un accoppiatore da X.'),
+    },
     "converge_unc_pair": {
         "en": "Published uncertainty: R ±{0:.1f}% of R, X ±{1:.1f} ohm (both measured).",
         "es": "Incertidumbre publicada: R ±{0:.1f}% de R, X ±{1:.1f} ohm (ambas medidas).",
@@ -3562,6 +3581,25 @@ CONVERGENCE_X_TOL_OHM_MIN = 5.0   # absolute floor of the X tolerance, ohm
 CONVERGENCE_X_TOL_Z_PCT   = 2.0   # ...or this % of |Z|, whichever is larger
 SEGS_X_UNCERTAINTY_FLOOR_OHM = 1.0  # never publish X as better than +/-1 ohm
 
+# The tolerance test above is a pure endpoint-spread check: |X(coarsest) -
+# X(finest)| <= tol_X.  It has no visibility into whether the refinements in
+# BETWEEN are actually shrinking towards that finest value.  A quantity that
+# drifts linearly with segment length (not yet converging at all) can still
+# pass it, as long as the density window sampled happens to be narrow enough
+# that the endpoint spread lands under tol_X — the check simply never looks
+# at the middle row(s).
+#
+# The fix is a Richardson-style trend check: compare the delta between the
+# two coarsest rows against the delta between the two finest rows. With the
+# default CONVERGENCE_FACTORS (0.5x, 1x, 2x) that ratio is exactly 2 between
+# successive densities, and a properly converging quantity should shrink by
+# roughly that factor each step; anything close to 1.0 means the sequence is
+# still drifting near-linearly and the endpoint test alone cannot see it.
+# Needs at least 3 accepted densities (2 deltas) — with only 2 rows (e.g.
+# FAST_RUN_CONVERGENCE_FACTORS) there is nothing to compare and the trend
+# check is skipped rather than guessed at.
+CONVERGENCE_X_TREND_MAX_RATIO = 0.75   # |dX(fine pair)| / |dX(coarse pair)| must be below this
+
 # ── Radiation re-ranking (gain / take-off angle) ───────────────────────────
 # The sweep scores impedance only: its decks carry no RP card, which is what
 # makes it fast.  A candidate that is a perfect match but fires straight up is
@@ -6169,8 +6207,11 @@ class ConvergenceReport:
     x_tol_ohm: float = 0.0                # tolerance the worst X drift was judged against
     x_drift_bands: List[str] = field(default_factory=list)    # X drift over tolerance
     sign_flip_bands: List[str] = field(default_factory=list)  # X changes sign
+    x_trend_ratio: Optional[float] = None      # worst |dX(fine)| / |dX(coarse)| seen
+    x_trend_bands: List[str] = field(default_factory=list)    # bands failing the trend test
+    x_trend_checked: bool = False              # True once >=3 good rows made the test possible
     converged_r: bool = True              # max_r_drift_pct <= CONVERGENCE_R_TOL_PCT
-    converged_x: bool = True              # every band inside its X tolerance, no sign flip
+    converged_x: bool = True              # every band inside its X tolerance, no sign flip, no bad trend
     converged: bool = True                # converged_r AND converged_x
     ran: bool = False
     note: str = ""
@@ -6429,8 +6470,44 @@ def check_segmentation_convergence(
                 rep.x_drift_bands.append(b)
             if X_other * X_fine < 0.0 and b not in rep.sign_flip_bands:
                 rep.sign_flip_bands.append(b)
+
+    # Trend check (B-3): the endpoint-spread test above only ever compares
+    # each row against the finest one, so a band whose X is still drifting
+    # near-linearly across the WHOLE density window can pass it as long as
+    # the window is narrow enough.  Guard against that by requiring the delta
+    # between the two finest rows to be meaningfully smaller than the delta
+    # between the two coarsest rows — a converging sequence must decelerate;
+    # one that doesn't is flagged even when the raw endpoint spread is inside
+    # tol_X.  `good` is ascending by segs_per_half_wave, so [0]/[1] are the
+    # two coarsest and [-2]/[-1] are the two finest usable rows.
+    if len(good) >= 3:
+        rep.x_trend_checked = True
+        _coarse_lo, _coarse_hi = good[0], good[1]
+        _fine_lo, _fine_hi = good[-2], good[-1]
+        for b, X_fine in fine_row.band_X.items():
+            X_coarse_lo = _coarse_lo.band_X.get(b)
+            X_coarse_hi = _coarse_hi.band_X.get(b)
+            X_fine_lo = _fine_lo.band_X.get(b)
+            X_fine_hi = _fine_hi.band_X.get(b)
+            if None in (X_coarse_lo, X_coarse_hi, X_fine_lo, X_fine_hi):
+                continue
+            d_coarse = abs(X_coarse_hi - X_coarse_lo)
+            d_fine = abs(X_fine_hi - X_fine_lo)
+            if d_coarse <= 1e-9:
+                # No detectable movement between the two coarsest rows at
+                # all — nothing to compare the fine-pair delta against, and
+                # treating a near-zero denominator as "diverging" would be a
+                # false flag, not a genuine one.
+                continue
+            ratio = d_fine / d_coarse
+            if rep.x_trend_ratio is None or ratio > rep.x_trend_ratio:
+                rep.x_trend_ratio = ratio
+            if ratio > CONVERGENCE_X_TREND_MAX_RATIO and b not in rep.x_trend_bands:
+                rep.x_trend_bands.append(b)
+
     rep.converged_r = rep.max_r_drift_pct <= CONVERGENCE_R_TOL_PCT
-    rep.converged_x = not rep.x_drift_bands and not rep.sign_flip_bands
+    rep.converged_x = (not rep.x_drift_bands and not rep.sign_flip_bands
+                        and not rep.x_trend_bands)
     rep.converged = rep.converged_r and rep.converged_x
     return rep
 
@@ -6475,10 +6552,21 @@ def convergence_lines(rep: ConvergenceReport,
     if rep.converged_x:
         out.append(T("converge_x_ok").format(rep.max_x_drift_ohm, rep.x_tol_ohm))
     else:
-        out.append(T("converge_x_warn").format(
-            rep.max_x_drift_ohm, rep.x_tol_ohm,
-            ", ".join(rep.x_drift_bands) or ", ".join(rep.sign_flip_bands),
-            rep.finest_spw))
+        # The endpoint-spread verdict can still read "converged" on its own
+        # numbers while the trend check has independently vetoed it (a band
+        # drifting near-linearly whose endpoint spread happens to be inside
+        # tol_X) — only fall back to the drift/sign-flip band list when there
+        # actually is one, so this line never renders an empty band list.
+        if rep.x_drift_bands or rep.sign_flip_bands:
+            out.append(T("converge_x_warn").format(
+                rep.max_x_drift_ohm, rep.x_tol_ohm,
+                ", ".join(rep.x_drift_bands) or ", ".join(rep.sign_flip_bands),
+                rep.finest_spw))
+    if rep.x_trend_bands:
+        out.append(T("converge_x_trend_warn").format(
+            rep.x_trend_ratio if rep.x_trend_ratio is not None else float("nan"),
+            CONVERGENCE_X_TREND_MAX_RATIO,
+            ", ".join(rep.x_trend_bands)))
     _ux = rep.x_uncertainty_ohm()
     if _ux is not None:
         out.append(T("converge_unc_pair").format(rep.r_uncertainty_pct(), _ux))
