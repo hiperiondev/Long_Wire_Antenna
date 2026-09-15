@@ -14407,8 +14407,9 @@ def _launch_gui() -> None:
                                    "Above the SRF the winding is not an autotransformer and "
                                    "the tap model R/n^2 does not hold. Affected bands: {b}. "
                                    "Use a larger former, wider spacing or a separate coil per band."),
-            "utk_srf_floor":      ("! The self-resonance cap could not be applied: the port "
-                                   "inductance and tap head-room already require {n} turns. "
+            "utk_srf_floor":      ("! The self-resonance cap could not be carried far enough: the "
+                                   "port inductance and tap head-room require at least {n} turns, "
+                                   "which still leaves the winding above its own self-resonance. "
                                    "This former cannot cover these bands with one coil."),
             "utk_shunt_bad":      ("! WINDING LOADING: the turns below the tap shunt the antenna "
                                    "port with less than {r}x |Z| on {b}; the transformed values "
@@ -14934,9 +14935,10 @@ def _launch_gui() -> None:
                                    "autotransformador y el modelo R/n^2 no vale. Bandas "
                                    "afectadas: {b}. Usar un formador mayor, más separación o "
                                    "una bobina por banda."),
-            "utk_srf_floor":      ("! No se pudo aplicar el límite de autorresonancia: la "
-                                   "inductancia de puerto y el margen de tomas ya exigen {n} "
-                                   "espiras. Este formador no cubre estas bandas con una sola bobina."),
+            "utk_srf_floor":      ("! El tope de autorresonancia no pudo llevarse lo bastante lejos: "
+                                   "la inductancia de puerto y el margen de tomas exigen al menos {n} "
+                                   "espiras, con lo que el bobinado sigue por encima de su propia "
+                                   "autorresonancia. Este formador no cubre estas bandas con una sola bobina."),
             "utk_shunt_bad":      ("! CARGA DEL BOBINADO: las espiras por debajo de la toma ponen "
                                    "en paralelo con el puerto de antena menos de {r}x |Z| en {b}; "
                                    "los valores transformados de esas bandas son optimistas."),
@@ -15426,7 +15428,7 @@ def _launch_gui() -> None:
             "utk_srf_margin": "NO — la SRF supera tutte le bande ma non il margine di {m}x",
             "utk_srf_cap": "! L'avvolgimento di riferimento è stato accorciato a {n} spire per mantenere la bobina sotto la propria autorisonanza.",
             "utk_srf_bad": "! AUTORISONANZA: la SRF di {srf} MHz è inferiore a {need} MHz. Sopra la SRF l'avvolgimento non è più un autotrasformatore e il modello di presa R/n^2 non è valido. Bande interessate: {b}. Usare un supporto più grande, una spaziatura maggiore o una bobina separata per banda.",
-            "utk_srf_floor": "! Non è stato possibile applicare il limite di autorisonanza: l'induttanza di porta e il margine della presa richiedono già {n} spire. Questo supporto non può coprire queste bande con una sola bobina.",
+            "utk_srf_floor": "! Il limite di autorisonanza non ha potuto essere spinto abbastanza: l'induttanza di porta e il margine della presa richiedono almeno {n} spire, per cui l'avvolgimento resta sopra la propria autorisonanza. Questo supporto non può coprire queste bande con una sola bobina.",
             "utk_shunt_bad": "! CARICO DELL'AVVOLGIMENTO: le spire sotto la presa derivano la porta dell'antenna con meno di {r}x |Z| su {b}; i valori trasformati per quelle bande sono ottimistici.",
             "utk_shunt_comp_bad": "! RAMO IN DERIVAZIONE: un solo L/C in derivazione cancella la suscettanza, non la reattanza: lascia la porta a (R'^2+X'^2)/R', cioè ROS > {s} su {b}. Quei valori sono cancellazione di reattanza, NON adattamento — usare il ramo serie.",
             "utk_above": 'Nota: {n} spire pendono sopra la presa più alta, a circuito aperto. Formano uno stub accoppiato che questo modello non include.',
