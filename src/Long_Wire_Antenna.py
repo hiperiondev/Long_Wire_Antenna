@@ -1784,8 +1784,10 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                " kΩ points are the ones to avoid, while a 49:1/64:1 transformer exists"
                " precisely to match them (end-fed half-wave) and it is then the low-R points"
                " that load it badly.  The avoidance score is 1.0 on the resonance class the"
-               " selected ratio wants, 0.0 on the other and 0.5 midway, averaged over ALL"
-               " defined bands — including those marked inactive for VSWR scoring."
+               " selected ratio wants, 0.0 on the other and 0.5 midway.  The figure that"
+               " enters the ranking (column -0.25xAv(a)) is the mean over the ACTIVE bands"
+               " only; the report also prints a mean over ALL defined bands, which is"
+               " informational and does not affect the score."
                " 1.0 = ★★★ EXCELLENT; values below 0.24 flag RESONANCE RISK, meaning the"
                " wire sits on the wrong resonance class for the transformer in use."),
         "es": ("El punto de alimentación alterna cada λ/4: los múltiplos impares (λ/4, 3λ/4 …)"
@@ -1796,11 +1798,13 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                " 49:1/64:1 existe justamente para adaptarlos (end-fed de media onda) y entonces"
                " son los puntos de R baja los que lo cargan mal.  La puntuación de evitación"
                " vale 1.0 sobre la clase de resonancia que quiere la relación seleccionada, 0.0"
-               " sobre la otra y 0.5 en el punto medio, promediada sobre TODAS las bandas"
-               " definidas — incluidas las marcadas como inactivas para ROS.  1.0 = ★★★"
+               " sobre la otra y 0.5 en el punto medio.  La cifra que entra en el ranking"
+               " (columna -0.25xAv(a)) es la media sobre las bandas ACTIVAS únicamente; el"
+               " informe también imprime una media sobre TODAS las bandas definidas, que es"
+               " informativa y no afecta a la puntuación.  1.0 = ★★★"
                " EXCELENTE; valores inferiores a 0.24 indican RIESGO DE RESONANCIA: el hilo"
                " está en la clase de resonancia equivocada para el transformador en uso."),
-        "it": "Il punto di alimentazione alterna ogni λ/4: i multipli dispari (λ/4, 3λ/4 …) sono massimi di corrente con R bassa, di decine di ohm, mentre i multipli pari (λ/2, λ, 3λ/2 …) sono massimi di tensione di diversi kΩ.  Solo UNA di queste due classi è negativa, e quale dipende dall'UnUn: alimentando direttamente o con rapporto basso i punti a kΩ sono quelli da evitare, mentre un trasformatore 49:1/64:1 esiste proprio per adattarli (end-fed a mezza onda) e allora sono i punti a R bassa che lo caricano male.  Il punteggio di evitamento vale 1.0 sulla classe di risonanza che il rapporto selezionato desidera, 0.0 sull'altra e 0.5 a metà strada, mediato su TUTTE le bande definite — incluse quelle segnate come inattive per il ROS. 1.0 = ★★★ ECCELLENTE; valori sotto 0.24 segnalano RISCHIO DI RISONANZA, cioè il filo si trova nella classe di risonanza sbagliata per il trasformatore in uso.",
+        "it": "Il punto di alimentazione alterna ogni λ/4: i multipli dispari (λ/4, 3λ/4 …) sono massimi di corrente con R bassa, di decine di ohm, mentre i multipli pari (λ/2, λ, 3λ/2 …) sono massimi di tensione di diversi kΩ.  Solo UNA di queste due classi è negativa, e quale dipende dall'UnUn: alimentando direttamente o con rapporto basso i punti a kΩ sono quelli da evitare, mentre un trasformatore 49:1/64:1 esiste proprio per adattarli (end-fed a mezza onda) e allora sono i punti a R bassa che lo caricano male.  Il punteggio di evitamento vale 1.0 sulla classe di risonanza che il rapporto selezionato desidera, 0.0 sull'altra e 0.5 a metà strada.  La cifra che entra nella classifica (colonna -0.25xAv(a)) è la media sulle bande ATTIVE soltanto; il report stampa anche una media su TUTTE le bande definite, che è informativa e non influisce sul punteggio. 1.0 = ★★★ ECCELLENTE; valori sotto 0.24 segnalano RISCHIO DI RISONANZA, cioè il filo si trova nella classe di risonanza sbagliata per il trasformatore in uso.",
     },
     "note2_title": {
         "en": "Counterpoise length selection",
@@ -2440,6 +2444,21 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "radiation_col_gain":  {"en": "Max dBi",    "es": "Máx dBi", "it": 'Max dBi'},
     "radiation_col_toa":   {"en": "TOA",        "es": "TOA", "it": 'TOA'},
     "radiation_col_gtoa":  {"en": "dBi @ TOAobj", "es": "dBi @ TOAobj", "it": 'dBi @ TOAobj'},
+    "warn_no_toa_sample": {
+        "en": ("⚠  No usable pattern sample at {1:.1f}° elevation for: {0}.  NEC-2 reports\n"
+               "     no gain at the horizon over a lossy ground, so that elevation is absent\n"
+               "     from the table and is shown as n/a instead of being read off the\n"
+               "     nearest one.  Those bands contribute nothing to the gain term."),
+        "es": ("⚠  Sin muestra utilizable del diagrama a {1:.1f}° de elevación en: {0}.  NEC-2\n"
+               "     no reporta ganancia en el horizonte sobre suelo con pérdidas, así que esa\n"
+               "     elevación no existe en la tabla y se muestra como n/a en vez de tomarse de\n"
+               "     la más cercana.  Esas bandas no aportan nada al término de ganancia."),
+        "it": ("⚠  Nessun campione utilizzabile del diagramma a {1:.1f}° di elevazione per: {0}.\n"
+               "     NEC-2 non riporta guadagno all'orizzonte su terreno con perdite, quindi\n"
+               "     quella elevazione è assente dalla tabella e viene mostrata come n/a invece\n"
+               "     di essere letta dalla più vicina.  Quelle bande non contribuiscono al\n"
+               "     termine di guadagno."),
+    },
     "warn_high_toa": {
         "en": ("WARNING: on {0} the main lobe peaks at {1:.0f}° above the horizon — "
                "this antenna radiates mostly upward (NVIS/cloud-warmer) on that band, "
@@ -2506,6 +2525,16 @@ class FreqPoint:
     # optimiser can score gain at a chosen take-off angle instead of only
     # reading the global maximum.
     rp_rows: List[Tuple[float, float, float]] = field(default_factory=list)
+    # Extent of the theta grid that actually carries usable gain samples, in
+    # NEC polar degrees (0 = zenith, 90 = horizon).  This is NOT the grid the
+    # RP card asked for: nec2c prints its "no gain here" sentinel (-999.99)
+    # for the whole theta = 90 ring over a lossy ground, so the parser drops
+    # that ring and the usable span stops short of the horizon.  Kept so a
+    # consumer asking for gain at an elevation outside the span can tell the
+    # difference between "measured" and "nearest sample available".  None when
+    # no RP table was parsed.
+    min_sampled_theta_deg: Optional[float] = None
+    max_sampled_theta_deg: Optional[float] = None
 
     @property
     def Z_mag(self):
@@ -3192,6 +3221,15 @@ def parse_nec2_output(filepath: str, debug: bool = False,
             phi   = _safe_float(rm.group(2))
             gain  = _safe_float(rm.group(total_group))
             if gain <= -200.0:
+                # nec2c's "no gain here" sentinel (-999.99), printed for the
+                # whole theta = 90 ring over a lossy ground — physically
+                # right, the horizon gain of a structure over real earth is
+                # genuinely -inf.  The row is unusable as a gain sample, so
+                # it is dropped, but dropping it silently removes an entire
+                # elevation from the table: min/max_sampled_theta_deg below
+                # record what survived so gain_at_elevation() can refuse to
+                # answer for an elevation that was never measured instead of
+                # handing back the nearest ring.
                 continue
             rp_gains.append((theta, phi, gain))
 
@@ -3209,6 +3247,9 @@ def parse_nec2_output(filepath: str, debug: bool = False,
             # Keep the whole table: the global maximum alone cannot tell the
             # optimiser what the antenna does at a low take-off angle.
             fp.rp_rows = rp_gains
+            _usable_theta = [t for (t, _p, _g) in rp_gains]
+            fp.min_sampled_theta_deg = min(_usable_theta)
+            fp.max_sampled_theta_deg = max(_usable_theta)
 
         fp.vswr50 = fp.compute_vswr50()
         run.freqs.append(fp)
@@ -5111,6 +5152,13 @@ class CandidateResult:
     band_gain_max: Dict[str, float] = field(default_factory=dict)
     band_toa:      Dict[str, float] = field(default_factory=dict)
     band_gain_toa: Dict[str, float] = field(default_factory=dict)
+    # Bands whose pattern WAS computed but which carry no usable sample at the
+    # requested take-off angle (typically --target-toa 0: NEC-2 reports no gain
+    # at the horizon over a lossy ground, so that ring is absent from the
+    # table).  Such a band is missing from band_gain_toa and contributes
+    # nothing to gain_toa_mean; the list exists so the report can print "n/a"
+    # and say why, instead of letting an absent measurement read as 0.00 dBi.
+    bands_no_toa_sample: List[str] = field(default_factory=list)
     gain_toa_mean: Optional[float] = None   # mean of band_gain_toa (active bands)
     toa_worst_deg: Optional[float] = None   # highest (worst) TOA across active bands
     pattern_ok:    bool  = False            # True once pattern data was obtained
@@ -5901,6 +5949,14 @@ def refine_peak_gain_toa(
     return g_vertex, 90.0 - t_vertex
 
 
+# Tolerance for comparing a requested theta cut against the sampled theta
+# grid.  The grid values come from parsed text (e.g. "87.50"), so exact
+# equality is fine in principle; the epsilon only absorbs the 90.0 - elev
+# subtraction and keeps a request that lands exactly on the last sampled
+# ring from being rejected as out of range.
+_THETA_EPS_DEG = 1e-6
+
+
 def gain_at_elevation(rp_rows: List[Tuple[float, float, float]],
                       elev_deg: float) -> Optional[float]:
     """
@@ -5912,7 +5968,12 @@ def gain_at_elevation(rp_rows: List[Tuple[float, float, float]],
     linearly interpolated between the two theta rows that bracket the cut,
     then the maximum over azimuth is returned — that is the gain the
     station actually gets at that take-off angle if the antenna is pointed
-    the right way.  Returns None when there is nothing to interpolate.
+    the right way.  Returns None when there is nothing to interpolate — which
+    now includes the case where the requested elevation lies OUTSIDE the theta
+    range the table actually samples.  The horizon (elev = 0, theta = 90) is
+    the practical case: nec2c reports no gain there over a lossy ground and
+    the parser drops the whole ring, so there is no measurement to report and
+    the function says so instead of returning the nearest ring's value.
 
     The interpolation is done in LINEAR POWER (10**(dB/10)), not in dB, and
     only the final result is converted back to dB. Near a lobe peak, gain
@@ -5940,6 +6001,15 @@ def gain_at_elevation(rp_rows: List[Tuple[float, float, float]],
         tdb.sort(key=lambda x: x[0])
         ths = [x[0] for x in tdb]
         dbs = [x[1] for x in tdb]
+        if theta_cut < ths[0] - _THETA_EPS_DEG or theta_cut > ths[-1] + _THETA_EPS_DEG:
+            # Outside the theta range this azimuth actually carries samples
+            # for.  Do NOT clamp to the nearest one: the horizon ring
+            # (theta = 90) is dropped by the parser whenever nec2c prints its
+            # -999.99 sentinel over a lossy ground, so a request for gain at
+            # 0 deg elevation would otherwise be answered with the 2.5 deg
+            # sample — several dB optimistic, at an elevation the pattern
+            # never measured, and with nothing in the output to say so.
+            continue
         if len(ths) == 1:
             val = dbs[0]
         elif theta_cut <= ths[0]:
@@ -6050,6 +6120,13 @@ def evaluate_pattern(
         if g is not None:
             cand.band_gain_toa[cr.band] = round(g, 2)
             gains_at_toa.append(g)
+        else:
+            # The pattern ran, but this elevation is outside the sampled
+            # theta range (see gain_at_elevation).  Leave the band out of
+            # band_gain_toa — no data, no score contribution — and record it
+            # so the report can say so rather than print a fabricated 0.00.
+            if cr.band not in cand.bands_no_toa_sample:
+                cand.bands_no_toa_sample.append(cr.band)
 
     if not got:
         return False
@@ -6996,9 +7073,19 @@ def write_report(
                 if _toa is None:
                     continue
                 _gmax = best.band_gain_max.get(_cr.band, 0.0)
-                _gt   = best.band_gain_toa.get(_cr.band, 0.0)
+                _gt   = best.band_gain_toa.get(_cr.band)
+                # An absent sample is printed as n/a: formatting None as 0.00
+                # would publish a number the model never produced, which is
+                # the failure this column exists to avoid.
+                _gt_s = f"{_gt:12.2f}" if _gt is not None else f"{'n/a':>12}"
                 ln(f"    {_cr.band:>8}  {_cr.freq_mhz:7.3f}  "
-                   f"{_gmax:10.2f}  {_toa:6.0f}°  {_gt:12.2f}")
+                   f"{_gmax:10.2f}  {_toa:6.0f}°  {_gt_s}")
+            _no_s = [b for b in best.bands_no_toa_sample
+                     if b in {c.band for c in calc_rows if c.active}]
+            if _no_s:
+                ln("")
+                ln("  " + T("warn_no_toa_sample").format(", ".join(_no_s),
+                                                         target_toa_deg))
             for _cr in [c for c in calc_rows if c.active]:
                 _toa = best.band_toa.get(_cr.band)
                 if _toa is not None and _toa >= HIGH_TOA_WARN_DEG:
@@ -13260,6 +13347,7 @@ def main() -> None:
                         _rf.band_gain_max = dict(cand.band_gain_max)
                         _rf.band_toa      = dict(cand.band_toa)
                         _rf.band_gain_toa = dict(cand.band_gain_toa)
+                        _rf.bands_no_toa_sample = list(cand.bands_no_toa_sample)
                         _rf.gain_toa_mean = cand.gain_toa_mean
                         _rf.toa_worst_deg = cand.toa_worst_deg
                         _rf.pattern_ok    = cand.pattern_ok
@@ -13441,10 +13529,16 @@ def main() -> None:
                     continue
                 _toa_col = (Fore.RED if _toa >= HIGH_TOA_WARN_DEG else
                             Fore.YELLOW if _toa >= 45.0 else Fore.GREEN)
+                _gt_s = f"{_gt:12.2f}" if _gt is not None else f"{'n/a':>12}"
                 print(f"    {b:>8}  {cr.freq_mhz:7.3f}  "
                       f"{(_gmax if _gmax is not None else 0.0):10.2f}  "
                       f"{_toa_col}{_toa:6.0f}°{Style.RESET_ALL}  "
-                      f"{(_gt if _gt is not None else 0.0):12.2f}")
+                      f"{_gt_s}")
+            _no_sample = [c.band for c in calc_rows
+                          if c.active and c.band in best.bands_no_toa_sample]
+            if _no_sample:
+                print(f"  {Fore.YELLOW}" + T("warn_no_toa_sample").format(
+                    ", ".join(_no_sample), _tgt_toa_show) + f"{Style.RESET_ALL}")
             # Conductor loss actually measured by NEC2, when the run reported a
             # power budget.  Silent when it did not — the figure is either real
             # or absent, never assumed.
