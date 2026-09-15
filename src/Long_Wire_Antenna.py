@@ -8770,11 +8770,16 @@ def plot_results(
                     marker="D", s=160, c="black", zorder=6, label=T("plot_best_label"))
         ax1.annotate(f"Best\n{ranked[0].wire_len_m:.2f}m / {ranked[0].cp_len_m:.2f}m",
                      xy=(ranked[0].wire_len_m, ranked[0].cp_len_m),
-                     xytext=(10, 10), textcoords="offset points", fontsize=8)
+                     xytext=(6, -18), textcoords="offset points", fontsize=8,
+                     annotation_clip=True)
     ax1.set_xlabel(T("plot_xlabel_wire"))
     ax1.set_ylabel(T("plot_ylabel_cp"))
     ax1.set_title(T("plot_heatmap_title"))
-    ax1.legend(fontsize=8)
+    # Legend placed outside the axes (to the right of the attached colorbar)
+    # so it never sits on top of a data point on a coarse grid; framealpha
+    # keeps it legible without fully hiding whatever is behind it.
+    ax1.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.28, 1.0),
+               framealpha=0.85, borderaxespad=0.0)
     ax1.grid(True, alpha=0.3)
 
     ax2 = fig.add_subplot(gs[0, 2])
