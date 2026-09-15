@@ -59,6 +59,7 @@ import itertools
 import webbrowser
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from colorama import Fore, Style, init as _cinit
@@ -174,6 +175,46 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "lo tolera; la geometría ganadora se recalcula igualmente con la "
                "segmentación fina."),
         "it": 'Scansione con segmentazione grossolana ({0} seg/mezza onda).  La classifica lo tollera; la geometria vincente viene ricalcolata comunque con la segmentazione fine.',
+    },
+    "help_fast_run": {
+        "en": ("Fast run: solve independent NEC2 decks in parallel (see --jobs), "
+               "sweep at the coarse density, refine at most {0} table rows "
+               "(the winner and the Pareto front are always refined), shorten "
+               "the radiation shortlist to {1} and drop the 2.0x convergence "
+               "arm.  Published impedances stay at the fine density."),
+        "es": ("Corrida rapida: resuelve en paralelo los decks NEC2 independientes "
+               "(ver --jobs), barre con segmentacion gruesa, refina como maximo {0} "
+               "filas de la tabla (el ganador y el frente de Pareto se refinan "
+               "siempre), acorta la lista corta de radiacion a {1} y descarta el "
+               "brazo 2.0x de convergencia.  Las impedancias publicadas siguen "
+               "calculandose con la segmentacion fina."),
+        "it": ("Esecuzione veloce: risolve in parallelo i deck NEC2 indipendenti "
+               "(vedi --jobs), scansione con segmentazione grossolana, rifinisce al "
+               "massimo {0} righe della tabella (il vincitore e il fronte di Pareto "
+               "vengono sempre rifiniti), accorcia la lista di radiazione a {1} ed "
+               "elimina il ramo 2.0x della convergenza.  Le impedenze pubblicate "
+               "restano alla segmentazione fine."),
+    },
+    "help_jobs": {
+        "en": ("Worker threads used by --fast-run for independent NEC2 decks "
+               "(default: one per core, capped at 16).  Ignored without "
+               "--fast-run."),
+        "es": ("Hilos de trabajo que usa --fast-run para decks NEC2 independientes "
+               "(por defecto: uno por nucleo, tope 16).  Se ignora sin --fast-run."),
+        "it": ("Thread di lavoro usati da --fast-run per i deck NEC2 indipendenti "
+               "(predefinito: uno per core, massimo 16).  Ignorato senza "
+               "--fast-run."),
+    },
+    "fast_run_banner": {
+        "en": ("  FAST RUN: {0} parallel NEC2 workers, coarse sweep ({1} seg/half "
+               "wave), <= {2} refined table rows, {3} pattern candidates, 0.5x "
+               "convergence only."),
+        "es": ("  CORRIDA RAPIDA: {0} trabajadores NEC2 en paralelo, barrido grueso "
+               "({1} seg/media onda), <= {2} filas refinadas, {3} candidatos de "
+               "patron, convergencia solo 0.5x."),
+        "it": ("  ESECUZIONE VELOCE: {0} worker NEC2 paralleli, scansione grossolana "
+               "({1} seg/mezza onda), <= {2} righe rifinite, {3} candidati di "
+               "diagramma, convergenza solo 0.5x."),
     },
     "help_converge": {
         "en": ("Re-run the winning geometry at half and twice the working "
@@ -3398,6 +3439,57 @@ SEGS_PER_HALF_WAVE_MAX = 400    # sanity cap (deck size / runtime)
 CONVERGENCE_FACTORS = (0.5, 2.0)
 CONVERGENCE_R_TOL_PCT = 3.0     # R drift above this is flagged in the report
 
+# ── Fast run mode (--fast-run / GUI "Fast" check box) ──────────────────────
+# OFF (default) changes nothing: every stage runs exactly as before.  ON
+# trades a documented amount of thoroughness for wall-clock time, and ONLY in
+# ways that stay visible in the report:
+#
+#   * independent nec2c decks are solved concurrently (the sweep, the fine
+#     refinement pass and the radiation re-ranking pass).  nec2c is an external
+#     process, so a thread pool is enough — the GIL is released for the whole
+#     solve — and no candidate state is shared between workers;
+#   * the sweep runs at the coarse segmentation, like --fast;
+#   * fewer candidates are recomputed at the publishing density (the winner and
+#     the Pareto front always are; the tail of the TOP-N table keeps its
+#     sweep-density tag, which the report already prints per row);
+#   * the radiation re-ranking shortlist is shortened;
+#   * the convergence self-check keeps only the 0.5x arm.  The 2.0x arm doubles
+#     the segment count, and NEC-2 cost grows as ~N^3, so that single run can
+#     outweigh everything else in the program.
+#
+# Deliberately NOT part of this mode: memoising or caching solved decks (the
+# numbers must stay reproducible run-to-run and traceable to one nec2c
+# invocation), and per-band decks (that changes the physics the bands are
+# compared at, which is a modelling decision, not a speed switch).
+FAST_RUN_REFINE_TOP_N        = 5      # cap on the refined TOP-N tail
+FAST_RUN_RERANK_TOP_N        = 3      # cap on the radiation-pattern shortlist
+FAST_RUN_CONVERGENCE_FACTORS = (0.5,) # drop the expensive 2.0x arm
+
+# Timeout for the full-band run at the PUBLISHING density.  This is the
+# biggest deck in the program (every band, fine segmentation), so it cannot
+# share run_nec2c()'s 60 s default — the pattern pass already uses 180 s and
+# the convergence pass 300 s for strictly smaller work.  nec2_timeout_s()
+# scales it further when several decks are solved at once.
+FINE_REFINE_TIMEOUT_S = 900
+# A refinement pass that cannot refine anything must not be retried forever;
+# see the refine loop for why a failure used to re-select the same candidates
+# on every pass.
+MAX_REFINE_PASSES = 8
+
+
+def default_worker_count() -> int:
+    """Worker threads for --fast-run when --jobs is not given.
+
+    One per core, capped: the workers are almost pure I/O-wait on nec2c, but
+    each concurrent deck still costs its own NEC-2 matrix in that child
+    process, so an unbounded pool on a many-core box can run the machine out
+    of RAM on large geometries."""
+    try:
+        _n = os.cpu_count() or 1
+    except Exception:
+        _n = 1
+    return max(1, min(int(_n), 16))
+
 # ── Thin-wire kernel validity (segment length / wire radius) ───────────────
 # NEC-2's thin-wire approximation requires the segment length Delta to stay
 # comfortably larger than the wire radius a: Delta/a >= ~8 is the usual
@@ -4907,15 +4999,39 @@ def _unlink_quiet(path: Optional[str]) -> None:
         pass
 
 
-def run_nec2c(binary: str, nec_path: str, out_path: str,
-              timeout: int = 60) -> bool:
+def nec2_timeout_s(base_s: int, jobs: int = 1) -> int:
+    """Per-deck timeout, adjusted for how many decks are solved at once.
+
+    A fixed timeout is only meaningful for a serial run.  Under --fast-run the
+    decks compete for the same cores, so the WALL-CLOCK time of each one grows
+    once the pool is wider than the machine — and a timeout that fires is
+    indistinguishable, at the call site, from a geometry nec2c could not
+    solve.  The factor is therefore the oversubscription ratio (never below
+    1.0) plus a flat margin for memory-bandwidth contention, which shows up
+    even when every worker has a core of its own.
+    """
+    try:
+        _cores = os.cpu_count() or 1
+    except Exception:
+        _cores = 1
+    _over = max(1.0, float(max(1, int(jobs))) / float(_cores))
+    return int(max(1, round(base_s * _over * 1.5)))
+
+
+def run_nec2c_ex(binary: str, nec_path: str, out_path: str,
+                 timeout: int = 60) -> Tuple[bool, str]:
     """
     Run the NEC2 engine, auto-adapting the command-line syntax:
 
       • nec2c (classic):  nec2c -i INPUT -o OUTPUT
       • onec  (OpenNEC):  onec -o OUTPUT INPUT
 
-    Returns True on success, False on failure.
+    Returns (ok, reason).  `reason` is "" on success and a SHORT, printable
+    explanation otherwise.  The plain run_nec2c() wrapper below keeps the
+    boolean contract every existing call site expects, but a caller that has
+    to tell the user WHY a run failed — "timed out after 60 s" and "nec2c
+    exited 1" call for completely different remedies — can ask for it here
+    instead of reporting an unexplained failure.
     """
     kind = _nec2_engine_kind(binary)
     if kind == "onec":
@@ -4929,10 +5045,26 @@ def run_nec2c(binary: str, nec_path: str, out_path: str,
             capture_output=True, text=True, timeout=timeout, check=False,
         )
         if result.returncode != 0:
-            return False
-        return os.path.isfile(out_path) and os.path.getsize(out_path) > 0
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return False
+            _err = (result.stderr or result.stdout or "").strip().splitlines()
+            _tail = _err[-1][:160] if _err else "no diagnostic on stderr"
+            return False, f"{os.path.basename(binary)} exited {result.returncode}: {_tail}"
+        if not os.path.isfile(out_path):
+            return False, f"{os.path.basename(binary)} wrote no output file"
+        if os.path.getsize(out_path) <= 0:
+            return False, f"{os.path.basename(binary)} wrote an empty output file"
+        return True, ""
+    except subprocess.TimeoutExpired:
+        return False, f"timed out after {timeout} s"
+    except FileNotFoundError:
+        return False, f"engine not found: {binary}"
+    except OSError as _os_err:
+        return False, f"could not run {binary}: {_os_err}"
+
+
+def run_nec2c(binary: str, nec_path: str, out_path: str,
+              timeout: int = 60) -> bool:
+    """Boolean wrapper around run_nec2c_ex() — True on success."""
+    return run_nec2c_ex(binary, nec_path, out_path, timeout=timeout)[0]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5421,6 +5553,7 @@ def nec2_sweep(
     cp_stub_len_m: float = DEFAULT_CP_STUB_LEN_M,
     ground_model: str = DEFAULT_GROUND_MODEL,
     segs_per_half_wave: Optional[int] = None,
+    jobs: int = 1,
     verbose: bool = True,
 ) -> List[CandidateResult]:
     """
@@ -5461,18 +5594,26 @@ def nec2_sweep(
     _warned_geom: Set[str] = set()
 
     with tempfile.TemporaryDirectory(prefix="nec2opt_") as tmpdir:
-        for w, c in grid:
-            done += 1
+
+        def _eval_point(w: float, c: float):
+            """Evaluate ONE grid point and return (candidate, geometry warnings).
+
+            The body is exactly the one that used to sit inline in the sweep
+            loop; it was lifted into a function so that the serial path and the
+            --fast-run parallel path execute the SAME code instead of two
+            copies that can drift apart.  Nothing outside the function is
+            mutated: the deck name is derived from the geometry (so two workers
+            never collide on a scratch file), warnings are returned rather than
+            printed, and the caller is the only thing that touches `results`,
+            `_warned_geom` and the progress counter.
+            """
+            _geo_msgs: List[str] = []
             # CP angle and reach are consequences of (cp length, far-end height)
             if use_counterpoise:
                 _cvl, _chr, _cbot, _cp_x, _cp_z = _cp_geometry(c, wire_height_m, cp_z_target)
                 cp_angle_deg = _cp_angle_from_geometry(_cp_x, wire_height_m, _cp_z)
-                angle_label = f"{_cp_z:.2f} m / {cp_angle_deg:.1f}°"
             else:
                 c, _cp_x, _cp_z, cp_angle_deg = 0.0, None, None, 0.0
-                angle_label = "—"
-            if verbose:
-                print(T("sweep_nec2_progress").format(done, total, w, c, angle_label), end="\r")
 
             tag   = (f"w{w:.3f}_c{c:.3f}_e{_cp_z:.3f}" if _cp_z is not None
                      else f"w{w:.3f}_nocp")
@@ -5485,8 +5626,8 @@ def nec2_sweep(
             # 200x200 grid accumulated ~40 000 deck/output pairs and large
             # runs died with 'Disk quota exceeded' (Errno 122) part-way
             # through.  Each candidate now cleans up after itself, which
-            # keeps the sweep footprint at one deck plus one output no
-            # matter how big the grid is.
+            # keeps the sweep footprint at one deck plus one output per
+            # worker no matter how big the grid is.
             try:
                 try:
                     _geo = write_nec_deck(
@@ -5508,15 +5649,11 @@ def nec2_sweep(
                         segs_per_half_wave=segs_per_half_wave,
                     )
                     # The geometry builder may have clamped a wire end away from
-                    # the ground singularity.  Report each DISTINCT message once,
-                    # not once per point and not "only the first batch".
+                    # the ground singularity.  The messages are handed back to
+                    # the driver, which reports each DISTINCT one once — not
+                    # once per point, and not "only the first batch".
                     if _geo.warnings:
-                        _new_msgs = [m for m in _geo.warnings if m not in _warned_geom]
-                        if _new_msgs:
-                            _warned_geom.update(_new_msgs)
-                            print()
-                            for _wmsg in _new_msgs:
-                                print(f"  {Fore.YELLOW}WARNING: {_wmsg}{Style.RESET_ALL}")
+                        _geo_msgs = list(_geo.warnings)
                     # Always report the geometry that ended up in the deck: the
                     # builder may have raised a wire end off the ground, and a
                     # candidate whose printed end height differs from the simulated
@@ -5535,11 +5672,11 @@ def nec2_sweep(
                     # traceback after hours of sweeping.
                     if _is_disk_full_error(_io_err):
                         raise Nec2WorkspaceError(
-                            f"NEC2 scratch directory ran out of space after "
-                            f"{done}/{total} candidates ({tmpdir}): {_io_err.strerror}. "
+                            f"NEC2 scratch directory ran out of space "
+                            f"({tmpdir}): {_io_err.strerror}. "
                             f"Free space on that filesystem or point TMPDIR at "
                             f"one with room (roughly a few MB is enough — the "
-                            f"sweep keeps only one deck at a time)."
+                            f"sweep keeps only one deck at a time per worker)."
                         ) from _io_err
                     raise Nec2WorkspaceError(
                         f"NEC2 scratch directory unusable ({tmpdir}): {_io_err}"
@@ -5555,8 +5692,7 @@ def nec2_sweep(
                         wire_slope_end_m=wire_slope_end_m,
                         cp_end_z_m=_cp_z, cp_reach_m=_cp_x,
                     )
-                    results.append(cand)
-                    continue
+                    return cand, _geo_msgs
 
                 run: Optional[NEC2Run] = None
                 _parse_exc: Optional[BaseException] = None
@@ -5587,34 +5723,105 @@ def nec2_sweep(
                         wire_slope_end_m=wire_slope_end_m,
                         cp_end_z_m=_cp_z, cp_reach_m=_cp_x,
                     )
-                    results.append(cand)
-                else:
-                    cand = score_candidate(
-                        wire_len_m=w,
-                        cp_len_m=c,
-                        calc_rows=calc_rows,
-                        unun_ratio=unun_ratio,
-                        run=run,
-                        cp_angle_deg=cp_angle_deg,
-                        cp_end_z_m=_cp_z,
-                        cp_reach_m=_cp_x,
-                        nec2_strict=True,
-                    )
-                    cand.wire_slope_end_m = wire_slope_end_m
-                    cand.segs_per_half_wave = _geo.segs_per_half_wave
-                    cand.feed_fused = _geo.fused_feed
-                    cand.feed_seg = _geo.feed_seg
-                    cand.feed_offset_frac_seg = _geo.feed_offset_frac_seg
-                    if not _geo.ok:
-                        # Geometry sat inside the NEC-2 ground singularity: nec2c
-                        # returns numbers without complaining, so flag them here.
-                        cand.nec2_ok = False
-                        cand.note = (cand.note + " geometry too close to ground "
-                                                 "(NEC2 result unreliable)").strip()
-                    results.append(cand)
+                    return cand, _geo_msgs
+
+                cand = score_candidate(
+                    wire_len_m=w,
+                    cp_len_m=c,
+                    calc_rows=calc_rows,
+                    unun_ratio=unun_ratio,
+                    run=run,
+                    cp_angle_deg=cp_angle_deg,
+                    cp_end_z_m=_cp_z,
+                    cp_reach_m=_cp_x,
+                    nec2_strict=True,
+                )
+                cand.wire_slope_end_m = wire_slope_end_m
+                cand.segs_per_half_wave = _geo.segs_per_half_wave
+                cand.feed_fused = _geo.fused_feed
+                cand.feed_seg = _geo.feed_seg
+                cand.feed_offset_frac_seg = _geo.feed_offset_frac_seg
+                if not _geo.ok:
+                    # Geometry sat inside the NEC-2 ground singularity: nec2c
+                    # returns numbers without complaining, so flag them here.
+                    cand.nec2_ok = False
+                    cand.note = (cand.note + " geometry too close to ground "
+                                             "(NEC2 result unreliable)").strip()
+                return cand, _geo_msgs
             finally:
                 _unlink_quiet(nec_p)
                 _unlink_quiet(out_p)
+
+        def _angle_label(cand: "CandidateResult") -> str:
+            """Progress-line label, rebuilt from the candidate the worker
+            produced rather than from the pre-deck estimate — under the
+            parallel driver the points do not finish in grid order, so the
+            label has to travel with the result."""
+            if not use_counterpoise or cand.cp_end_z_m is None:
+                return "—"
+            return f"{cand.cp_end_z_m:.2f} m / {cand.cp_angle_deg:.1f}°"
+
+        def _report_warnings(msgs: List[str]) -> None:
+            _new_msgs = [m for m in msgs if m not in _warned_geom]
+            if _new_msgs:
+                _warned_geom.update(_new_msgs)
+                print()
+                for _wmsg in _new_msgs:
+                    print(f"  {Fore.YELLOW}WARNING: {_wmsg}{Style.RESET_ALL}")
+
+        _jobs = max(1, int(jobs or 1))
+
+        if _jobs > 1 and total > 1:
+            # --fast-run.  nec2c is an external process, so the interpreter
+            # lock is released for the whole solve and threads are enough —
+            # no pickling of candidates, no per-worker interpreter, and the
+            # existing Nec2WorkspaceError still propagates to the caller.
+            # Results are stored BY GRID INDEX and appended in order once the
+            # pool drains, so `results` is bit-for-bit the same list the serial
+            # path builds and the ranking cannot reshuffle between two
+            # identical runs.
+            _slots: List[Optional[CandidateResult]] = [None] * total
+            _executor = ThreadPoolExecutor(max_workers=min(_jobs, total))
+            try:
+                _futs = {}
+                for _i, (_w, _c) in enumerate(grid):
+                    _futs[_executor.submit(_eval_point, _w, _c)] = _i
+                # Iterating in submission order keeps the progress counter
+                # monotonic and the error surfaced first deterministic; the
+                # pool itself is still fully concurrent.
+                for _fut, _i in _futs.items():
+                    _cand, _msgs = _fut.result()
+                    _slots[_i] = _cand
+                    done += 1
+                    _report_warnings(_msgs)
+                    if verbose:
+                        print(T("sweep_nec2_progress").format(
+                            done, total, _cand.wire_len_m, _cand.cp_len_m,
+                            _angle_label(_cand)), end="\r")
+            finally:
+                # cancel_futures keeps a Nec2WorkspaceError from having to wait
+                # for every queued deck to be solved first.
+                try:
+                    _executor.shutdown(wait=True, cancel_futures=True)
+                except TypeError:      # Python < 3.9
+                    _executor.shutdown(wait=True)
+            results.extend([_c for _c in _slots if _c is not None])
+        else:
+            for w, c in grid:
+                done += 1
+                if verbose:
+                    if use_counterpoise:
+                        _pv_x, _pv_z = _cp_geometry(c, wire_height_m, cp_z_target)[3:5]
+                        _pv_a = _cp_angle_from_geometry(_pv_x, wire_height_m, _pv_z)
+                        _pv_label = f"{_pv_z:.2f} m / {_pv_a:.1f}°"
+                    else:
+                        _pv_label = "—"
+                    print(T("sweep_nec2_progress").format(
+                        done, total, w, (c if use_counterpoise else 0.0),
+                        _pv_label), end="\r")
+                _cand, _msgs = _eval_point(w, c)
+                _report_warnings(_msgs)
+                results.append(_cand)
 
     if verbose:
         print(T("sweep_nec2_done").format(total))
@@ -11445,6 +11652,23 @@ def _build_parser() -> argparse.ArgumentParser:
                        SEGS_PER_HALF_WAVE_SWEEP, SEGS_PER_HALF_WAVE_FINE))
     p.add_argument("--fast", action="store_true",
                    help=T("help_fast").format(SEGS_PER_HALF_WAVE_FAST))
+    # NOTE: this is deliberately NOT called --fast.  --fast already exists and
+    # means one specific thing (coarse SWEEP segmentation); it is wired to the
+    # GUI "Segmentation" combo.  The GUI check box labelled "Fast" in the Run
+    # tab emits --fast-run, which is the whole acceleration policy.
+    p.add_argument("--fast-run", action="store_true", dest="fast_run",
+                   help=T("help_fast_run").format(FAST_RUN_REFINE_TOP_N,
+                                                  FAST_RUN_RERANK_TOP_N))
+
+    def _jobs_arg(value):
+        ivalue = int(value)
+        if ivalue < 1:
+            raise argparse.ArgumentTypeError(
+                f"--jobs must be >= 1 (got {value})")
+        return ivalue
+
+    p.add_argument("--jobs", "-j", metavar="N", type=_jobs_arg, default=None,
+                   dest="jobs", help=T("help_jobs"))
     p.add_argument("--converge", action="store_true",
                    help=T("help_converge"))
     def _target_toa_deg(value):
@@ -11960,9 +12184,29 @@ def main() -> None:
         _spw_user  = max(5, min(int(args.segs_per_half_wave), SEGS_PER_HALF_WAVE_MAX))
         segs_sweep = segs_final = _spw_user
     else:
-        segs_sweep = SEGS_PER_HALF_WAVE_FAST if args.fast else SEGS_PER_HALF_WAVE_SWEEP
+        segs_sweep = (SEGS_PER_HALF_WAVE_FAST
+                      if (args.fast or getattr(args, "fast_run", False))
+                      else SEGS_PER_HALF_WAVE_SWEEP)
         segs_final = SEGS_PER_HALF_WAVE_FINE
     segs_pattern = segs_final
+
+    # ── Fast run policy (--fast-run / GUI "Fast") ────────────────────────
+    # One place decides everything the flag changes, so the report, the
+    # console banner and the stages themselves cannot disagree about which
+    # mode the run was in.  segs_final is NOT touched: the published
+    # impedances stay at the fine density in both modes.
+    _fast_run = bool(getattr(args, "fast_run", False))
+    _jobs_req = getattr(args, "jobs", None)
+    if _fast_run:
+        _jobs = int(_jobs_req) if _jobs_req else default_worker_count()
+    else:
+        # --jobs alone never changes behaviour: the acceleration policy is
+        # opt-in as a whole, so a stale --jobs in a saved command line cannot
+        # silently parallelise a run the user asked to keep serial.
+        _jobs = 1
+        if _jobs_req and verbose:
+            print(f"  {Fore.YELLOW}NOTE: --jobs is ignored without "
+                  f"--fast-run{Style.RESET_ALL}")
 
     # ── Wire diameter ────────────────────────────────────────────────────
     # Every deck writer, the counterpoise clamp (_cp_end_z) and the
@@ -12041,6 +12285,7 @@ def main() -> None:
                 cp_stub_len_m=args.cp_stub_len,
                 ground_model=args.ground_model,
                 segs_per_half_wave=segs_sweep,
+                jobs=_jobs,
                 verbose=verbose,
             )
         else:
@@ -12089,6 +12334,13 @@ def main() -> None:
         return _w_at_max, _w_at_min, _c_at_max, _c_at_min, _hits_wire, _hits_cp
 
     # ── Initial sweep ─────────────────────────────────────────────────────
+    if _fast_run and verbose:
+        print(f"{Fore.CYAN}" + T("fast_run_banner").format(
+            _jobs, segs_sweep,
+            min(max(0, int(getattr(args, "top_n", 0) or 0)),
+                FAST_RUN_REFINE_TOP_N),
+            min(max(0, int(getattr(args, "rerank_top", DEFAULT_RERANK_TOP_N))),
+                FAST_RUN_RERANK_TOP_N)) + f"{Style.RESET_ALL}")
     results, ranked, pareto_ranked = _run_sweep(
         args.wire_min, args.wire_max, args.cp_min, args.cp_max
     )
@@ -12360,6 +12612,13 @@ def main() -> None:
     best_run_v: Optional[NEC2Run] = None
     conv_report: Optional[ConvergenceReport] = None
 
+    # Why every failure to refine used to read the same: _full_band_run()
+    # collapsed "nec2c timed out", "nec2c exited non-zero" and "the parser
+    # found nothing" into a bare None, and the caller printed one generic
+    # line.  Reasons are collected here (list.append is atomic, so the
+    # parallel refine workers can share it) and summarised once per pass.
+    _refine_fail_reasons: List[str] = []
+
     def _full_band_run(cand: "CandidateResult") -> Optional[NEC2Run]:
         """Full-band NEC2 run for one geometry (None when not in NEC2 mode)."""
         if mode != "nec2" or not nec2c_bin:
@@ -12387,14 +12646,28 @@ def main() -> None:
                 ground_model=args.ground_model,
                 segs_per_half_wave=segs_final,
             )
-            if not run_nec2c(nec2c_bin, _nec, _out):
+            # This is the LARGEST deck the program builds — every band, at
+            # the publishing density — and it used to inherit run_nec2c()'s
+            # 60 s default while the pattern pass got 180 s and the
+            # convergence pass 300 s.  On a multi-band fine-density geometry
+            # that budget expires long before nec2c is done, and the whole
+            # refinement pass then failed for reasons nobody could see.
+            _ok, _why = run_nec2c_ex(
+                nec2c_bin, _nec, _out,
+                timeout=nec2_timeout_s(FINE_REFINE_TIMEOUT_S, _jobs))
+            if not _ok:
+                _refine_fail_reasons.append(_why)
                 return None
             try:
                 _run = parse_nec2_output(_out, debug=False,
                                          explicit_nec_path=_nec)
-            except Exception:
+            except Exception as _parse_err:
+                _refine_fail_reasons.append(
+                    f"parser raised {_parse_err!r}")
                 return None
         if _run is not None and not _run.freq_map():
+            _refine_fail_reasons.append(
+                "NEC2 output held no usable frequency block")
             return None
         return _run
 
@@ -12679,10 +12952,29 @@ def main() -> None:
             # candidate; if so, refine it too. This converges in a handful
             # of passes because each pass either refines a previously-coarse
             # candidate (finite supply, strictly decreasing) or stops.
+            #
+            # That last sentence was only true while every refinement
+            # SUCCEEDED.  A candidate whose fine run fails keeps its coarse
+            # segs_per_half_wave, so _needs_refine() stays True for it, so
+            # _select_to_refine() hands it back on the next pass, forever —
+            # the loop printed the same failure for the same candidates until
+            # the run was killed.  Failed candidates are therefore retired
+            # into _refine_failed_ids after one attempt, and the pass counter
+            # is bounded as a second line of defence.
             _report_top_n = max(0, int(getattr(args, "top_n", 0) or 0))
+            if _fast_run:
+                # The winner and the whole Pareto front are still refined
+                # unconditionally (_select_to_refine seeds them before the
+                # table rows); only the TOP-N tail is capped.  Rows left at
+                # the sweep density keep their own segs_per_half_wave and the
+                # report already prints the density per row, so nothing is
+                # published as fine that was not computed as fine.
+                _report_top_n = min(_report_top_n, FAST_RUN_REFINE_TOP_N)
 
             def _needs_refine(cand):
                 return (cand.segs_per_half_wave or segs_sweep) < segs_final
+
+            _refine_failed_ids: Set[int] = set()
 
             def _select_to_refine():
                 _sel = {id(best): best}
@@ -12691,12 +12983,21 @@ def main() -> None:
                 _cur_ranked = rank_results(results)
                 for _r in _cur_ranked[:_report_top_n]:
                     _sel.setdefault(id(_r), _r)
+                for _dead in _refine_failed_ids:
+                    _sel.pop(_dead, None)
                 return _sel
 
             _refined_by_id = {}
             _pass = 0
             while True:
                 _pass += 1
+                if _pass > MAX_REFINE_PASSES:
+                    print(f"  {Fore.YELLOW}WARNING: refinement stopped after "
+                          f"{MAX_REFINE_PASSES} passes — the top-N/Pareto "
+                          f"window is still shifting.  Rows left at the sweep "
+                          f"density are tagged as such in the report."
+                          f"{Style.RESET_ALL}")
+                    break
                 _to_refine = {cid: c for cid, c in _select_to_refine().items()
                               if _needs_refine(c)}
                 if not _to_refine:
@@ -12712,14 +13013,53 @@ def main() -> None:
                           f" ({len(_to_refine)} more — top-{_report_top_n}/Pareto "
                           f"window shifted after refinement)")
 
-                for _cid, _cand in _to_refine.items():
-                    _ref, _fine_run = _refine_and_sync(_cand)
+                # The candidates in _to_refine are independent full-band NEC2
+                # runs and each one spends nearly all of its time inside
+                # nec2c, so --fast-run solves them concurrently.  Only the
+                # PURE half (_refine_candidate) runs in the workers;
+                # _swap_in_results mutates `results` and is applied afterwards
+                # on this thread, in the original dict order, so the refined
+                # set — and every view derived from it — is identical to what
+                # the serial path produces.
+                _items = list(_to_refine.items())
+                if _jobs > 1 and len(_items) > 1:
+                    with ThreadPoolExecutor(
+                            max_workers=min(_jobs, len(_items))) as _rex:
+                        _outs = list(_rex.map(
+                            lambda _it: _refine_candidate(_it[1]), _items))
+                else:
+                    _outs = [_refine_candidate(_cand) for _cid, _cand in _items]
+
+                _failed_this_pass = 0
+                for (_cid, _cand), (_ref, _fine_run) in zip(_items, _outs):
                     if _fine_run is None:
-                        print(f"  {Fore.YELLOW}" + T("refining_best_failed") + f"{Style.RESET_ALL}")
+                        # One attempt per candidate.  Retrying a geometry that
+                        # nec2c already refused costs the same minutes again
+                        # and cannot succeed, and leaving it selectable is what
+                        # made this loop non-terminating.
+                        _refine_failed_ids.add(_cid)
+                        _cand.note = (_cand.note + " " +
+                                      T("refining_best_failed")).strip()
+                        _failed_this_pass += 1
                         continue
+                    _swap_in_results(_cand, _ref)
                     _refined_by_id[_cid] = _ref
                     if _cand is best:
                         best, best_run_h = _ref, _fine_run
+
+                if _failed_this_pass:
+                    # ONE line for the whole pass, naming the most frequent
+                    # cause.  The old code printed an identical, reasonless
+                    # line per candidate per pass, which told the user nothing
+                    # and buried everything else in the log.
+                    _why = "unknown"
+                    if _refine_fail_reasons:
+                        _why = max(set(_refine_fail_reasons),
+                                   key=_refine_fail_reasons.count)
+                    print(f"  {Fore.YELLOW}" + T("refining_best_failed") +
+                          f" ({_failed_this_pass}/{len(_items)}; {_why})" +
+                          f"{Style.RESET_ALL}")
+                    _refine_fail_reasons.clear()
 
                 # Rebuild every derived view from the now-consistent
                 # `results` so `ranked`, `pareto`, and `pareto_ranked` all
@@ -12801,6 +13141,13 @@ def main() -> None:
         #     score_final = score_combined − gain_weight × gain(target TOA)
         # This costs N extra NEC2 runs, not one per grid point.
         _rerank_n = max(0, int(getattr(args, "rerank_top", DEFAULT_RERANK_TOP_N)))
+        if _fast_run and _rerank_n > 0:
+            # Each shortlist entry is a full-band deck WITH RP cards at the
+            # fine density — the most expensive run per candidate in the whole
+            # program.  Shortening the list changes which candidates are
+            # eligible to overtake on gain, which is a ranking trade-off, so
+            # it is announced in the fast-run banner rather than done quietly.
+            _rerank_n = min(_rerank_n, FAST_RUN_RERANK_TOP_N)
         _gain_w   = float(getattr(args, "gain_weight", DEFAULT_GAIN_WEIGHT))
         _tgt_toa  = float(getattr(args, "target_toa", DEFAULT_TARGET_TOA_DEG))
         if mode == "nec2" and nec2c_bin and (_rerank_n == 0 or _gain_w <= 0.0):
@@ -12828,12 +13175,13 @@ def main() -> None:
                 # matching theta-grid/peak-finding half of the same fix.
                 _spw_rr = int(segs_final)
                 _any_pattern = False
-                for _i, _cand in enumerate(_shortlist, 1):
-                    if verbose:
-                        print(T("gain_rerank_progress").format(
-                            _i, len(_shortlist), _cand.wire_len_m, _cand.cp_len_m),
-                            end="\r")
-                    _ok_pat = evaluate_pattern(
+
+                def _pattern_for(_cand):
+                    """One pattern run.  evaluate_pattern() mutates only the
+                    candidate it is given and uses its own temporary
+                    directory, so distinct candidates are independent and may
+                    be solved concurrently under --fast-run."""
+                    return evaluate_pattern(
                         cand=_cand,
                         calc_rows=calc_rows,
                         nec2c_bin=nec2c_bin,
@@ -12851,7 +13199,24 @@ def main() -> None:
                         ground_model=args.ground_model,
                         segs_per_half_wave=_spw_rr,
                     )
-                    _any_pattern = _any_pattern or _ok_pat
+
+                if _jobs > 1 and len(_shortlist) > 1:
+                    if verbose:
+                        print(T("gain_rerank_progress").format(
+                            len(_shortlist), len(_shortlist),
+                            _shortlist[0].wire_len_m, _shortlist[0].cp_len_m),
+                            end="\r")
+                    with ThreadPoolExecutor(
+                            max_workers=min(_jobs, len(_shortlist))) as _pex:
+                        _any_pattern = any(list(_pex.map(_pattern_for, _shortlist)))
+                else:
+                    for _i, _cand in enumerate(_shortlist, 1):
+                        if verbose:
+                            print(T("gain_rerank_progress").format(
+                                _i, len(_shortlist), _cand.wire_len_m, _cand.cp_len_m),
+                                end="\r")
+                        _ok_pat = _pattern_for(_cand)
+                        _any_pattern = _any_pattern or _ok_pat
                 if verbose:
                     print(" " * 70, end="\r")
 
@@ -12966,9 +13331,16 @@ def main() -> None:
 
         # ── Segmentation convergence self-check (--converge) ────────────
         if args.converge and mode == "nec2" and nec2c_bin:
+            # --fast-run drops the 2.0x arm: it doubles the segment count and
+            # NEC-2 cost grows as ~N^3, so that ONE run can cost more than the
+            # rest of the program.  The 0.5x arm still measures drift against
+            # the working density, so the check keeps its meaning — it just
+            # spans 2:1 instead of 4:1, which the header prints.
+            _conv_factors = (FAST_RUN_CONVERGENCE_FACTORS if _fast_run
+                             else CONVERGENCE_FACTORS)
             print(T("converge_header").format(
                 best.segs_per_half_wave or segs_final,
-                ", ".join(f"{f:g}x" for f in CONVERGENCE_FACTORS)))
+                ", ".join(f"{f:g}x" for f in _conv_factors)))
             conv_report = check_segmentation_convergence(
                 best=best,
                 calc_rows=calc_rows,
@@ -12984,6 +13356,7 @@ def main() -> None:
                 no_cp_return=args.no_cp_return,
                 cp_stub_len_m=args.cp_stub_len,
                 ground_model=args.ground_model,
+                factors=_conv_factors,
                 verbose=verbose,
             )
             _print_convergence(conv_report, calc_rows)
@@ -13472,6 +13845,7 @@ def _launch_gui() -> None:
             "preset_excel":       "Excellent (farm land)",
             "preset_salt":        "Salt water",
             "misc_lf":            "Misc Flags",
+            "fast_run_flag":      "Fast  (parallel NEC2 + reduced final passes)",
             "quiet_flag":         "quiet  (suppress progress output)",
             "no_interact":        "no-interactive  (don't prompt; exit on missing inputs)",
             "workdir_lf":         "Working / Output Directory",
@@ -13995,6 +14369,7 @@ def _launch_gui() -> None:
             "preset_excel":       "Excelente (tierra de cultivo)",
             "preset_salt":        "Agua salada",
             "misc_lf":            "Opciones Varias",
+            "fast_run_flag":      "Fast  (NEC2 en paralelo + pasadas finales reducidas)",
             "quiet_flag":         "quiet  (suprimir salida de progreso)",
             "no_interact":        "no-interactive  (sin preguntas; salir si faltan entradas)",
             "workdir_lf":         "Directorio de Trabajo / Salida",
@@ -14502,6 +14877,7 @@ def _launch_gui() -> None:
             "preset_excel": 'Eccellente (terreno agricolo)',
             "preset_salt": 'Acqua salata',
             "misc_lf": 'Opzioni Varie',
+            "fast_run_flag": "Fast  (NEC2 in parallelo + passate finali ridotte)",
             "quiet_flag": "quiet  (sopprime l'output di avanzamento)",
             "no_interact": 'no-interactive  (non chiede conferma; esce se mancano input)',
             "workdir_lf": 'Cartella di Lavoro / Output',
@@ -14918,6 +15294,7 @@ def _launch_gui() -> None:
             "help_converge": "When enabled, re-runs the winning geometry at 2x and 4x the segmentation to show how much R and X still change, as a convergence check.",
             "help_outdir": "Folder where the report, plot, and CSV files from this run will be written. Created automatically if it does not already exist.",
             "help_out_filenames": "File name used for this particular output artifact (report, radiation-pattern file, or PDF) inside the chosen output folder.",
+            "help_fast_run": ("OFF: every stage runs as before.  ON: independent NEC2 decks are solved in parallel (one worker per core, max 16), the sweep uses the coarse segmentation, only the winner, the Pareto front and the first few table rows are recomputed at the publishing density, the radiation shortlist is shortened and the convergence check keeps only its 0.5x arm.  Published impedances are still computed at the fine density; rows left coarse are tagged as such in the report."),
             "help_quiet": "Suppress the detailed progress log during the run and only print the final summary and any warnings or errors.",
             "help_no_interact": "Never pause to ask questions interactively (e.g. for locating nec2c); fail immediately instead if something required is missing.",
             "help_nec2c_path": "Full path to the nec2c executable used to run each simulation. Leave the auto-detected value unless you have a non-standard install location.",
@@ -14993,6 +15370,7 @@ def _launch_gui() -> None:
             "help_converge": "Al activarlo, reejecuta la geometría ganadora a 2x y 4x la segmentación e informa cuánto siguen cambiando R y X, como verificación de convergencia.",
             "help_outdir": "Carpeta donde se guardarán el informe, el gráfico y el CSV de esta corrida. Se crea automáticamente si no existe.",
             "help_out_filenames": "Nombre de archivo usado para este artefacto de salida en particular (informe, archivo de patrón de radiación o PDF) dentro de la carpeta de salida elegida.",
+            "help_fast_run": ("OFF: todas las etapas funcionan como hasta ahora.  ON: los decks NEC2 independientes se resuelven en paralelo (un trabajador por nucleo, maximo 16), el barrido usa la segmentacion gruesa, solo el ganador, el frente de Pareto y las primeras filas de la tabla se recalculan con la densidad de publicacion, la lista corta de radiacion se acorta y la verificacion de convergencia conserva solo su brazo 0.5x.  Las impedancias publicadas se siguen calculando con la segmentacion fina; las filas que quedan gruesas se marcan como tales en el informe."),
             "help_quiet": "Suprime el registro detallado de progreso durante la corrida e imprime solo el resumen final y cualquier advertencia o error.",
             "help_no_interact": "Nunca detenerse a hacer preguntas de forma interactiva (p. ej. para localizar nec2c); fallar de inmediato si falta algo requerido.",
             "help_nec2c_path": "Ruta completa al ejecutable nec2c usado para cada simulación. Cambiar solo si la instalación no está en una ubicación estándar.",
@@ -15068,6 +15446,7 @@ def _launch_gui() -> None:
             "help_converge": "Se attivato, riesegue la geometria vincente a 2x e 4x la segmentazione e riporta quanto R e X continuano a cambiare, come verifica di convergenza.",
             "help_outdir": "Cartella in cui verranno scritti report, grafico e CSV di questa esecuzione. Creata automaticamente se non esiste.",
             "help_out_filenames": "Nome file usato per questo particolare artefatto di output (report, file del diagramma di radiazione o PDF) all'interno della cartella di output scelta.",
+            "help_fast_run": ("OFF: ogni fase funziona come prima.  ON: i deck NEC2 indipendenti vengono risolti in parallelo (un worker per core, massimo 16), la scansione usa la segmentazione grossolana, solo il vincitore, il fronte di Pareto e le prime righe della tabella vengono ricalcolati alla densita di pubblicazione, la lista di radiazione viene accorciata e il controllo di convergenza mantiene solo il ramo 0.5x.  Le impedenze pubblicate restano calcolate con la segmentazione fine; le righe rimaste grossolane sono contrassegnate nel rapporto."),
             "help_quiet": "Sopprime il registro dettagliato di avanzamento durante l'esecuzione e stampa solo il riepilogo finale ed eventuali avvisi o errori.",
             "help_no_interact": "Non fermarsi mai a fare domande in modo interattivo (es. per individuare nec2c); fallire subito se manca qualcosa di necessario.",
             "help_nec2c_path": "Percorso completo dell'eseguibile nec2c usato per ogni simulazione. Cambiare solo se l'installazione non è in una posizione standard.",
@@ -17382,6 +17761,16 @@ def _launch_gui() -> None:
             self._reg(misc_lf, "misc_lf")
             self._quiet_var       = tk.BooleanVar(value=True)
             self._no_interact_var = tk.BooleanVar(value=True)
+            # Default OFF: the accelerated policy is opt-in, so an existing
+            # workflow keeps the exact behaviour (and the exact numbers) it
+            # had before this check box existed.
+            self._fast_run_var    = tk.BooleanVar(value=False)
+            _fr_row = ttk.Frame(misc_lf)
+            _fr_row.pack(anchor="w", fill="x")
+            self._cb_fast_run = ttk.Checkbutton(_fr_row, variable=self._fast_run_var)
+            self._cb_fast_run.pack(side="left")
+            self._reg(self._cb_fast_run, "fast_run_flag")
+            self._help(_fr_row, "help_fast_run").pack(side="left", padx=(6, 0))
             _q_row = ttk.Frame(misc_lf)
             _q_row.pack(anchor="w", fill="x")
             self._cb_quiet = ttk.Checkbutton(_q_row, variable=self._quiet_var)
@@ -19020,6 +19409,8 @@ def _launch_gui() -> None:
                 v = var.get().strip()
                 if v:
                     cmd += [flag, v]
+            if getattr(self, "_fast_run_var", None) is not None and self._fast_run_var.get():
+                cmd += ["--fast-run"]
             if self._quiet_var.get():
                 cmd += ["--quiet"]
             if self._no_interact_var.get():
