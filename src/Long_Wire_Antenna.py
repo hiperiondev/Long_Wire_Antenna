@@ -1154,6 +1154,11 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "Distancia soporte extremo lejano",
         "it": 'Distanza supporto estremo lontano',
     },
+    "construction_far_support": {
+        "en": "far-end support",
+        "es": "soporte extremo lejano",
+        "it": "supporto estremità lontana",
+    },
     "construction_xlabel": {
         "en": "Horizontal distance (m)",
         "es": "Distancia horizontal (m)",
@@ -9001,8 +9006,14 @@ def _dim_line(ax, p0, p1, label, color, text_color, below: bool = False,
 
 
 def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False,
-               bg="#ffffff", right: bool = False):
+               bg="#ffffff", right: bool = False,
+               leader_to_x: Optional[float] = None):
     """Draw a vertical dimension line with end ticks and a rotated side label.
+
+    If leader_to_x is given and differs from x, a thin horizontal leader
+    ties the dimension line's base tick back to the feature it measures
+    (e.g. an offset dimension back to the mast at the ground). Without
+    it, an offset dimension line appears to land on empty ground.
 
     Returns the Text artist.
     """
@@ -9011,6 +9022,9 @@ def _vdim_line(ax, x, z0, z1, label, color, text_color, small: bool = False,
     tick = 0.12
     ax.plot([x - tick, x + tick], [z0, z0], color=color, linewidth=1, alpha=0.8)
     ax.plot([x - tick, x + tick], [z1, z1], color=color, linewidth=1, alpha=0.8)
+    if leader_to_x is not None and abs(leader_to_x - x) > 1e-6:
+        ax.plot([x, leader_to_x], [z0, z0], color=color, linewidth=0.8,
+                linestyle=":", alpha=0.6, zorder=2)
     fontsize = 7.5 if small else 8.5
     label_x = x + 0.15 if right else x - 0.15
     return ax.text(label_x, (z0 + z1) / 2, label, color=text_color,
@@ -9169,7 +9183,8 @@ def plot_construction_diagram(
     # optional far-end support pole
     if abs(z_far) > 0.05:
         ax.plot([x_far, x_far], [0, z_far], color="#5b6b7c", linewidth=3,
-                zorder=2, linestyle=(0, (4, 3)))
+                zorder=2, linestyle=(0, (4, 3)),
+                label=T("construction_far_support"))
 
     # ── radiator length label: parallel to wire, above it, centred ────────
     # Normal = 90° CCW from wire direction, always flipped to point upward.
@@ -9325,7 +9340,8 @@ def plot_construction_diagram(
     # ── height annotations ────────────────────────────────────────────────
     t_ht = _vdim_line(ax, -1.1, 0, z_near,
                       f"{T('construction_dim_height')}\n{z_near:.2f} m",
-                      color="#5b6b7c", text_color=TEXT, bg=BG)
+                      color="#5b6b7c", text_color=TEXT, bg=BG,
+                      leader_to_x=0.0)
     placer.register(t_ht, priority=4)
 
     # Counterpoise far-end height (mirrors the radiator's far-end height label)
