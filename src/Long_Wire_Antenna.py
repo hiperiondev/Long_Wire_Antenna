@@ -5441,9 +5441,11 @@ def score_candidate(
     # NOTE: this is ratio-dependent.  Anything that changes `unun_ratio`
     # after the fact MUST recompute it (see _rescore_all()).
     _w = resonance_preference(unun_ratio)
+    _avoid_exact: Dict[str, float] = {}
     for cr in calc_rows:
         avoidance = band_avoidance_score(wire_len_m, cr.freq_mhz, unun_ratio,
                                          weights=_w)
+        _avoid_exact[cr.band] = avoidance
         res.band_avoidance[cr.band] = round(avoidance, 4)
         avoidances.append(avoidance)
 
@@ -5467,8 +5469,12 @@ def score_candidate(
     res.score_vswr_raw  = mean_vswr_penalty + 1.5 * worst_vswr_penalty
     res.score_avoidance = sum(avoidances) / len(avoidances) if avoidances else 0.0
 
-    active_avoidances = [res.band_avoidance[cr.band] for cr in active
-                         if cr.band in res.band_avoidance]
+    # Both means come from the SAME unrounded source. Averaging the rounded
+    # display copies made the all-bands and active-bands figures disagree in
+    # the 4th decimal even when every band is active and they are by
+    # definition the same number.
+    active_avoidances = [_avoid_exact[cr.band] for cr in active
+                         if cr.band in _avoid_exact]
     res.score_avoidance_active = (sum(active_avoidances) / len(active_avoidances)
                                   if active_avoidances else 0.0)
 
@@ -12930,15 +12936,20 @@ def main() -> None:
             # corrupt the candidate this one was copied from.
             _new.band_avoidance = {}
             _avoid_all = []
+            _avoid_exact_r: Dict[str, float] = {}
             for _cr in calc_rows:
                 _av = band_avoidance_score(_c.wire_len_m, _cr.freq_mhz, ratio,
                                            weights=_w)
+                _avoid_exact_r[_cr.band] = _av
                 _new.band_avoidance[_cr.band] = round(_av, 4)
                 _avoid_all.append(_av)
             _new.score_avoidance = (sum(_avoid_all) / len(_avoid_all)
                                     if _avoid_all else 0.0)
-            _avoid_act = [_new.band_avoidance[_ar.band] for _ar in _active_rows
-                          if _ar.band in _new.band_avoidance]
+            # Same fix as score_candidate(): average the unrounded values,
+            # not the rounded display copies, so the all-bands and
+            # active-bands means agree when every band is active.
+            _avoid_act = [_avoid_exact_r[_ar.band] for _ar in _active_rows
+                          if _ar.band in _avoid_exact_r]
             _new.score_avoidance_active = (sum(_avoid_act) / len(_avoid_act)
                                            if _avoid_act else 0.0)
 
