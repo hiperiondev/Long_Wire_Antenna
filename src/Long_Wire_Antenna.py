@@ -692,6 +692,20 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "  --cp-max      : {0} m",
         "it": '  --cp-max      : {0} m',
     },
+    "err_cp_len_zero": {
+        "en": ("--cp-len 0 asks for an antenna with no counterpoise, which is a "
+               "different antenna, not a zero-width search window. Use "
+               "--no-counterpoise instead (with --no-cp-return ground-rod or "
+               "coax-stub in NEC2 mode), or give --cp-len a positive length."),
+        "es": ("--cp-len 0 pide una antena sin contrapeso, que es una antena "
+               "distinta, no una ventana de búsqueda de ancho cero. Use "
+               "--no-counterpoise en su lugar (con --no-cp-return ground-rod o "
+               "coax-stub en modo NEC2), o dé a --cp-len una longitud positiva."),
+        "it": ("--cp-len 0 richiede un'antenna senza contrappeso, che è un'antenna "
+               "diversa, non una finestra di ricerca di larghezza zero. Usare invece "
+               "--no-counterpoise (con --no-cp-return ground-rod o coax-stub in "
+               "modalità NEC2), oppure dare a --cp-len una lunghezza positiva."),
+    },
     "ant_height": {
         "en": "  Antenna height: {0} m  {1}",
         "es": "  Altura antena : {0} m  {1}",
@@ -12029,6 +12043,19 @@ def main() -> None:
     for _name, _val in (("--cp-min", args.cp_min), ("--cp-max", args.cp_max)):
         if _val is not None and _val < 0:
             _bad.append(f"{_name} must be ≥ 0 m (got {_val})")
+
+    # --cp-len 0 with use_counterpoise still on is not a zero-width search
+    # window around 0 — it's a request for a different antenna topology
+    # (no counterpoise at all). Left alone, the auto-window logic below
+    # floors --cp-min to 1.0 m but not --cp-max, inverting the window and
+    # surfacing as an opaque "cp_min > cp_max" arithmetic error instead of
+    # pointing at --no-counterpoise. Catch it here, alongside the rest of
+    # the input validation, only when the window is actually auto-derived
+    # (explicit --cp-min/--cp-max bypass this, same as the wire-length floor
+    # above).
+    if use_counterpoise and args.cp_len is not None and args.cp_len <= 1e-9 \
+            and args.cp_min is None and args.cp_max is None:
+        _bad.append(T("err_cp_len_zero"))
 
     if args.height is not None and args.height <= _HEIGHT_HARD_FLOOR_M:
         _bad.append(
