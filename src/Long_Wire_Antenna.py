@@ -13491,6 +13491,114 @@ def _launch_gui() -> None:
             "show_pdf_btn":       "📑  Show Final Report (PDF)",
             "idle":               "Idle",
             "console_lf":         "Console Output",
+            # ── Resume pane ───────────────────────────────────────
+            "resume_lf":          "Resume  (current pass)",
+            "rs_intro":           ("This pane explains, in plain words, what the left console "
+                                   "is doing right now: the stage being executed, the data it "
+                                   "is working on, every variable in play for this pass, and "
+                                   "how the previous pass ended."),
+            "rs_wait":            ("Idle — press \u25b6 Run Optimizer.  Everything shown here is "
+                                   "read back from the optimizer's own console output, so the "
+                                   "two panes can never disagree."),
+            "rs_hdr_now":         "WHAT IS RUNNING NOW",
+            "rs_hdr_vars":        "VARIABLES IN PLAY (this pass)",
+            "rs_hdr_last":        "RESULT OF THE LAST PASS",
+            "rs_hdr_cfg":         "RUN CONFIGURATION (command line)",
+            "rs_hdr_events":      "EVENTS & OUTPUT FILES",
+            "rs_l_stage":         "Stage",
+            "rs_l_meaning":       "Meaning",
+            "rs_l_pass":          "Pass",
+            "rs_l_kind":          "Pass kind",
+            "rs_l_progress":      "Progress",
+            "rs_l_candidate":     "Candidate now",
+            "rs_l_elapsed":       "Elapsed",
+            "rs_l_rate":          "Rate",
+            "rs_l_eta":           "ETA (this pass)",
+            "rs_l_wire_win":      "Wire window",
+            "rs_l_cp_win":        "CP window",
+            "rs_l_grid":          "Grid",
+            "rs_l_step":          "step",
+            "rs_l_engine":        "Engine",
+            "rs_l_unun":          "UnUn ratio",
+            "rs_l_retry":         "Retry budget",
+            "rs_l_segs":          "Segmentation",
+            "rs_l_cands":         "Candidates evaluated",
+            "rs_l_pareto":        "Pareto-optimal",
+            "rs_l_best":          "Best geometry",
+            "rs_l_score":         "Combined score",
+            "rs_l_verdict":       "Verdict",
+            "rs_l_window":        "Window swept",
+            "rs_l_duration":      "Duration",
+            "rs_l_bestsofar":     "Best so far",
+            "rs_l_status":        "Status",
+            "rs_l_warn":          "Warnings",
+            "rs_l_err":           "Errors",
+            "rs_l_lastwarn":      "Last warning",
+            "rs_l_lasterr":       "Last error",
+            "rs_l_files":         "Files written",
+            "rs_k_initial":       "initial sweep (the window you configured)",
+            "rs_k_expand":        "retry / expansion (--retry: the window is pushed outwards)",
+            "rs_k_refine":        "refinement (--test-window: the window zooms in, steps halved)",
+            "rs_v_better":        "improved on the previous best \u2713",
+            "rs_v_same":          "no improvement — the previous best is kept",
+            "rs_v_unknown":       "not reported yet",
+            "rs_no_last":         "No pass has finished yet — this is the first one.",
+            "rs_no_data":         "(not reported yet)",
+            "rs_pt_start":        "Starting up",
+            "rs_pe_start":        ("The optimizer is reading its arguments, resolving the band "
+                                   "frequencies and building the search grid. Nothing has been "
+                                   "computed yet."),
+            "rs_pt_sweep_nec2":   "NEC-2 sweep",
+            "rs_pe_sweep_nec2":   ("Every (wire, counterpoise) pair of the grid is written out as "
+                                   "a NEC-2 deck and solved by nec2c at each band frequency. The "
+                                   "resulting R/X per band give the VSWR score of that candidate. "
+                                   "This is by far the slowest stage: one full NEC-2 run per pair."),
+            "rs_pt_sweep_emp":    "Empirical sweep",
+            "rs_pe_sweep_emp":    ("The grid is scored with the closed-form empirical impedance "
+                                   "model instead of NEC-2 — thousands of times faster, but it "
+                                   "ignores the counterpoise geometry, so it only ranks candidates."),
+            "rs_pt_sweep_done":   "Sweep finished — ranking",
+            "rs_pe_sweep_done":   ("All candidates of this pass have been scored. They are now "
+                                   "ranked by the combined score and the Pareto front (VSWR vs "
+                                   "band-avoidance) is extracted."),
+            "rs_pt_refine":       "Refinement pass (--test-window)",
+            "rs_pe_refine":       ("A retry was spent on resolution instead of reach: the next "
+                                   "sweep covers only the bounding box of the best candidates of "
+                                   "the previous pass, with both grid steps halved."),
+            "rs_pt_expand":       "Expansion pass (--retry)",
+            "rs_pe_expand":       ("The winning length landed on a search boundary, so the window "
+                                   "is pushed outwards at the same grid step and swept again — the "
+                                   "true optimum probably lies outside the window you configured."),
+            "rs_pt_unun":         "Choosing the UnUn ratio",
+            "rs_pe_unun":         ("Every standard transformer ratio is tried against the band "
+                                   "impedances of the best geometry. Changing the ratio changes "
+                                   "which candidate wins, so the whole set is re-ranked after each "
+                                   "change until the choice is stable."),
+            "rs_pt_rerank":       "Radiation re-ranking",
+            "rs_pe_rerank":       ("The top candidates get a full NEC-2 radiation-pattern run so "
+                                   "they can be re-ranked by gain and take-off angle, not by VSWR "
+                                   "alone."),
+            "rs_pt_recompute":    "Recomputing the winner",
+            "rs_pe_recompute":    ("The sweep ranked candidates at a coarse segmentation. The "
+                                   "winner is now solved again at the fine density, and those are "
+                                   "the impedances that get published."),
+            "rs_pt_converge":     "Segmentation convergence check",
+            "rs_pe_converge":     ("The winning geometry is solved at several segment densities. "
+                                   "If R and X stop moving, the published numbers are converged; "
+                                   "if they do not, the report says so."),
+            "rs_pt_outputs":      "Writing the outputs",
+            "rs_pe_outputs":      ("Computation is over. The text report, the CSV, the NEC deck "
+                                   "and the plots are being written to disk."),
+            "rs_pt_radiation":    "Radiation diagrams",
+            "rs_pe_radiation":    ("A full RP sweep of the winning geometry is being run to draw "
+                                   "the azimuth and elevation patterns."),
+            "rs_pt_pdf":          "PDF brochure",
+            "rs_pe_pdf":          "The final PDF brochure is being assembled from the results.",
+            "rs_pt_done":         "Finished",
+            "rs_pe_done":         "The run completed. The values below are the final ones.",
+            "rs_pt_failed":       "Stopped / failed",
+            "rs_pe_failed":       ("The run did not complete. The values below are the last ones "
+                                   "the console reported before it ended."),
             "clear_btn":          "Clear",
             "running":            "Running…",
             "stopped":            "Stopped by user",
@@ -13906,6 +14014,117 @@ def _launch_gui() -> None:
             "show_pdf_btn":       "📑  Ver Informe Final (PDF)",
             "idle":               "Inactivo",
             "console_lf":         "Salida de Consola",
+            # ── Panel Resumen ─────────────────────────────────────
+            "resume_lf":          "Resumen  (pasada actual)",
+            "rs_intro":           ("Este panel explica, en palabras simples, qué está haciendo la "
+                                   "consola de la izquierda en este momento: la etapa que se "
+                                   "ejecuta, los datos que procesa, todas las variables en juego "
+                                   "de esta pasada y cómo terminó la pasada anterior."),
+            "rs_wait":            ("Inactivo — pulse \u25b6 Ejecutar Optimizador.  Todo lo que se "
+                                   "muestra aquí se lee de la propia salida de consola del "
+                                   "optimizador, así que ambos paneles nunca pueden contradecirse."),
+            "rs_hdr_now":         "QUÉ SE ESTÁ EJECUTANDO AHORA",
+            "rs_hdr_vars":        "VARIABLES EN JUEGO (esta pasada)",
+            "rs_hdr_last":        "RESULTADO DE LA ÚLTIMA PASADA",
+            "rs_hdr_cfg":         "CONFIGURACIÓN DE LA CORRIDA (línea de comandos)",
+            "rs_hdr_events":      "EVENTOS Y ARCHIVOS GENERADOS",
+            "rs_l_stage":         "Etapa",
+            "rs_l_meaning":       "Significado",
+            "rs_l_pass":          "Pasada",
+            "rs_l_kind":          "Tipo de pasada",
+            "rs_l_progress":      "Progreso",
+            "rs_l_candidate":     "Candidato actual",
+            "rs_l_elapsed":       "Transcurrido",
+            "rs_l_rate":          "Ritmo",
+            "rs_l_eta":           "ETA (esta pasada)",
+            "rs_l_wire_win":      "Ventana de hilo",
+            "rs_l_cp_win":        "Ventana de CP",
+            "rs_l_grid":          "Grilla",
+            "rs_l_step":          "paso",
+            "rs_l_engine":        "Motor",
+            "rs_l_unun":          "Relación UnUn",
+            "rs_l_retry":         "Presupuesto de reintentos",
+            "rs_l_segs":          "Segmentación",
+            "rs_l_cands":         "Candidatos evaluados",
+            "rs_l_pareto":        "Pareto-óptimos",
+            "rs_l_best":          "Mejor geometría",
+            "rs_l_score":         "Puntuación combinada",
+            "rs_l_verdict":       "Veredicto",
+            "rs_l_window":        "Ventana barrida",
+            "rs_l_duration":      "Duración",
+            "rs_l_bestsofar":     "Mejor hasta ahora",
+            "rs_l_status":        "Estado",
+            "rs_l_warn":          "Advertencias",
+            "rs_l_err":           "Errores",
+            "rs_l_lastwarn":      "Última advertencia",
+            "rs_l_lasterr":       "Último error",
+            "rs_l_files":         "Archivos escritos",
+            "rs_k_initial":       "barrido inicial (la ventana que usted configuró)",
+            "rs_k_expand":        "reintento / expansión (--retry: la ventana se empuja hacia afuera)",
+            "rs_k_refine":        "refinamiento (--test-window: la ventana hace zoom, pasos a la mitad)",
+            "rs_v_better":        "mejoró al mejor anterior \u2713",
+            "rs_v_same":          "sin mejora — se mantiene el mejor anterior",
+            "rs_v_unknown":       "aún no informado",
+            "rs_no_last":         "Todavía no terminó ninguna pasada — ésta es la primera.",
+            "rs_no_data":         "(aún no informado)",
+            "rs_pt_start":        "Arranque",
+            "rs_pe_start":        ("El optimizador está leyendo sus argumentos, resolviendo las "
+                                   "frecuencias de las bandas y armando la grilla de búsqueda. "
+                                   "Todavía no se calculó nada."),
+            "rs_pt_sweep_nec2":   "Barrido NEC-2",
+            "rs_pe_sweep_nec2":   ("Cada par (hilo, contrapeso) de la grilla se escribe como un "
+                                   "deck NEC-2 y lo resuelve nec2c en cada frecuencia de banda. "
+                                   "Los R/X resultantes por banda dan la puntuación de ROE de ese "
+                                   "candidato. Es de lejos la etapa más lenta: una corrida NEC-2 "
+                                   "completa por cada par."),
+            "rs_pt_sweep_emp":    "Barrido empírico",
+            "rs_pe_sweep_emp":    ("La grilla se puntúa con el modelo empírico de impedancia en "
+                                   "forma cerrada en vez de NEC-2 — miles de veces más rápido, "
+                                   "pero ignora la geometría del contrapeso, así que sólo sirve "
+                                   "para ordenar candidatos."),
+            "rs_pt_sweep_done":   "Barrido terminado — ordenando",
+            "rs_pe_sweep_done":   ("Ya se puntuaron todos los candidatos de esta pasada. Ahora se "
+                                   "ordenan por la puntuación combinada y se extrae el frente de "
+                                   "Pareto (ROE vs. evitación de bandas)."),
+            "rs_pt_refine":       "Pasada de refinamiento (--test-window)",
+            "rs_pe_refine":       ("Se gastó un reintento en resolución y no en alcance: el "
+                                   "siguiente barrido cubre sólo la caja de los mejores candidatos "
+                                   "de la pasada previa, con ambos pasos de grilla a la mitad."),
+            "rs_pt_expand":       "Pasada de expansión (--retry)",
+            "rs_pe_expand":       ("La longitud ganadora quedó sobre un borde de la búsqueda, así "
+                                   "que la ventana se empuja hacia afuera con el mismo paso y se "
+                                   "vuelve a barrer — el óptimo real probablemente esté fuera de "
+                                   "la ventana que usted configuró."),
+            "rs_pt_unun":         "Eligiendo la relación UnUn",
+            "rs_pe_unun":         ("Se prueba cada relación estándar de transformador contra las "
+                                   "impedancias por banda de la mejor geometría. Cambiar la "
+                                   "relación cambia qué candidato gana, así que todo el conjunto "
+                                   "se reordena tras cada cambio hasta que la elección se estabiliza."),
+            "rs_pt_rerank":       "Reordenamiento por radiación",
+            "rs_pe_rerank":       ("Los mejores candidatos reciben una corrida NEC-2 completa de "
+                                   "patrón de radiación para reordenarlos por ganancia y ángulo de "
+                                   "salida, y no sólo por ROE."),
+            "rs_pt_recompute":    "Recalculando al ganador",
+            "rs_pe_recompute":    ("El barrido ordenó los candidatos con segmentación gruesa. "
+                                   "Ahora el ganador se resuelve otra vez con la densidad fina, y "
+                                   "esas son las impedancias que se publican."),
+            "rs_pt_converge":     "Verificación de convergencia de segmentación",
+            "rs_pe_converge":     ("La geometría ganadora se resuelve con varias densidades de "
+                                   "segmentos. Si R y X dejan de moverse, los números publicados "
+                                   "están convergidos; si no, el informe lo aclara."),
+            "rs_pt_outputs":      "Escribiendo los resultados",
+            "rs_pe_outputs":      ("Terminó el cálculo. Se escriben en disco el informe de texto, "
+                                   "el CSV, el deck NEC y los gráficos."),
+            "rs_pt_radiation":    "Diagramas de radiación",
+            "rs_pe_radiation":    ("Se corre un barrido RP completo de la geometría ganadora para "
+                                   "dibujar los patrones de azimut y elevación."),
+            "rs_pt_pdf":          "Folleto PDF",
+            "rs_pe_pdf":          "Se está armando el folleto PDF final con los resultados.",
+            "rs_pt_done":         "Finalizado",
+            "rs_pe_done":         "La corrida terminó. Los valores de abajo son los definitivos.",
+            "rs_pt_failed":       "Detenido / con error",
+            "rs_pe_failed":       ("La corrida no se completó. Los valores de abajo son los últimos "
+                                   "que informó la consola antes de terminar."),
             "clear_btn":          "Limpiar",
             "running":            "Ejecutando…",
             "stopped":            "Detenido por el usuario",
@@ -14302,6 +14521,116 @@ def _launch_gui() -> None:
             "show_pdf_btn": '📑  Mostra Report Finale (PDF)',
             "idle": 'Inattivo',
             "console_lf": 'Output Console',
+            # ── Pannello Riepilogo ────────────────────────────────
+            "resume_lf": 'Riepilogo  (passata corrente)',
+            "rs_intro": ('Questo pannello spiega, in parole semplici, cosa sta facendo la console '
+                         'di sinistra in questo momento: la fase in esecuzione, i dati che elabora, '
+                         'tutte le variabili in gioco in questa passata e come è finita la passata '
+                         'precedente.'),
+            "rs_wait": ('Inattivo — premere \u25b6 Esegui Ottimizzatore.  Tutto ciò che appare qui '
+                        'è letto dall\'output di console dell\'ottimizzatore, quindi i due pannelli '
+                        'non possono mai contraddirsi.'),
+            "rs_hdr_now": 'COSA È IN ESECUZIONE ADESSO',
+            "rs_hdr_vars": 'VARIABILI IN GIOCO (questa passata)',
+            "rs_hdr_last": "RISULTATO DELL'ULTIMA PASSATA",
+            "rs_hdr_cfg": 'CONFIGURAZIONE DELLA CORSA (riga di comando)',
+            "rs_hdr_events": 'EVENTI E FILE GENERATI',
+            "rs_l_stage": 'Fase',
+            "rs_l_meaning": 'Significato',
+            "rs_l_pass": 'Passata',
+            "rs_l_kind": 'Tipo di passata',
+            "rs_l_progress": 'Avanzamento',
+            "rs_l_candidate": 'Candidato attuale',
+            "rs_l_elapsed": 'Trascorso',
+            "rs_l_rate": 'Ritmo',
+            "rs_l_eta": 'ETA (questa passata)',
+            "rs_l_wire_win": 'Finestra del filo',
+            "rs_l_cp_win": 'Finestra del CP',
+            "rs_l_grid": 'Griglia',
+            "rs_l_step": 'passo',
+            "rs_l_engine": 'Motore',
+            "rs_l_unun": 'Rapporto UnUn',
+            "rs_l_retry": 'Budget dei tentativi',
+            "rs_l_segs": 'Segmentazione',
+            "rs_l_cands": 'Candidati valutati',
+            "rs_l_pareto": 'Pareto-ottimali',
+            "rs_l_best": 'Migliore geometria',
+            "rs_l_score": 'Punteggio combinato',
+            "rs_l_verdict": 'Verdetto',
+            "rs_l_window": 'Finestra scansionata',
+            "rs_l_duration": 'Durata',
+            "rs_l_bestsofar": 'Migliore finora',
+            "rs_l_status": 'Stato',
+            "rs_l_warn": 'Avvisi',
+            "rs_l_err": 'Errori',
+            "rs_l_lastwarn": 'Ultimo avviso',
+            "rs_l_lasterr": 'Ultimo errore',
+            "rs_l_files": 'File scritti',
+            "rs_k_initial": 'scansione iniziale (la finestra configurata)',
+            "rs_k_expand": 'tentativo / espansione (--retry: la finestra viene spinta verso fuori)',
+            "rs_k_refine": 'raffinamento (--test-window: la finestra fa zoom, passi dimezzati)',
+            "rs_v_better": 'migliorato il migliore precedente \u2713',
+            "rs_v_same": 'nessun miglioramento — si mantiene il migliore precedente',
+            "rs_v_unknown": 'non ancora riportato',
+            "rs_no_last": 'Nessuna passata è ancora terminata — questa è la prima.',
+            "rs_no_data": '(non ancora riportato)',
+            "rs_pt_start": 'Avvio',
+            "rs_pe_start": ("L'ottimizzatore sta leggendo i suoi argomenti, risolvendo le frequenze "
+                            'delle bande e costruendo la griglia di ricerca. Non è stato ancora '
+                            'calcolato nulla.'),
+            "rs_pt_sweep_nec2": 'Scansione NEC-2',
+            "rs_pe_sweep_nec2": ('Ogni coppia (filo, contrappeso) della griglia viene scritta come '
+                                 'un deck NEC-2 e risolta da nec2c a ogni frequenza di banda. I '
+                                 'valori R/X per banda danno il punteggio di ROS del candidato. È '
+                                 'di gran lunga la fase più lenta: una corsa NEC-2 completa per '
+                                 'ogni coppia.'),
+            "rs_pt_sweep_emp": 'Scansione empirica',
+            "rs_pe_sweep_emp": ('La griglia è valutata con il modello empirico di impedenza in '
+                                'forma chiusa invece che con NEC-2 — migliaia di volte più veloce, '
+                                'ma ignora la geometria del contrappeso, quindi serve solo a '
+                                'ordinare i candidati.'),
+            "rs_pt_sweep_done": 'Scansione terminata — classifica',
+            "rs_pe_sweep_done": ('Tutti i candidati di questa passata sono stati valutati. Ora '
+                                 'vengono ordinati per punteggio combinato e si estrae il fronte '
+                                 'di Pareto (ROS vs. evitamento delle bande).'),
+            "rs_pt_refine": 'Passata di raffinamento (--test-window)',
+            "rs_pe_refine": ('Un tentativo è stato speso in risoluzione e non in estensione: la '
+                             'scansione successiva copre solo il riquadro dei migliori candidati '
+                             'della passata precedente, con entrambi i passi dimezzati.'),
+            "rs_pt_expand": 'Passata di espansione (--retry)',
+            "rs_pe_expand": ('La lunghezza vincente è finita su un bordo della ricerca, quindi la '
+                             'finestra viene spinta verso fuori con lo stesso passo e riscansionata '
+                             '— il vero ottimo è probabilmente fuori dalla finestra configurata.'),
+            "rs_pt_unun": 'Scelta del rapporto UnUn',
+            "rs_pe_unun": ('Ogni rapporto standard del trasformatore viene provato contro le '
+                           'impedenze per banda della migliore geometria. Cambiare il rapporto '
+                           'cambia quale candidato vince, quindi tutto il set viene riclassificato '
+                           'dopo ogni cambio finché la scelta non è stabile.'),
+            "rs_pt_rerank": 'Riclassificazione per radiazione',
+            "rs_pe_rerank": ('I migliori candidati ricevono una corsa NEC-2 completa del diagramma '
+                             'di radiazione per essere riclassificati per guadagno e angolo di '
+                             'partenza, non solo per ROS.'),
+            "rs_pt_recompute": 'Ricalcolo del vincitore',
+            "rs_pe_recompute": ('La scansione ha classificato i candidati con segmentazione '
+                                'grossolana. Ora il vincitore viene risolto di nuovo alla densità '
+                                'fine, e sono quelle le impedenze pubblicate.'),
+            "rs_pt_converge": 'Verifica di convergenza della segmentazione',
+            "rs_pe_converge": ('La geometria vincente viene risolta con diverse densità di '
+                               'segmenti. Se R e X smettono di muoversi, i numeri pubblicati sono '
+                               'convergiti; altrimenti il report lo dichiara.'),
+            "rs_pt_outputs": 'Scrittura dei risultati',
+            "rs_pe_outputs": ('Il calcolo è finito. Il report testuale, il CSV, il deck NEC e i '
+                              'grafici vengono scritti su disco.'),
+            "rs_pt_radiation": 'Diagrammi di radiazione',
+            "rs_pe_radiation": ('Viene eseguita una scansione RP completa della geometria vincente '
+                                'per disegnare i diagrammi di azimut ed elevazione.'),
+            "rs_pt_pdf": 'Brochure PDF',
+            "rs_pe_pdf": 'La brochure PDF finale viene assemblata dai risultati.',
+            "rs_pt_done": 'Completato',
+            "rs_pe_done": 'La corsa è terminata. I valori sotto sono quelli definitivi.',
+            "rs_pt_failed": 'Fermato / fallito',
+            "rs_pe_failed": ('La corsa non si è completata. I valori sotto sono gli ultimi '
+                             'riportati dalla console prima della fine.'),
             "clear_btn": 'Pulisci',
             "running": 'In esecuzione…',
             "stopped": "Fermato dall'utente",
@@ -14808,6 +15137,455 @@ def _launch_gui() -> None:
     _HELP_POPUP_EDGE   = "#B5620A"
     _HELP_MAX_CHARS    = 1024
 
+    # ── Resume pane: digest of the optimizer's own console stream ─────────
+    #
+    # The right-hand "Resume" pane is fed from exactly the same byte stream
+    # the left console shows: every line the child process prints is handed
+    # to _ResumeState.feed().  Nothing is invented from GUI-side state, so
+    # the Resume can never claim something the raw console does not also
+    # show — it only *explains* it and keeps the numbers that matter.
+    #
+    # The optimizer speaks en/es/it, so the patterns below anchor on the
+    # parts that are NOT translated — numbers, units, bracketed windows,
+    # CLI flag names (--retry, --test-window, wire-step, cp-step) and the
+    # literal tokens NEC2 / CP / UnUn — plus the few word stems that do get
+    # translated, spelled out in all three languages.
+
+    import time as _time
+
+    def _rs_alt(*stems: str) -> str:
+        return "(?:" + "|".join(stems) + ")"
+
+    _RS_RE = {
+        # "  Empirical sweep  63% (312/495)  w=12.40 m  cp=6.20 m"
+        "emp_prog": re.compile(
+            r"(\d{1,3})\s*%\s*\((\d+)\s*/\s*(\d+)\)\s*\w+\s*=\s*([\d.,]+)\s*m"
+            r"\s+cp\s*=\s*([\d.,]+)\s*m", re.I),
+        # "  NEC2  312/495  wire=12.40 m  cp=6.20 m  (20m)"
+        "nec_prog": re.compile(
+            r"NEC2\s+(\d+)\s*/\s*(\d+)\s+\w+\s*=\s*([\d.,]+)\s*m"
+            r"\s+cp\s*=\s*([\d.,]+)\s*m\s*\(([^)]*)\)", re.I),
+        # "  Grid size     : 25 (wire) × 17 (cp) = 425 pairs"
+        "grid": re.compile(
+            r"(\d+)\s*\([^)]*\)\s*[×x]\s*(\d+)\s*\([^)]*\)\s*=\s*(\d+)"),
+        # "  Starting NEC2 sweep …"
+        "sweep_start": re.compile(
+            _rs_alt("Starting", "Iniciando", "Avvio") + r"\b.*?\b(NEC2|EMPIRICAL)\b", re.I),
+        # "  Sweep complete.  425 candidates evaluated."
+        "sweep_done": re.compile(
+            _rs_alt("complet") + r"\w*\b.*?(\d+)\s+" + _rs_alt("candidat") + r"\w*", re.I),
+        # "  Pareto-optimal candidates: 7"
+        "pareto": re.compile(r"Pareto\D*?(\d+)\s*$", re.I),
+        # "  🔁  --test-window: refine pass 2/3 — wire-step = 0.050 m, cp-step = 0.050 m"
+        "refine_pass": re.compile(
+            r"--test-window.*?(\d+)\s*/\s*(\d+).*?wire-step\s*=\s*([\d.,]+)"
+            r".*?cp-step\s*=\s*([\d.,]+)", re.I | re.S),
+        # "      window: wire [11.900, 13.100] m   CP [5.800, 6.600] m   (from the top 5 …)"
+        "refine_win": re.compile(
+            r"\[\s*([\d.,]+)\s*,\s*([\d.,]+)\s*\]\s*m\D+?"
+            r"\[\s*([\d.,]+)\s*,\s*([\d.,]+)\s*\]\s*m"),
+        # "  🔁  --retry: wire boundary at maximum — expanding upper bound to 14.000 m (retry 1/3)"
+        "retry_exp": re.compile(
+            r"--retry:.*?([\d.,]+)\s*m\s*\(\s*\w+\s*(\d+)\s*/\s*(\d+)\s*\)", re.I | re.S),
+        # "  ✔  new best — wire = 12.400 m   cp = 6.200 m   score = 0.8421"
+        "new_best": re.compile(
+            r"=\s*([\d.,]+)\s*m\s+\w+\s*=\s*([\d.,]+)\s*m\s+\w+\s*=\s*([\d.,]+)\s*$"),
+        # "  ℹ  no improvement — keeping wire = 12.400 m, cp = 6.200 m."
+        "no_improve": re.compile(
+            r"=\s*([\d.,]+)\s*m\s*,\s*\w+\s*=\s*([\d.,]+)\s*m"),
+        # "    pass 2: 9:1 → 16:1 — re-ranking every candidate …"
+        "unun_pass": re.compile(
+            r"(\d+)\s*:\s*([\d.,]+)\s*:\s*1\s*(?:→|->)\s*([\d.,]+)\s*:\s*1"),
+        # "UnUn selected automatically: 16:1"
+        "unun_sel": re.compile(
+            _rs_alt("selected", "seleccionado", "selezionato")
+            + r"\D*?([\d.,]+)\s*:\s*1", re.I),
+        # "  pattern 3/10: wire 12.340 m  cp 6.170 m"
+        "rerank": re.compile(
+            _rs_alt("pattern", "patr[oó]n", "diagramma") + r"\s+(\d+)\s*/\s*(\d+)\s*:"
+            r"\s*\w+\s+([\d.,]+)\s*m\s+cp\s+([\d.,]+)\s*m", re.I),
+        # "  Recomputing the best geometry at 41 segments per half wave …"
+        "recompute": re.compile(
+            _rs_alt("Recomputing", "Recalculando", "Ricalcolo") + r"\b.*?(\d+)\s+"
+            + _rs_alt("segment"), re.I | re.S),
+        # "  Segmentation convergence check (base 41 seg/half wave, plus …)"
+        "converge": re.compile(
+            _rs_alt("convergence", "convergencia", "convergenza"), re.I),
+        # "    running 61 seg/half wave  (wire 97 seg / cp 49 seg) …"
+        "conv_run": re.compile(
+            _rs_alt("running", "ejecutando", "esecuzione") + r"\s+(\d+)\s+seg", re.I),
+        "outputs": re.compile(
+            _rs_alt("Writing outputs", "Escribiendo resultados",
+                    "Scrittura dei risultati"), re.I),
+        "radiation": re.compile(
+            _rs_alt("radiation diagram", "diagramas de radiaci[oó]n",
+                    "diagrammi di radiazione"), re.I),
+        "pdf": re.compile(
+            _rs_alt("Generating", "Generando", "Generazione") + r"\b.*?PDF", re.I | re.S),
+        # "  📄  Report saved → optimizer_report.txt".  The token after the
+        # arrow must look like a FILE NAME: "40m → 7.1 MHz" also carries an
+        # arrow and must not be mistaken for an output file.
+        "saved": re.compile(r"(?:→|->)\s*(\S*\.[A-Za-z]{2,5})(?:\s|$)"),
+        # "  --wire-min    : 10.000 m"   (only printed when set explicitly)
+        "bound": re.compile(r"--(wire|cp)-(min|max)\s*:\s*([\d.,]+)\s*m", re.I),
+        # "  Optimising the UnUn ratio automatically …"
+        "unun_opt": re.compile(
+            _rs_alt("Optimising", "Optimizing", "Optimizando", "Ottimizzazione")
+            + r"\b.*?UnUn", re.I | re.S),
+    }
+
+    def _rs_f(text, default=None):
+        """Tolerant float parser ('12,40' and '12.40' both work)."""
+        try:
+            return float(str(text).strip().replace(",", "."))
+        except (TypeError, ValueError):
+            return default
+
+    def _rs_hms(seconds) -> str:
+        if seconds is None or seconds < 0:
+            return "—"
+        s = int(seconds)
+        return f"{s // 3600:02d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
+
+    class _PassInfo:
+        """Everything the console revealed about one sweep pass."""
+
+        def __init__(self, index: int, kind: str = "initial"):
+            self.index    = index
+            self.kind     = kind          # initial | expand | refine
+            self.mode     = ""            # NEC2 | EMPIRICAL
+            self.t0       = _time.time()
+            self.t_end    = None
+            self.w_min = self.w_max = None
+            self.c_min = self.c_max = None
+            self.w_step = self.c_step = None
+            self.n_wire = self.n_cp = self.n_pairs = None
+            self.done = self.total = None
+            self.pct      = None
+            self.cur_wire = self.cur_cp = None
+            self.cur_band = ""
+            self.candidates = None
+            self.pareto     = None
+            self.best_wire = self.best_cp = self.best_score = None
+            self.verdict    = ""          # better | same | ""
+
+        @property
+        def duration(self):
+            return (self.t_end or _time.time()) - self.t0
+
+        def rate(self):
+            """Candidates per second, or None while nothing has finished."""
+            if not self.done or self.duration <= 0:
+                return None
+            return self.done / self.duration
+
+        def eta(self):
+            r = self.rate()
+            if not r or not self.total:
+                return None
+            left = max(0, self.total - (self.done or 0))
+            return left / r
+
+    class _ResumeState:
+        """Language-independent digest of one optimizer run.
+
+        `feed()` is called once per console line and updates the model; the
+        GUI re-renders the Resume pane from it.  Every attribute here maps to
+        something the user can also find verbatim in the left console.
+        """
+
+        def __init__(self):
+            self.reset()
+
+        def reset(self, cmd=None):
+            self.cmd        = list(cmd or [])
+            self.args       = self._parse_cmd(self.cmd)
+            self.t0         = _time.time()
+            self.t_end      = None
+            self.ok         = None
+            self.final_msg  = ""
+            self.phase      = "start"
+            self.phase_arg  = ""
+            self.mode       = ""
+            self.passes     = []            # finished passes, oldest first
+            self.cur        = None          # _PassInfo | None
+            self.retry_used = 0
+            self.retry_max  = 0
+            self.unun_seed  = None
+            self.unun_now   = None
+            self.unun_pass  = 0
+            self.segs_final = None
+            self.conv_segs  = None
+            self.rerank     = None          # (i, n, wire, cp)
+            self.warnings   = 0
+            self.errors     = 0
+            self.last_warn  = ""
+            self.last_err   = ""
+            self.files      = []
+            self.best_wire = self.best_cp = self.best_score = None
+
+        # ── helpers ──────────────────────────────────────────────────────
+
+        @staticmethod
+        def _parse_cmd(cmd):
+            """'--wire-min 10' → {'--wire-min': '10'}; bare flags map to ''."""
+            out, flag = {}, None
+            for tok in list(cmd)[1:]:
+                if tok.startswith("--"):
+                    if flag is not None:
+                        out[flag] = ""
+                    flag = tok
+                elif flag is not None:
+                    out[flag] = tok
+                    flag = None
+            if flag is not None:
+                out[flag] = ""
+            return out
+
+        def _arg_f(self, flag):
+            return _rs_f(self.args.get(flag)) if self.args.get(flag) else None
+
+        @property
+        def last_pass(self):
+            return self.passes[-1] if self.passes else None
+
+        def elapsed(self):
+            return (self.t_end or _time.time()) - self.t0
+
+        def _open_pass(self, kind: str, mode: str = ""):
+            """Close the running pass (if any) and start a new one."""
+            if self.cur is not None:
+                self.cur.t_end = _time.time()
+                self.passes.append(self.cur)
+            idx = (self.cur.index + 1) if self.cur is not None else 1
+            self.cur = _PassInfo(idx, kind)
+            self.cur.mode = mode or self.mode
+            if kind == "initial":
+                # The window of the FIRST pass is not always echoed (it is
+                # derived from --margin unless min/max were given), so seed it
+                # from the command line we launched ourselves.  Any explicit
+                # "--wire-min : x m" line later overwrites these.
+                self.cur.w_min  = self._arg_f("--wire-min")
+                self.cur.w_max  = self._arg_f("--wire-max")
+                self.cur.w_step = self._arg_f("--wire-step")
+                self.cur.c_min  = self._arg_f("--cp-min")
+                self.cur.c_max  = self._arg_f("--cp-max")
+                self.cur.c_step = self._arg_f("--cp-step")
+            # A refine/expand pass inherits the window it was announced with.
+            return self.cur
+
+        def _ensure_pass(self):
+            if self.cur is None:
+                self._open_pass("initial", self.mode)
+            return self.cur
+
+        def finish(self, ok: bool, msg: str):
+            if self.cur is not None and self.cur.t_end is None:
+                self.cur.t_end = _time.time()
+            self.t_end     = _time.time()
+            self.ok        = ok
+            self.final_msg = msg
+            self.phase     = "done" if ok else "failed"
+
+        # ── the parser ───────────────────────────────────────────────────
+
+        def feed(self, raw: str) -> None:
+            line = (raw or "").replace("\r", "").rstrip("\n")
+            if not line.strip():
+                return
+            low = line.lower()
+
+            # 1. severity bookkeeping (same heuristic the console tags use)
+            if any(k in low for k in ("error", "failed", "✗", "traceback")):
+                self.errors += 1
+                self.last_err = line.strip()
+            elif any(k in low for k in ("warning", "warn", "⚠", "aviso",
+                                        "avviso", "atención", "attenzione")):
+                self.warnings += 1
+                self.last_warn = line.strip()
+
+            # 2. pending window announced by a refine pass, applied to the
+            #    pass that the next "Starting … sweep" opens.
+            m = _RS_RE["refine_pass"].search(line)
+            if m:
+                self.retry_used = int(m.group(1))
+                self.retry_max  = int(m.group(2))
+                p = self._open_pass("refine")
+                p.w_step = _rs_f(m.group(3))
+                p.c_step = _rs_f(m.group(4))
+                self.phase = "refine"
+                return
+
+            m = _RS_RE["retry_exp"].search(line)
+            if m:
+                self.retry_used = int(m.group(2))
+                self.retry_max  = int(m.group(3))
+                p = self._open_pass("expand")
+                bound = _rs_f(m.group(1))
+                if re.search(r"\bCP\b", line):
+                    p.c_max = bound
+                else:
+                    p.w_max = bound
+                self.phase = "expand"
+                return
+
+            m = _RS_RE["bound"].search(line)
+            if m:
+                p = self._ensure_pass()
+                val = _rs_f(m.group(3))
+                setattr(p, ("w_" if m.group(1).lower() == "wire" else "c_")
+                        + m.group(2).lower(), val)
+                return
+
+            m = _RS_RE["refine_win"].search(line)
+            if m and self.cur is not None:
+                self.cur.w_min = _rs_f(m.group(1))
+                self.cur.w_max = _rs_f(m.group(2))
+                self.cur.c_min = _rs_f(m.group(3))
+                self.cur.c_max = _rs_f(m.group(4))
+                return
+
+            # 3. sweep life-cycle
+            m = _RS_RE["sweep_start"].search(line)
+            if m:
+                self.mode = m.group(1).upper()
+                if self.cur is None or self.cur.done is not None \
+                        or self.cur.candidates is not None:
+                    self._open_pass("initial" if not self.passes else "expand",
+                                    self.mode)
+                self.cur.mode = self.mode
+                self.phase = "sweep"
+                return
+
+            m = _RS_RE["nec_prog"].search(line)
+            if m:
+                p = self._ensure_pass()
+                p.mode     = p.mode or "NEC2"
+                p.done     = int(m.group(1))
+                p.total    = int(m.group(2))
+                p.pct      = (100.0 * p.done / p.total) if p.total else None
+                p.cur_wire = _rs_f(m.group(3))
+                p.cur_cp   = _rs_f(m.group(4))
+                p.cur_band = m.group(5).strip()
+                self.phase = "sweep"
+                return
+
+            m = _RS_RE["emp_prog"].search(line)
+            if m:
+                p = self._ensure_pass()
+                p.mode     = p.mode or "EMPIRICAL"
+                p.pct      = float(m.group(1))
+                p.done     = int(m.group(2))
+                p.total    = int(m.group(3))
+                p.cur_wire = _rs_f(m.group(4))
+                p.cur_cp   = _rs_f(m.group(5))
+                self.phase = "sweep"
+                return
+
+            m = _RS_RE["grid"].search(line)
+            if m:
+                p = self._ensure_pass()
+                p.n_wire, p.n_cp, p.n_pairs = (int(m.group(1)), int(m.group(2)),
+                                               int(m.group(3)))
+                return
+
+            m = _RS_RE["sweep_done"].search(line)
+            if m:
+                p = self._ensure_pass()
+                p.candidates = int(m.group(1))
+                if p.total:
+                    p.done, p.pct = p.total, 100.0
+                self.phase = "sweep_done"
+                return
+
+            m = _RS_RE["pareto"].search(line)
+            if m:
+                self._ensure_pass().pareto = int(m.group(1))
+                return
+
+            # 4. pass outcome
+            m = _RS_RE["new_best"].search(line)
+            if m:
+                p = self._ensure_pass()
+                p.best_wire  = _rs_f(m.group(1))
+                p.best_cp    = _rs_f(m.group(2))
+                p.best_score = _rs_f(m.group(3))
+                p.verdict    = "better"
+                self.best_wire, self.best_cp, self.best_score = (
+                    p.best_wire, p.best_cp, p.best_score)
+                return
+
+            m = _RS_RE["no_improve"].search(line)
+            if m:
+                p = self._ensure_pass()
+                p.best_wire = _rs_f(m.group(1))
+                p.best_cp   = _rs_f(m.group(2))
+                p.verdict   = "same"
+                if self.best_wire is None:
+                    self.best_wire, self.best_cp = p.best_wire, p.best_cp
+                return
+
+            # 5. post-sweep stages
+            m = _RS_RE["unun_pass"].search(line)
+            if m:
+                self.unun_pass = int(m.group(1))
+                if self.unun_seed is None:
+                    self.unun_seed = _rs_f(m.group(2))
+                self.unun_now = _rs_f(m.group(3))
+                self.phase = "unun"
+                return
+
+            if _RS_RE["unun_opt"].search(line):
+                self.phase = "unun"
+                return
+
+            m = _RS_RE["unun_sel"].search(line)
+            if m and "unun" in low:
+                self.unun_now = _rs_f(m.group(1))
+                return
+
+            m = _RS_RE["rerank"].search(line)
+            if m:
+                self.rerank = (int(m.group(1)), int(m.group(2)),
+                               _rs_f(m.group(3)), _rs_f(m.group(4)))
+                self.phase = "rerank"
+                return
+
+            m = _RS_RE["recompute"].search(line)
+            if m:
+                self.segs_final = int(m.group(1))
+                self.phase = "recompute"
+                return
+
+            m = _RS_RE["conv_run"].search(line)
+            if m:
+                self.conv_segs = int(m.group(1))
+                self.phase = "converge"
+                return
+
+            if _RS_RE["converge"].search(line):
+                self.phase = "converge"
+                return
+
+            if _RS_RE["outputs"].search(line):
+                self.phase = "outputs"
+                return
+
+            if _RS_RE["radiation"].search(line):
+                self.phase = "radiation"
+                return
+
+            if _RS_RE["pdf"].search(line):
+                self.phase = "pdf"
+                return
+
+            m = _RS_RE["saved"].search(line)
+            if m:
+                name = m.group(1).strip().rstrip(".,;")
+                if name and name not in self.files:
+                    self.files.append(name)
+                return
+
     # ── Help badge widget ────────────────────────────────────────────────
     #
     # A tiny orange circle with a "?" that any modifiable GUI control can
@@ -15160,6 +15938,10 @@ def _launch_gui() -> None:
                 self._cmd_text.config(font=mono)
             if hasattr(self, "_console"):
                 self._console.config(font=mono)
+            if hasattr(self, "_resume"):
+                self._resume.config(font=mono)
+                self._resume.tag_config("t", font=(_FFM, sz, "bold"))
+                self._resume.tag_config("h", font=(_FFM, sz, "bold"))
             if hasattr(self, "_font_sz_lbl"):
                 self._font_sz_lbl.config(text=str(self._font_sz))
             self._rescale_help_badges()
@@ -16328,6 +17110,271 @@ def _launch_gui() -> None:
 
         # ── Tab: Run ──────────────────────────────────────────────────────
 
+        # ── Resume pane ───────────────────────────────────────────────────
+        #
+        # The Resume is a *rendering* of _ResumeState, which in turn is fed
+        # only from the console stream.  It is rebuilt from scratch on every
+        # refresh (cheap — it is a page of text) and the refresh is throttled
+        # so a 400-candidate NEC2 sweep cannot spend its time redrawing.
+
+        _RS_PHASE_KEYS = {
+            "start":      ("rs_pt_start",      "rs_pe_start"),
+            "sweep_done": ("rs_pt_sweep_done", "rs_pe_sweep_done"),
+            "refine":     ("rs_pt_refine",     "rs_pe_refine"),
+            "expand":     ("rs_pt_expand",     "rs_pe_expand"),
+            "unun":       ("rs_pt_unun",       "rs_pe_unun"),
+            "rerank":     ("rs_pt_rerank",     "rs_pe_rerank"),
+            "recompute":  ("rs_pt_recompute",  "rs_pe_recompute"),
+            "converge":   ("rs_pt_converge",   "rs_pe_converge"),
+            "outputs":    ("rs_pt_outputs",    "rs_pe_outputs"),
+            "radiation":  ("rs_pt_radiation",  "rs_pe_radiation"),
+            "pdf":        ("rs_pt_pdf",        "rs_pe_pdf"),
+            "done":       ("rs_pt_done",       "rs_pe_done"),
+            "failed":     ("rs_pt_failed",     "rs_pe_failed"),
+        }
+
+        def _rs_phase_keys(self, st):
+            if st.phase == "sweep":
+                mode = ((st.cur.mode if st.cur else "") or st.mode or "NEC2").upper()
+                if mode.startswith("EMP"):
+                    return ("rs_pt_sweep_emp", "rs_pe_sweep_emp")
+                return ("rs_pt_sweep_nec2", "rs_pe_sweep_nec2")
+            return self._RS_PHASE_KEYS.get(st.phase,
+                                           ("rs_pt_start", "rs_pe_start"))
+
+        def _resume_touch(self):
+            """Ask for a redraw; coalesces bursts of console lines into one."""
+            if not hasattr(self, "_resume"):
+                return
+            if getattr(self, "_resume_job", None) is not None:
+                return
+            self._resume_job = self.after(250, self._resume_flush)
+
+        def _resume_flush(self):
+            self._resume_job = None
+            self._render_resume()
+
+        def _resume_tick(self):
+            """1 Hz heartbeat so elapsed/ETA keep moving between lines."""
+            self._resume_tick_job = None
+            if getattr(self, "_running", False):
+                self._render_resume()
+                self._resume_tick_job = self.after(1000, self._resume_tick)
+
+        # ── small formatters ──────────────────────────────────────────────
+
+        def _rs_dash(self) -> str:
+            return self.t("rs_no_data")
+
+        def _rs_m(self, v, nd: int = 3) -> str:
+            return self._rs_dash() if v is None else f"{v:.{nd}f} m"
+
+        def _rs_win(self, lo, hi, step=None) -> str:
+            if lo is None and hi is None and step is None:
+                return self._rs_dash()
+            _lo = "—" if lo is None else f"{lo:.3f}"
+            _hi = "—" if hi is None else f"{hi:.3f}"
+            out = f"[{_lo} … {_hi}] m"
+            if step is not None:
+                out += f"   {self.t('rs_l_step')} = {step:.3f} m"
+            return out
+
+        def _rs_row(self, key: str, value: str) -> str:
+            lab = self.t(key)
+            pad = " " * max(1, 24 - len(lab))
+            return f"  {lab}{pad}: {value}\n"
+
+        def _rs_cfg_pairs(self):
+            """Flatten the command line into readable 'flag value' items."""
+            out, pending = [], None
+            for tok in getattr(self._resume_state, "cmd", [])[1:]:
+                if tok.startswith("--"):
+                    if pending:
+                        out.append(pending)
+                    pending = tok
+                elif pending:
+                    out.append(f"{pending} {tok}")
+                    pending = None
+            if pending:
+                out.append(pending)
+            return out
+
+        # ── the renderer ──────────────────────────────────────────────────
+
+        def _render_resume(self):
+            if not hasattr(self, "_resume"):
+                return
+            st = self._resume_state
+            w  = self._resume
+            try:
+                y0 = w.yview()[0]
+            except Exception:
+                y0 = 0.0
+            w.config(state="normal")
+            w.delete("1.0", "end")
+
+            def add(text, tag=""):
+                w.insert("end", text, tag)
+
+            dash = self._rs_dash()
+            cur  = st.cur
+            last = st.last_pass
+            if last is None and cur is not None and cur.candidates is not None:
+                # Single-pass run: the pass in hand has already produced its
+                # result, so it IS the last pass as far as the user is
+                # concerned — better than an empty section.
+                last = cur
+
+            # ── header ────────────────────────────────────────────────────
+            title = self.t("resume_lf")
+            if cur is not None:
+                title += f"  —  {self.t('rs_l_pass')} {cur.index}"
+                if st.retry_max:
+                    title += f"  ({st.retry_used}/{st.retry_max})"
+            add(title + "\n", "t")
+            add(self.t("rs_intro") + "\n\n", "dim")
+
+            if st.ok is None and cur is None and not st.cmd:
+                add(self.t("rs_wait") + "\n", "dim")
+                w.config(state="disabled")
+                return
+
+            # ── 1. what is running now ────────────────────────────────────
+            add("■ " + self.t("rs_hdr_now") + "\n", "h")
+            k_title, k_expl = self._rs_phase_keys(st)
+            add(self._rs_row("rs_l_stage", self.t(k_title)), "k")
+            add("  " + self.t(k_expl) + "\n", "dim")
+
+            if st.ok is not None:
+                add(self._rs_row("rs_l_status", st.final_msg or dash),
+                    "ok" if st.ok else "err")
+
+            if cur is not None:
+                if cur.total:
+                    pct = cur.pct if cur.pct is not None else 0.0
+                    add(self._rs_row(
+                        "rs_l_progress",
+                        f"{cur.done or 0}/{cur.total}  ({pct:.0f} %)"))
+                if cur.cur_wire is not None:
+                    band = f"   [{cur.cur_band}]" if cur.cur_band else ""
+                    add(self._rs_row(
+                        "rs_l_candidate",
+                        f"wire = {self._rs_m(cur.cur_wire, 2)}"
+                        f"   cp = {self._rs_m(cur.cur_cp, 2)}{band}"))
+                # A rate measured over the first fraction of a second is
+                # noise, so both it and the ETA derived from it stay hidden
+                # until the pass has been running for a couple of seconds.
+                rate = cur.rate() if cur.duration >= 2.0 else None
+                if rate:
+                    add(self._rs_row("rs_l_rate", f"{rate:.2f} /s"))
+                    if st.ok is None and cur.eta() is not None:
+                        add(self._rs_row("rs_l_eta", _rs_hms(cur.eta())))
+            if st.rerank and st.phase == "rerank":
+                i, n, rw, rc = st.rerank
+                add(self._rs_row(
+                    "rs_l_progress",
+                    f"{i}/{n}   wire = {self._rs_m(rw)}   cp = {self._rs_m(rc)}"))
+            add(self._rs_row("rs_l_elapsed", _rs_hms(st.elapsed())))
+            add("\n")
+
+            # ── 2. variables in play ──────────────────────────────────────
+            add("■ " + self.t("rs_hdr_vars") + "\n", "h")
+            if cur is None:
+                add("  " + dash + "\n", "dim")
+            else:
+                add(self._rs_row("rs_l_kind", self.t("rs_k_" + cur.kind)))
+                add(self._rs_row("rs_l_wire_win",
+                                 self._rs_win(cur.w_min, cur.w_max, cur.w_step)))
+                add(self._rs_row("rs_l_cp_win",
+                                 self._rs_win(cur.c_min, cur.c_max, cur.c_step)))
+                if cur.n_pairs:
+                    add(self._rs_row(
+                        "rs_l_grid",
+                        f"{cur.n_wire} × {cur.n_cp} = {cur.n_pairs}"))
+                add(self._rs_row("rs_l_engine",
+                                 (cur.mode or st.mode or dash)))
+            if st.segs_final:
+                add(self._rs_row("rs_l_segs", f"{st.segs_final} seg/½λ"))
+            elif st.conv_segs:
+                add(self._rs_row("rs_l_segs", f"{st.conv_segs} seg/½λ"))
+            if st.unun_now is not None or st.unun_seed is not None:
+                txt = f"{(st.unun_now if st.unun_now is not None else st.unun_seed):.0f}:1"
+                if st.unun_seed is not None and st.unun_now is not None \
+                        and abs(st.unun_seed - st.unun_now) > 1e-9:
+                    txt += f"   ({st.unun_seed:.0f}:1 → {st.unun_now:.0f}:1"
+                    txt += f", {self.t('rs_l_pass').lower()} {st.unun_pass})"
+                add(self._rs_row("rs_l_unun", txt))
+            if st.retry_max:
+                add(self._rs_row("rs_l_retry", f"{st.retry_used}/{st.retry_max}"))
+            if st.best_wire is not None:
+                sc = "" if st.best_score is None else f"   score = {st.best_score:.4f}"
+                add(self._rs_row(
+                    "rs_l_bestsofar",
+                    f"wire = {self._rs_m(st.best_wire)}"
+                    f"   cp = {self._rs_m(st.best_cp)}{sc}"), "ok")
+            add("\n")
+
+            # ── 3. result of the last pass ────────────────────────────────
+            add("■ " + self.t("rs_hdr_last") + "\n", "h")
+            if last is None:
+                add("  " + self.t("rs_no_last") + "\n", "dim")
+            else:
+                add(self._rs_row(
+                    "rs_l_pass",
+                    f"{last.index}  ({self.t('rs_k_' + last.kind)})"))
+                add(self._rs_row("rs_l_engine", last.mode or dash))
+                add(self._rs_row("rs_l_window",
+                                 self._rs_win(last.w_min, last.w_max, last.w_step)))
+                add(self._rs_row("rs_l_cp_win",
+                                 self._rs_win(last.c_min, last.c_max, last.c_step)))
+                add(self._rs_row(
+                    "rs_l_cands",
+                    str(last.candidates if last.candidates is not None
+                        else (last.done or dash))))
+                if last.pareto is not None:
+                    add(self._rs_row("rs_l_pareto", str(last.pareto)))
+                add(self._rs_row(
+                    "rs_l_best",
+                    f"wire = {self._rs_m(last.best_wire)}"
+                    f"   cp = {self._rs_m(last.best_cp)}"))
+                if last.best_score is not None:
+                    add(self._rs_row("rs_l_score", f"{last.best_score:.4f}"))
+                verdict = {"better": "rs_v_better", "same": "rs_v_same"}.get(
+                    last.verdict, "rs_v_unknown")
+                add(self._rs_row("rs_l_verdict", self.t(verdict)),
+                    "ok" if last.verdict == "better" else "dim")
+                add(self._rs_row("rs_l_duration", _rs_hms(last.duration)))
+            add("\n")
+
+            # ── 4. run configuration ──────────────────────────────────────
+            pairs = self._rs_cfg_pairs()
+            if pairs:
+                add("■ " + self.t("rs_hdr_cfg") + "\n", "h")
+                for item in pairs:
+                    add(f"    {item}\n", "dim")
+                add("\n")
+
+            # ── 5. events ─────────────────────────────────────────────────
+            add("■ " + self.t("rs_hdr_events") + "\n", "h")
+            add(self._rs_row("rs_l_warn", str(st.warnings)),
+                "warn" if st.warnings else "")
+            add(self._rs_row("rs_l_err", str(st.errors)),
+                "err" if st.errors else "")
+            if st.last_warn:
+                add(self._rs_row("rs_l_lastwarn", st.last_warn), "warn")
+            if st.last_err:
+                add(self._rs_row("rs_l_lasterr", st.last_err), "err")
+            if st.files:
+                add("  " + self.t("rs_l_files") + ":\n", "k")
+                for f in st.files:
+                    add(f"      • {f}\n", "ok")
+
+            w.config(state="disabled")
+            try:
+                w.yview_moveto(y0)
+            except Exception:
+                pass
+
         def _build_tab_run(self):
             t = self._tab_run
             misc_lf = ttk.LabelFrame(t, padding=8)
@@ -16389,8 +17436,24 @@ def _launch_gui() -> None:
             self._progress = ttk.Progressbar(t, mode="indeterminate", length=400)
             self._progress.pack(fill="x", pady=(0, 8))
 
-            con_lf = ttk.LabelFrame(t, padding=4)
-            con_lf.pack(fill="both", expand=True)
+            # The output area is split in two panes.
+            #
+            #   LEFT  — the raw console.  Byte-for-byte what the optimizer
+            #           printed, exactly as before: same widget, same tags,
+            #           same wrap="none", same Clear button.  Nothing about
+            #           that output is altered or filtered.
+            #   RIGHT — the Resume: the same stream, digested into "what is
+            #           being executed right now, on which data, with which
+            #           variables, and how the previous pass ended".
+            #
+            # A ttk.PanedWindow (not a fixed grid) so the user can drag the
+            # divider and give either side the width they need.
+            self._resume_state = _ResumeState()
+            con_pw = ttk.PanedWindow(t, orient="horizontal")
+            con_pw.pack(fill="both", expand=True)
+
+            con_lf = ttk.LabelFrame(con_pw, padding=4)
+            con_pw.add(con_lf, weight=3)
             self._reg(con_lf, "console_lf")
             self._console = scrolledtext.ScrolledText(
                 con_lf, wrap="none", state="disabled",
@@ -16404,6 +17467,29 @@ def _launch_gui() -> None:
             self._clear_btn = ttk.Button(con_lf, style="Browse.TButton", command=self._clear_console)
             self._clear_btn.pack(anchor="e", pady=(2, 0))
             self._reg(self._clear_btn, "clear_btn")
+
+            res_lf = ttk.LabelFrame(con_pw, padding=4)
+            con_pw.add(res_lf, weight=2)
+            self._reg(res_lf, "resume_lf")
+            self._resume = scrolledtext.ScrolledText(
+                res_lf, wrap="word", state="disabled",
+                bg=_ENTRY_BG, fg=_FG, font=self._font("mono"), relief="solid",
+                insertbackground=_FG, highlightbackground=_BORDER, highlightthickness=1)
+            self._resume.pack(fill="both", expand=True)
+            self._resume.tag_config("t",    foreground=_TAG_HEAD,
+                                    font=(_FFM, self._font_sz, "bold"),
+                                    spacing3=2)
+            self._resume.tag_config("h",    foreground=_TAG_HEAD,
+                                    font=(_FFM, self._font_sz, "bold"),
+                                    spacing1=4, spacing3=2)
+            self._resume.tag_config("k",    foreground=_FG)
+            self._resume.tag_config("dim",  foreground=_FG2, spacing3=2)
+            self._resume.tag_config("ok",   foreground=_TAG_OK)
+            self._resume.tag_config("warn", foreground=_TAG_WARN)
+            self._resume.tag_config("err",  foreground=_TAG_ERR)
+            # Re-render on every language switch, like any other label.
+            self._reg_fn(self._render_resume)
+            self._render_resume()
 
             self._set_status_key("idle")
             self._refresh_cmd()
@@ -18003,11 +19089,24 @@ def _launch_gui() -> None:
             self._console.insert("end", text, tag)
             self._console.see("end")
             self._console.config(state="disabled")
+            # Same text, second consumer: the Resume digest.  The left pane
+            # is written first and is never affected by what follows.
+            state = getattr(self, "_resume_state", None)
+            if state is not None:
+                for _ln in text.splitlines():
+                    try:
+                        state.feed(_ln)
+                    except Exception:
+                        pass        # a parse slip must never break the run
+                self._resume_touch()
 
         def _clear_console(self):
             self._console.config(state="normal")
             self._console.delete("1.0", "end")
             self._console.config(state="disabled")
+            if hasattr(self, "_resume"):
+                self._resume_state.reset()
+                self._render_resume()
 
         def _set_status_key(self, key: str, color: str = _FG2, **kw):
             self._status_key = key
@@ -18035,6 +19134,7 @@ def _launch_gui() -> None:
                 return
             self._refresh_cmd()
             self._clear_console()
+            self._resume_state.reset(cmd)
             self._log(f"Command: {' '.join(cmd)}\n\n", "head")
             outdir = self._outdir_var.get().strip() or None
             if outdir and not os.path.isdir(outdir):
@@ -18060,6 +19160,10 @@ def _launch_gui() -> None:
             self._thread = _threading.Thread(
                 target=self._run_in_thread, args=(cmd, outdir, _token), daemon=True)
             self._thread.start()
+            # Heartbeat: keeps "Elapsed" and the ETA moving even while the
+            # optimizer is silent (a long NEC2 run prints nothing for a while).
+            if getattr(self, "_resume_tick_job", None) is None:
+                self._resume_tick_job = self.after(1000, self._resume_tick)
 
         def _token_is_current(self, token: int) -> bool:
             """True while `token` still identifies the run in progress."""
@@ -18121,6 +19225,8 @@ def _launch_gui() -> None:
             self._progress.stop()
             color = _ACCENT2 if success else _ERR
             self._set_status_text(msg, color)
+            self._resume_state.finish(success, msg)
+            self._render_resume()
             self._log(f"\n{'─' * 60}\n{msg}\n", "ok" if success else "error")
             if success:
                 outdir = self._outdir_var.get().strip() or os.getcwd()
@@ -18155,6 +19261,8 @@ def _launch_gui() -> None:
                 except Exception:
                     pass
             self._set_status_key("stopped", _WARN)
+            self._resume_state.finish(False, self.t("stopped"))
+            self._render_resume()
             self._running = False
             self._run_btn.config(state="normal")
             self._stop_btn.config(state="disabled")
