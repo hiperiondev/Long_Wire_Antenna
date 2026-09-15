@@ -883,6 +883,18 @@ _STRINGS: Dict[str, Dict[str, str]] = {
               "      está agotado — reejecute con --retry mayor o una ventana más amplia.",
         "it": "  ℹ  Limite ancora raggiunto con l'UnUn finale, ma il budget di --retry\n      è esaurito — rieseguire con --retry maggiore o una finestra più ampia.",
     },
+    "retry_no_budget": {
+        "en": "  ℹ  Boundary still hit under the final UnUn ratio.  Automatic window\n"
+              "      expansion is off by default — re-run with --retry N (or widen the\n"
+              "      window with --margin / --wire-min / --wire-max).",
+        "es": "  ℹ  Límite aún alcanzado con el UnUn final.  La expansión automática de\n"
+              "      la ventana está desactivada por defecto — reejecute con --retry N\n"
+              "      (o amplíe la ventana con --margin / --wire-min / --wire-max).",
+        "it": "  ℹ  Limite ancora raggiunto con l'UnUn finale.  L'espansione automatica\n"
+              "      della finestra è disattivata per impostazione predefinita — rieseguire\n"
+              "      con --retry N (o allargare la finestra con --margin / --wire-min /\n"
+              "      --wire-max).",
+    },
     # ── window-refinement messages (--test-window) ───────────────────
     "refine_mode_banner": {
         "en": "  🔎  --test-window: retries refine around the top {0} candidates "
@@ -13025,7 +13037,8 @@ def main() -> None:
                           + f"{Style.RESET_ALL}")
                 break
             if _retry_used >= _retry_max:
-                print(f"\n  {Fore.YELLOW}" + T("retry_budget_spent")
+                print(f"\n  {Fore.YELLOW}"
+                      + T("retry_budget_spent" if _retry_max > 0 else "retry_no_budget")
                       + f"{Style.RESET_ALL}")
                 break
             print(f"\n  {Fore.YELLOW}" + T("retry_post_unun").format(unun_ratio)
