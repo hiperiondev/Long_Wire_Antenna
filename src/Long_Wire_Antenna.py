@@ -8804,7 +8804,17 @@ def plot_results(
     # `ranked` can be empty even when `results` is not (e.g. every candidate
     # failed NEC-2), which would leave top10/vswrs empty and crash the
     # per-band bar charts below on max(vswrs). Nothing to plot in that case.
-    for bi, cr in enumerate(active[:6] if top10 else []):
+    _panel_bands = active[:6] if top10 else []
+
+    # One y-scale for every band panel: per-panel autoscaling made the same
+    # bar height mean a different VSWR in each panel and dropped the 6.0
+    # reference line from any band whose worst case happened to be lower.
+    _all_vswrs = [r.band_vswr.get(cr.band, 999)
+                  for cr in _panel_bands for r in top10]
+    _all_vswrs = [v for v in _all_vswrs if v < 900]
+    _vswr_top = min(20.0, (max(_all_vswrs) if _all_vswrs else 3.0) * 1.15 + 0.5)
+
+    for bi, cr in enumerate(_panel_bands):
         row_idx = 1 + bi // 3
         col_idx = bi % 3
         ax = fig.add_subplot(gs[row_idx, col_idx])
@@ -8812,14 +8822,14 @@ def plot_results(
         colors = ["green" if v <= 1.5 else "orange" if v <= 3.0 else "red"
                   for v in vswrs]
         ax.bar(range(len(top10)), vswrs, color=colors, width=0.7)
-        ax.axhline(1.5, color="green", linestyle="--", linewidth=0.8)
-        ax.axhline(3.0, color="orange", linestyle="--", linewidth=0.8)
-        ax.axhline(6.0, color="red",    linestyle="--", linewidth=0.8)
+        for _thr, _col in ((1.5, "green"), (3.0, "orange"), (6.0, "red")):
+            if _thr <= _vswr_top:
+                ax.axhline(_thr, color=_col, linestyle="--", linewidth=0.8)
         ax.set_xticks(range(len(top10)))
         ax.set_xticklabels(labels, fontsize=6, rotation=30, ha="right")
         ax.set_title(f"{cr.band}  {cr.freq_mhz:.3f} MHz", fontsize=9)
         ax.set_ylabel(T("plot_vswr_ylabel"))
-        ax.set_ylim(0.9, min(20, max(vswrs) * 1.15 + 0.5))
+        ax.set_ylim(0.9, _vswr_top)
         ax.grid(True, alpha=0.3, axis="y")
 
     plt.savefig(out_png, dpi=150, bbox_inches="tight")
