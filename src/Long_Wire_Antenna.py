@@ -6328,7 +6328,6 @@ def check_segmentation_convergence(
     # already be under the limit at the FEEDPOINT wire's own length; a
     # boundary case that only shows up once the real geometry is resolved is
     # still caught by geo.ok below.
-    _highest_lambda_half = C_MHZ / (2.0 * highest_f) if highest_f else 10.0
     spws: List[int] = []
     _skipped_kernel: List[int] = []
     for f in (1.0,) + tuple(factors):
