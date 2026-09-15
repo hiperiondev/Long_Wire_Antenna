@@ -14398,7 +14398,8 @@ def _launch_gui() -> None:
             "utk_rdc":            "Total RF resistance",
             "utk_yes":            "YES",
             "utk_no":             "NO — increase turns",
-            "utk_srf_no":         "NO — the coil self-resonates in band",
+            "utk_srf_no":         "NO — a band sits at or above the coil's self-resonance",
+            "utk_srf_margin":     "NO — SRF is above every band but inside the {m}x safety margin",
             "utk_srf_cap":        ("! The reference winding was shortened to {n} turns to keep "
                                    "the coil below its own self-resonance."),
             "utk_srf_bad":        ("! SELF-RESONANCE: SRF {srf} MHz is below {need} MHz. "
@@ -14922,7 +14923,8 @@ def _launch_gui() -> None:
             "utk_srfok":          "¿Bobinado por debajo de la autorresonancia?",
             "utk_nsrf":           "Espiras máximas admitidas por la FAR",
             "utk_xwind":          "Reactancia paralelo del bobinado en f_max",
-            "utk_srf_no":         "NO — la bobina autorresuena dentro de banda",
+            "utk_srf_no":         "NO — una banda queda en o por encima de la autorresonancia",
+            "utk_srf_margin":     "NO — la FAR supera todas las bandas pero no el margen de {m}x",
             "utk_srf_cap":        ("! El bobinado de referencia se acortó a {n} espiras para "
                                    "mantener la bobina por debajo de su autorresonancia."),
             "utk_srf_bad":        ("! AUTORRESONANCIA: la FAR de {srf} MHz está por debajo de "
@@ -15417,7 +15419,8 @@ def _launch_gui() -> None:
             "utk_rdc": 'Resistenza RF totale',
             "utk_yes": 'SÌ',
             "utk_no": 'NO — aumentare le spire',
-            "utk_srf_no": 'NO — la bobina va in autorisonanza in banda',
+            "utk_srf_no": "NO — una banda si trova alla o sopra l'autorisonanza",
+            "utk_srf_margin": "NO — la SRF supera tutte le bande ma non il margine di {m}x",
             "utk_srf_cap": "! L'avvolgimento di riferimento è stato accorciato a {n} spire per mantenere la bobina sotto la propria autorisonanza.",
             "utk_srf_bad": "! AUTORISONANZA: la SRF di {srf} MHz è inferiore a {need} MHz. Sopra la SRF l'avvolgimento non è più un autotrasformatore e il modello di presa R/n^2 non è valido. Bande interessate: {b}. Usare un supporto più grande, una spaziatura maggiore o una bobina separata per banda.",
             "utk_srf_floor": "! Non è stato possibile applicare il limite di autorisonanza: l'induttanza di porta e il margine della presa richiedono già {n} spire. Questo supporto non può coprire queste bande con una sola bobina.",
@@ -19251,7 +19254,9 @@ def _launch_gui() -> None:
                               f=f(coil["f_max_mhz"], 3)),
                 self._ut_line("utk_nsrf",  f"{coil['n_srf_max']}"),
                 self._ut_line("utk_srfok", self.t("utk_yes") if coil["srf_ok"]
-                                           else self.t("utk_srf_no")),
+                                           else (self.t("utk_srf_no") if coil["bands_above_srf"]
+                                                 else self.t("utk_srf_margin",
+                                                             m=f"{coil['srf_margin']:g}"))),
                 self._ut_line("utk_xwind", f"{f(coil['x_wind_total_ohm'], 0)} Ω  @ "
                                            f"{f(coil['f_max_mhz'], 3)} MHz"),
                 "\n",
