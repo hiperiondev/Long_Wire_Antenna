@@ -2720,6 +2720,12 @@ class FreqPoint:
     # optimiser can score gain at a chosen take-off angle instead of only
     # reading the global maximum.
     rp_rows: List[Tuple[float, float, float]] = field(default_factory=list)
+    # (theta_nec, phi, vertical dBi, horizontal dBi) for the same rows, when
+    # the table carried a VERTC/HORIZ split.  Empty otherwise — an empty list
+    # means "not measured", never "no vertical component".  A component at
+    # nec2c's -999.99 sentinel is stored as None, since a null is not a gain.
+    rp_pol_rows: List[Tuple[float, float, Optional[float], Optional[float]]] = \
+        field(default_factory=list)
     # Extent of the theta grid that actually carries usable gain samples, in
     # NEC polar degrees (0 = zenith, 90 = horizon).  This is NOT the grid the
     # RP card asked for: nec2c prints its "no gain here" sentinel (-999.99)
@@ -2954,6 +2960,40 @@ def _rp_total_gain_offset(rp_text: str) -> Optional[int]:
     if 'TOTAL' not in cols:
         return None
     return cols.index('TOTAL')
+
+
+def _rp_component_offsets(rp_text: str) -> Optional[Tuple[int, int]]:
+    """(vertical, horizontal) gain-field offsets in the RADIATION PATTERNS
+    table, or None when the header does not name those columns.
+
+    Found the same header-driven way _rp_total_gain_offset() finds TOTAL, so
+    the two cannot disagree about the layout.  Only the VERTC/HORIZ layout
+    carries a polarisation split at all: with XNDA X=0 nec2c prints
+    MAJOR/MINOR axes instead, which are ellipse axes, not polarisations, and
+    this returns None for them rather than mislabelling them.
+    """
+    hm = _RE_RP_HEADER.search(rp_text)
+    if not hm:
+        return None
+    nl = rp_text.find('\n', hm.start())
+    header_line = rp_text[hm.start(): nl if nl >= 0 else len(rp_text)]
+    cols = [c.upper().rstrip('.') for c in _RE_RP_HEADER_COL.findall(header_line)]
+    if 'VERT' not in cols or 'HOR' not in cols:
+        return None
+    return cols.index('VERT'), cols.index('HOR')
+
+
+def _build_rp_row_regex_n(n_fields: int) -> 're.Pattern[str]':
+    """Row regex capturing THETA, PHI and the first `n_fields` gain columns.
+
+    One regex for however many gain fields the caller needs, so the total-gain
+    and polarisation parses read the SAME row with the same field boundaries
+    instead of two patterns that can drift apart on an odd table.
+    """
+    return re.compile(
+        r'^\s*((?:90(?:\.0+)?|[0-8]?\d(?:\.\d+)?))\s+(\d{1,3}(?:\.\d+)?)\s+'
+        + r'([\-\d.]+)\s+' * (n_fields - 1) + r'([\-\d.]+)',
+        re.MULTILINE)
 
 
 def _build_rp_row_regex(offset: int) -> 're.Pattern[str]':
@@ -3405,16 +3445,37 @@ def parse_nec2_output(filepath: str, debug: bool = False,
         # apart. Only fall back to the old fixed-offset regex (group 4)
         # when no recognizable header line is present at all.
         rp_offset = _rp_total_gain_offset(rp_search_text)
+        # Polarisation split: read the vertical and horizontal columns in the
+        # same pass as TOTAL, from the same row match, so a row can never be
+        # counted for one and missed for the other.
+        rp_pol: List[Tuple[float, float, Optional[float], Optional[float]]] = []
+        _pol_off = _rp_component_offsets(rp_search_text)
         if rp_offset is not None:
-            rp_row_re = _build_rp_row_regex(rp_offset)
-            total_group = 3
+            _n_fields = max(rp_offset + 1,
+                            (max(_pol_off) + 1) if _pol_off else 0)
+            rp_row_re = _build_rp_row_regex_n(_n_fields)
+            total_group = 3 + rp_offset
+            _v_group = (3 + _pol_off[0]) if _pol_off else None
+            _h_group = (3 + _pol_off[1]) if _pol_off else None
         else:
             rp_row_re = _RE_RP_ROW_FALLBACK
             total_group = 4
+            _v_group = _h_group = None
+
+        def _pol_val(match, grp):
+            if grp is None:
+                return None
+            v = _safe_float(match.group(grp))
+            # -999.99 is "no field in this polarisation here", not -1000 dBi.
+            return None if v <= -200.0 else v
+
         for rm in rp_row_re.finditer(rp_search_text):
             theta = _safe_float(rm.group(1))
             phi   = _safe_float(rm.group(2))
             gain  = _safe_float(rm.group(total_group))
+            if _v_group is not None:
+                rp_pol.append((theta, phi,
+                               _pol_val(rm, _v_group), _pol_val(rm, _h_group)))
             if gain <= -200.0:
                 # nec2c's "no gain here" sentinel (-999.99), printed for the
                 # whole theta = 90 ring over a lossy ground — physically
@@ -3442,6 +3503,7 @@ def parse_nec2_output(filepath: str, debug: bool = False,
             # Keep the whole table: the global maximum alone cannot tell the
             # optimiser what the antenna does at a low take-off angle.
             fp.rp_rows = rp_gains
+            fp.rp_pol_rows = rp_pol
             _usable_theta = [t for (t, _p, _g) in rp_gains]
             fp.min_sampled_theta_deg = min(_usable_theta)
             fp.max_sampled_theta_deg = max(_usable_theta)
@@ -3988,6 +4050,9 @@ ANTENNA_TYPE  = DEFAULT_ANTENNA_TYPE
 CW_VERT_LEN_M = CW_DEFAULT_VERT_LEN_M
 CW_ISOLATOR_Z: Optional[Tuple[float, float]] = None   # None -> ideal isolator
 MATCH_MODEL   = "ideal"        # "ideal" | "real"  (see _vswr_for_ratio)
+MATCH_BALUN_KIND  = "guanella"
+MATCH_BALUN_CORE  = ""         # set from the CLI; "" -> use DEFAULT_TOROID
+MATCH_BALUN_TURNS = 10
 
 # ── Ground-proximity limits (NEC-2 Sommerfeld-Norton ground) ───────────────
 # NEC-2's SN ground is singular as a wire approaches z=0: the impedance does
@@ -5952,6 +6017,12 @@ class CandidateResult:
     band_gain_max: Dict[str, float] = field(default_factory=dict)
     band_toa:      Dict[str, float] = field(default_factory=dict)
     band_gain_toa: Dict[str, float] = field(default_factory=dict)
+    # Vertical / horizontal gain at the TARGET take-off angle, when the RP
+    # table carried a polarisation split.  Reporting only — the ranking key
+    # stays on TOTAL gain, because that is the figure that compares like with
+    # like against an antenna of different polarisation.
+    band_gain_vert:  Dict[str, float] = field(default_factory=dict)
+    band_gain_horiz: Dict[str, float] = field(default_factory=dict)
     # Bands whose pattern WAS computed but which carry no usable sample at the
     # requested take-off angle (typically --target-toa 0: NEC-2 reports no gain
     # at the horizon over a lossy ground, so that ring is absent from the
@@ -6093,14 +6164,14 @@ def score_candidate(
                         and not math.isnan(fmap[key].X_ohm)):
                     fp = fmap[key]
                     R_ant, X_ant = fp.R_ohm, fp.X_ohm
-                    # An n:1 impedance transformer scales BOTH R and X by 1/n
-                    if unun_ratio > 1.0:
-                        R_in = R_ant / unun_ratio
-                        X_in = X_ant / unun_ratio   # X must also be divided by n
-                    else:
-                        R_in, X_in = R_ant, X_ant
-                    g_in = math.hypot(R_in - 50, X_in) / math.hypot(R_in + 50, X_in)
-                    best_vswr = (1 + g_in) / (1 - g_in) if g_in < 1 else 999.0
+                    # An n:1 impedance transformer scales BOTH R and X by 1/n.
+                    # Under --match-model real the finite magnetising
+                    # reactance is applied in shunt first (see
+                    # match_shunt_xm_ohm); it returns None by default, which
+                    # keeps this the ideal transformer it has always been.
+                    best_vswr = _vswr_for_ratio(
+                        R_ant, X_ant, unun_ratio, 50.0,
+                        xm_ohm=match_shunt_xm_ohm(freq, unun_ratio))
                     best_R, best_X = R_ant, X_ant
                     imp_src = "NEC2"
 
@@ -6122,13 +6193,9 @@ def score_candidate(
                 if not _emp_ok and cr.band not in res.empirical_clamped_bands:
                     res.empirical_clamped_bands.append(cr.band)
                     res.note += f" empirical-null@{freq:.3f}MHz"
-                if unun_ratio > 1.0:
-                    R_in_emp = best_R / unun_ratio
-                    X_in_emp = best_X / unun_ratio
-                else:
-                    R_in_emp, X_in_emp = best_R, best_X
-                _g = math.hypot(R_in_emp - 50, X_in_emp) / math.hypot(R_in_emp + 50, X_in_emp)
-                best_vswr = (1 + _g) / (1 - _g) if _g < 1 else 999.0
+                best_vswr = _vswr_for_ratio(
+                    best_R, best_X, unun_ratio, 50.0,
+                    xm_ohm=match_shunt_xm_ohm(freq, unun_ratio))
                 res.nec2_ok = False
                 imp_src = "empirical"
 
@@ -6887,6 +6954,29 @@ def refine_peak_gain_toa(
 _THETA_EPS_DEG = 1e-6
 
 
+def pol_gain_at_elevation(
+        rp_pol_rows: List[Tuple[float, float, Optional[float], Optional[float]]],
+        elev_deg: float) -> Tuple[Optional[float], Optional[float]]:
+    """(vertical, horizontal) gain at `elev_deg`, or (None, None).
+
+    Built on gain_at_elevation() so the elevation is selected exactly the way
+    the total-gain figure selects it — a split taken at a different elevation
+    than the total it is supposed to decompose would be worse than no split.
+    A component that is null everywhere on that ring returns None, not a
+    number: nec2c's -999.99 has already been dropped at parse time.
+    """
+    if not rp_pol_rows:
+        return None, None
+    result: List[Optional[float]] = []
+    for idx in (2, 3):
+        rows = [(theta, phi, comp)
+                for (theta, phi, vert, horiz) in rp_pol_rows
+                for comp in (vert if idx == 2 else horiz,)
+                if comp is not None]
+        result.append(gain_at_elevation(rows, elev_deg) if rows else None)
+    return result[0], result[1]
+
+
 def gain_at_elevation(rp_rows: List[Tuple[float, float, float]],
                       elev_deg: float) -> Optional[float]:
     """
@@ -7056,6 +7146,12 @@ def evaluate_pattern(
         cand.band_gain_max[cr.band] = round(fp.gain_dbi, 2)
         cand.band_toa[cr.band]      = round(fp.toa_deg, 1)
         g = gain_at_elevation(fp.rp_rows, target_toa_deg)
+        if fp.rp_pol_rows:
+            _gv, _gh = pol_gain_at_elevation(fp.rp_pol_rows, target_toa_deg)
+            if _gv is not None:
+                cand.band_gain_vert[cr.band] = round(_gv, 2)
+            if _gh is not None:
+                cand.band_gain_horiz[cr.band] = round(_gh, 2)
         if g is not None:
             cand.band_gain_toa[cr.band] = round(g, 2)
             gains_at_toa.append(g)
@@ -7595,6 +7691,32 @@ class UnUnResult:
     source_geometry: Optional["CandidateResult"] = None
 
 
+def match_shunt_xm_ohm(freq_mhz: float, n: float) -> Optional[float]:
+    """Magnetising reactance of the matching device at `freq_mhz`, or None.
+
+    None means "use the ideal transformer", which is the default and what
+    every result before --match-model real was built on.  A real
+    transmission-line balun departs from ideal mainly through its FINITE
+    winding inductance, which appears in shunt across the antenna-side port
+    and drags the match down at the low-frequency end — exactly where an OCFD
+    on its lowest band already has the least margin.  Returning the reactance
+    (not a fudged VSWR) keeps the physics in one place: _vswr_for_ratio()
+    applies it.
+    """
+    if MATCH_MODEL != "real":
+        return None
+    if antenna_profile().match_device != "balun":
+        return None
+    core = TOROID_DB.get(MATCH_BALUN_CORE or DEFAULT_TOROID)
+    if not core:
+        return None
+    f = float(freq_mhz)
+    if not (f > 0.0 and math.isfinite(f)):
+        return None
+    l_uh = float(core["AL"]) * (int(MATCH_BALUN_TURNS) ** 2) / 1000.0
+    return 2.0 * math.pi * f * 1e6 * l_uh * 1e-6
+
+
 def _vswr_for_ratio(R_ant: float, X_ant: float, n: float,
                     z0: float = 50.0,
                     xm_ohm: Optional[float] = None) -> float:
@@ -7633,13 +7755,22 @@ def _vswr_for_ratio(R_ant: float, X_ant: float, n: float,
 
 
 def _aggregate_vswr_penalty(band_impedances: List[Tuple[str, float, float]],
-                              n: float, z0: float = 50.0) -> float:
-    """Compute the aggregate VSWR penalty for a given UnUn ratio n."""
+                              n: float, z0: float = 50.0,
+                              band_freqs: Optional[Dict[str, float]] = None
+                              ) -> float:
+    """Compute the aggregate VSWR penalty for a given UnUn ratio n.
+
+    `band_freqs` is only needed for --match-model real, where the shunt
+    magnetising reactance is frequency dependent; without it the ideal
+    transformer is used, which is what the default path wants anyway.
+    """
     if not band_impedances:
         return 999.0
     penalties = []
     for _band, R, X in band_impedances:
-        v = _vswr_for_ratio(R, X, n, z0)
+        _f = (band_freqs or {}).get(_band)
+        v = _vswr_for_ratio(R, X, n, z0,
+                            xm_ohm=(match_shunt_xm_ohm(_f, n) if _f else None))
         penalties.append(_vswr_score_single(v))
     mean_pen  = sum(penalties) / len(penalties)
     worst_pen = max(penalties)
@@ -7774,12 +7905,16 @@ def find_best_unun(
     if current_unun not in ratios_to_sweep:
         ratios_to_sweep = sorted(ratios_to_sweep + [current_unun])
 
+    _band_freqs = {cr.band: cr.freq_mhz for cr in calc_rows}
     for n in ratios_to_sweep:
         bv: Dict[str, float] = {}
         for band, R, X in band_impedances:
-            bv[band] = round(_vswr_for_ratio(R, X, n, z0), 3)
+            bv[band] = round(_vswr_for_ratio(
+                R, X, n, z0,
+                xm_ohm=match_shunt_xm_ohm(_band_freqs.get(band, 0.0), n)), 3)
         result.ratio_band_vswr[n] = bv
-        result.ratio_score[n] = _aggregate_vswr_penalty(band_impedances, n, z0)
+        result.ratio_score[n] = _aggregate_vswr_penalty(
+            band_impedances, n, z0, band_freqs=_band_freqs)
 
     best_std = min(_std_set, key=lambda n: result.ratio_score[n])
     result.best_standard_ratio = best_std
@@ -8092,6 +8227,53 @@ def write_report(
                       else f"{CW_ISOLATOR_Z[0]:.0f} + j{CW_ISOLATOR_Z[1]:.0f} ohm "
                            f"series load (LD 4)"))
 
+            _bd = getattr(unun_result, "balun", None) if unun_result else None
+            if _bd:
+                h2("BALUN (TRANSMISSION-LINE TRANSFORMER)")
+                ln(f"Topology          : {_bd.get('kind')} "
+                   f"{_bd.get('ratio', 0):g}:1  "
+                   f"({_bd.get('z_in', 50):.0f} -> {_bd.get('z_out', 0):.0f} ohm)")
+                if _bd.get("n_lines"):
+                    ln(f"Lines             : {_bd['n_lines']} x "
+                       f"{_bd.get('z0_line_target', 0):.0f} ohm, "
+                       f"{_bd.get('turns')} turns each on {_bd.get('core')}")
+                else:
+                    ln(f"Lines             : hybrid winding, "
+                       f"{_bd.get('z0_line_target', 0):.0f} ohm nominal, "
+                       f"{_bd.get('turns')} turns on {_bd.get('core')}")
+                if _bd.get("pair_spacing_mm") is not None:
+                    ln(f"Pair spacing      : "
+                       f"{_bd['pair_spacing_mm']:.2f} mm centre-to-centre on "
+                       f"{_bd.get('wire_dia_mm', 0):.2f} mm wire")
+                if _bd.get("xl_min_ohm") is not None:
+                    ln(f"Magnetising X     : {_bd['xl_min_ohm']:.0f} ohm at "
+                       f"{_bd.get('freq_min_mhz', 0):.3f} MHz "
+                       f"(want >= {_bd.get('xl_required_ohm', 0):.0f} ohm)")
+                ln(f"Status            : {_bd.get('status')}")
+                for _n in _bd.get("notes", []):
+                    ln(f"  - {_n}")
+
+            _id = getattr(unun_result, "isolator", None) if unun_result else None
+            if _id:
+                h2("LINE ISOLATOR (COMMON-MODE CHOKE)")
+                ln(f"Core / turns      : {_id.get('core')}, "
+                   f"{_id.get('turns')} turns of {_id.get('cable')}")
+                if _id.get("z_cm_lo") is not None:
+                    ln(f"|Z common-mode|   : {_id['z_cm_lo']:.0f} ohm at "
+                       f"{_id.get('freq_min_mhz', 0):.3f} MHz, "
+                       f"{_id.get('z_cm_hi', 0):.0f} ohm at "
+                       f"{_id.get('freq_max_mhz', 0):.3f} MHz "
+                       f"(target {_id.get('z_target_ohm', 0):.0f} ohm)")
+                if _id.get("srf_mhz") is not None:
+                    ln(f"Self-resonance    : ~{_id['srf_mhz']:.1f} MHz "
+                       f"(rough estimate — the Medhurst formula is for a "
+                       f"solenoid, not a toroid; above resonance |Z_cm| falls "
+                       f"with frequency, which the figures above already "
+                       f"reflect)")
+                ln(f"Status            : {_id.get('status')}")
+                for _n in _id.get("notes", []):
+                    ln(f"  - {_n}")
+
             h2("ASSUMPTIONS AND LIMITS")
             ln(f"Matching model    : {MATCH_MODEL} transformer "
                + ("(R and X divided by the ratio)" if MATCH_MODEL == "ideal"
@@ -8185,6 +8367,40 @@ def write_report(
                 _gt_s = f"{_gt:12.2f}" if _gt is not None else f"{'n/a':>12}"
                 ln(f"    {_cr.band:>8}  {_cr.freq_mhz:7.3f}  "
                    f"{_gmax:10.2f}  {_toa:6.0f}°  {_gt_s}")
+            # ── Polarisation split ───────────────────────────────────────
+            # Only printed when the RP table actually carried one.  It exists
+            # because a Carolina Windom's vertical component is the whole
+            # point of the design and is invisible in the total-gain column —
+            # and because comparing that total against a horizontally
+            # polarised antenna at the same take-off angle is not comparing
+            # like with like unless the reader knows the split.
+            if best.band_gain_vert or best.band_gain_horiz:
+                ln("")
+                ln(f"    Polarisation at {target_toa_deg:.0f}° take-off "
+                   f"(informational; ranking uses TOTAL gain)")
+                ln(f"    {'Band':>8}  {'Vert dBi':>10}  {'Horiz dBi':>10}  "
+                   f"{'Total dBi':>10}")
+                ln("    " + "─" * 46)
+                for _cr in [c for c in calc_rows if c.active]:
+                    _gv = best.band_gain_vert.get(_cr.band)
+                    _gh = best.band_gain_horiz.get(_cr.band)
+                    _gt2 = best.band_gain_toa.get(_cr.band)
+                    if _gv is None and _gh is None:
+                        continue
+                    # "null" is not "-999 dBi": a polarisation with no field
+                    # on this ring has no gain figure at all.
+                    _fv = f"{_gv:10.2f}" if _gv is not None else f"{'null':>10}"
+                    _fh = f"{_gh:10.2f}" if _gh is not None else f"{'null':>10}"
+                    _ft = f"{_gt2:10.2f}" if _gt2 is not None else f"{'n/a':>10}"
+                    ln(f"    {_cr.band:>8}  {_fv}  {_fh}  {_ft}")
+                if _prof_rep.has_vertical_radiator:
+                    ln("")
+                    ln("    The vertical component originates in the feedline "
+                       "section above the line")
+                    ln("    isolator, by design.  Compare against a "
+                       "horizontally polarised antenna")
+                    ln("    using the TOTAL figure, not the horizontal one.")
+
             _no_s = [b for b in best.bands_no_toa_sample
                      if b in {c.band for c in calc_rows if c.active}]
             if _no_s:
@@ -10163,9 +10379,31 @@ def plot_construction_diagram(
                        color=SUBTEXT, fontsize=8.5, va="center", ha="left")
     placer.register(t_ground, priority=1)
 
-    # ── feed mast ─────────────────────────────────────────────────────────
-    ax.plot([0, 0], [0, z_near], color="#5b6b7c", linewidth=4, zorder=2,
-            solid_capstyle="round")
+    # ── supports ──────────────────────────────────────────────────────────
+    # An end-fed wire hangs from a mast AT the feedpoint.  A dipole does not:
+    # it is strung between two END supports and the feed hangs free in
+    # between, carrying the balun and the coax.  Drawing a mast under the
+    # feedpoint of an OCFD tells the builder to put a pole exactly where the
+    # antenna must have nothing.
+    _prof_cd_early = antenna_profile(
+        antenna_type if antenna_type is not None
+        else getattr(best, "antenna_type", None))
+    if _prof_cd_early.is_dipole:
+        for _sx, _sz in ((-_cxe, _cze), (x_far, z_far)):
+            ax.plot([_sx, _sx], [0, _sz], color="#5b6b7c", linewidth=4,
+                    zorder=2, solid_capstyle="round")
+        # The coax drop replaces the mast under the feed: it is what is
+        # actually there.  For a Carolina Windom its top section is drawn
+        # separately as the vertical radiator, so start below that.
+        _drop_top = z_near
+        if _prof_cd_early.has_vertical_radiator:
+            _drop_top = max(0.0, z_near - (getattr(best, "vert_len_m", 0.0)
+                                           or CW_VERT_LEN_M))
+        ax.plot([0, 0], [0, _drop_top], color="#5b6b7c", linewidth=2,
+                zorder=2, linestyle=(0, (2, 3)))
+    else:
+        ax.plot([0, 0], [0, z_near], color="#5b6b7c", linewidth=4, zorder=2,
+                solid_capstyle="round")
 
     # feedpoint dot + label
     ax.scatter([0], [z_near], s=90, color=ACCENT, edgecolors=TEXT,
@@ -11968,12 +12206,23 @@ def line_isolator_design(freq_min_mhz: float,
 
     # An isolator resonant inside the band stops isolating above resonance.
     out.update(c_self_pf=c_self, srf_mhz=srf)
+    # Above self-resonance the winding capacitance dominates and |Z_cm| falls
+    # with frequency.  That is not automatically a failure — the |Z_cm|
+    # figures above already say whether it still clears the target — so this
+    # reports the fact and lets the impedance numbers decide.
     if math.isfinite(srf) and f_lo <= srf <= f_hi:
         notes.append(
-            f"The choke self-resonates at {srf:.1f} MHz, inside the "
-            f"{f_lo:.2f}-{f_hi:.2f} MHz range: above resonance it stops being "
-            f"an isolator.  Use fewer turns or split it into two chokes.")
+            f"The choke self-resonates at about {srf:.1f} MHz, inside the "
+            f"{f_lo:.2f}-{f_hi:.2f} MHz range; above that it turns capacitive "
+            f"and |Z_cm| falls with frequency.  Check the |Z_cm| figure at the "
+            f"top band before trusting it, or split it into two chokes.")
         status = "srf"
+    elif math.isfinite(srf) and srf < f_lo:
+        notes.append(
+            f"The choke is above self-resonance ({srf:.1f} MHz) across the "
+            f"whole range, so it works as a lossy capacitive impedance rather "
+            f"than as an inductive choke.  The |Z_cm| figures above still "
+            f"apply, but fewer turns would give a more predictable device.")
 
     if min(z_lo, z_hi) < z_target_ohm:
         notes.append(
@@ -13258,6 +13507,14 @@ def _build_parser() -> argparse.ArgumentParser:
                             "a finite series impedance (e.g. 1000,2000) "
                             "instead of an ideal open.  Use this to study what "
                             "an inadequate choke does.")
+    g_ant.add_argument("--balun-core", metavar="CORE", default=DEFAULT_TOROID,
+                       dest="balun_core",
+                       help=f"Toroid for the balun and the line isolator "
+                            f"(default {DEFAULT_TOROID}).")
+    g_ant.add_argument("--balun-turns", metavar="N", type=int, default=10,
+                       dest="balun_turns",
+                       help="Turns per transmission line on the balun "
+                            "(default 10).")
     g_ant.add_argument("--feed-choke", action="store_true", dest="feed_choke",
                        help="Also design a feedline common-mode choke (always "
                             "designed for carolina-windom, where it is the "
@@ -13387,6 +13644,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     global WIRE_RADIUS_M, WIRE_CONDUCTIVITY, FEED_MODEL
     global ANTENNA_TYPE, CW_VERT_LEN_M, CW_ISOLATOR_Z, MATCH_MODEL
+    global MATCH_BALUN_KIND, MATCH_BALUN_CORE, MATCH_BALUN_TURNS
     print()
     print(f"{Fore.CYAN}{'═'*70}")
 
@@ -14050,6 +14308,9 @@ def main() -> None:
         ANTENNA_TYPE = DEFAULT_ANTENNA_TYPE
     _prof_run = antenna_profile(ANTENNA_TYPE)
     MATCH_MODEL = getattr(args, "match_model", "ideal")
+    MATCH_BALUN_KIND  = getattr(args, "balun_kind", "guanella")
+    MATCH_BALUN_CORE  = getattr(args, "balun_core", DEFAULT_TOROID)
+    MATCH_BALUN_TURNS = max(1, int(getattr(args, "balun_turns", 10)))
     if _prof_run.has_vertical_radiator:
         CW_VERT_LEN_M = max(float(getattr(args, "cw_vert_len",
                                           CW_DEFAULT_VERT_LEN_M)),
@@ -15223,6 +15484,27 @@ def main() -> None:
                 run_v=best_run_v,
                 nec2_strict=(mode == "nec2"),
             )
+
+        # The ratio search says WHICH transformer; these say whether it can
+        # be built, and for a Carolina Windom where its radiating section
+        # stops.  Both are cheap and neither needs NEC-2, so they are always
+        # computed for the types that use them rather than being an extra flag
+        # the user has to know to set.
+        if unun_result is not None and unun_result.device_kind == "balun":
+            _f_lo = min(cr.freq_mhz for cr in calc_rows if cr.active)
+            _f_hi = max(cr.freq_mhz for cr in calc_rows if cr.active)
+            try:
+                unun_result.balun = balun_design(
+                    _f_lo, _f_hi, unun_ratio, core=MATCH_BALUN_CORE,
+                    kind=MATCH_BALUN_KIND, turns=MATCH_BALUN_TURNS)
+            except Exception as _be:          # never lose the run over a design note
+                unun_result.balun = {"status": "error", "notes": [str(_be)]}
+            if _prof_run.has_vertical_radiator or getattr(args, "feed_choke", False):
+                try:
+                    unun_result.isolator = line_isolator_design(
+                        _f_lo, _f_hi, core=MATCH_BALUN_CORE)
+                except Exception as _ie:
+                    unun_result.isolator = {"status": "error", "notes": [str(_ie)]}
 
         print(f"\n  {Fore.GREEN}" + T("unun_auto_selected").format(unun_ratio)
               + f"{Style.RESET_ALL}")
