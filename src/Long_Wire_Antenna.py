@@ -497,6 +497,57 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "che contiene il punto di alimentazione; 'junction' mantiene il modello a "
                "due fili con EX sul segmento 1, che converge molto più lentamente."),
     },
+    "antenna_type_msg": {
+        "en": "Antenna type: {0}",
+        "es": "Tipo de antena: {0}",
+        "it": "Tipo di antenna: {0}",
+    },
+    "cw_vert_msg": {
+        "en": "Carolina Windom vertical radiator: {0:.2f} m, line isolator {1}",
+        "es": "Radiador vertical Carolina Windom: {0:.2f} m, aislador de línea {1}",
+        "it": "Radiatore verticale Carolina Windom: {0:.2f} m, isolatore di linea {1}",
+    },
+    "dipole_grid_size": {
+        "en": "Dipole grid: {0} total lengths x {1} offsets = {2} candidates",
+        "es": "Malla de dipolo: {0} longitudes totales x {1} desplazamientos = {2} candidatos",
+        "it": "Griglia dipolo: {0} lunghezze totali x {1} sfalsamenti = {2} candidati",
+    },
+    "warn_empirical_ocfd": {
+        "en": ("Empirical mode for an off-centre-fed dipole uses the "
+               "sinusoidal-current model (R = R_loop / sin^2(k*s); X from the "
+               "two arms as open stubs).  It DOES depend on the feed offset, "
+               "unlike the long-wire formulas, but it assumes an undisturbed "
+               "current distribution, no ground and a thin wire, and it "
+               "systematically UNDER-predicts the feed resistance of a real "
+               "OCFD (which measures 150-400 ohm).  Use it to pick the search "
+               "window; re-run with --mode nec2 before building anything."),
+        "es": ("El modo empírico para un dipolo alimentado descentrado usa el "
+               "modelo de corriente sinusoidal (R = R_loop / sin^2(k*s); X de "
+               "los dos brazos como stubs abiertos).  SI depende del "
+               "desplazamiento del punto de alimentacion, a diferencia de las "
+               "formulas de hilo largo, pero supone una distribucion de "
+               "corriente no perturbada, sin suelo y con hilo delgado, y "
+               "SUBESTIMA sistematicamente la resistencia real de una OCFD "
+               "(que mide 150-400 ohm).  Uselo para elegir la ventana de "
+               "busqueda; vuelva a ejecutar con --mode nec2 antes de construir."),
+        "it": ("La modalita empirica per un dipolo alimentato fuori centro usa "
+               "il modello a corrente sinusoidale (R = R_loop / sin^2(k*s); X "
+               "dai due bracci come stub aperti).  Dipende dallo sfalsamento "
+               "del punto di alimentazione, a differenza delle formule per il "
+               "filo lungo, ma presuppone una distribuzione di corrente non "
+               "perturbata, senza suolo e con filo sottile, e SOTTOSTIMA "
+               "sistematicamente la resistenza reale di una OCFD (misurata "
+               "150-400 ohm).  Usarla per scegliere la finestra di ricerca; "
+               "rieseguire con --mode nec2 prima di costruire."),
+    },
+    "warn_empirical_cw_vertical": {
+        "en": ("The vertical radiator is NOT represented in empirical mode at "
+               "all: these figures describe the horizontal OCFD alone."),
+        "es": ("El radiador vertical NO esta representado en el modo empirico: "
+               "estas cifras describen solo la OCFD horizontal."),
+        "it": ("Il radiatore verticale NON e rappresentato in modalita "
+               "empirica: questi valori descrivono solo la OCFD orizzontale."),
+    },
     "feed_model_msg": {
         "en": "Feed model: {0} (collinear geometries only; others fall back to the junction feed)",
         "es": "Modelo de alimentación: {0} (sólo geometrías colineales; el resto usa la unión)",
@@ -1169,6 +1220,31 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "Radiator (long wire)",
         "es": "Radiador (hilo largo)",
         "it": 'Radiatore (filo lungo)',
+    },
+    "construction_long_arm_label": {
+        "en": "Long arm",
+        "es": "Brazo largo",
+        "it": "Braccio lungo",
+    },
+    "construction_short_arm_label": {
+        "en": "Short arm",
+        "es": "Brazo corto",
+        "it": "Braccio corto",
+    },
+    "construction_vert_label": {
+        "en": "Vertical radiator",
+        "es": "Radiador vertical",
+        "it": "Radiatore verticale",
+    },
+    "construction_isolator_label": {
+        "en": "Line isolator",
+        "es": "Aislador de línea",
+        "it": "Isolatore di linea",
+    },
+    "construction_offset_note": {
+        "en": "Off-centre feed: total {0:.2f} m, feed {1:.2f} m from the short-arm end ({2:.1%})",
+        "es": "Alimentación descentrada: total {0:.2f} m, punto a {1:.2f} m del extremo del brazo corto ({2:.1%})",
+        "it": "Alimentazione fuori centro: totale {0:.2f} m, punto a {1:.2f} m dall'estremità del braccio corto ({2:.1%})",
     },
     "construction_cp_label": {
         "en": "Counterpoise / ground",
@@ -3805,6 +3881,113 @@ FEED_COLLINEAR_TOL = 1e-6
 # How far either side of the nominal segment count the straddle search looks
 # for a count that puts the feed node nearest a segment CENTRE.
 FEED_STRADDLE_SEARCH = 8
+# An OFF-CENTRE feed needs the node far closer to a segment centre than an end
+# feed does: near a current null the feed resistance varies as 1/sin^2(k*s), so
+# a residual offset is a first-order impedance error on the higher bands rather
+# than a rounding artefact.  The dipole search is therefore much wider.
+FEED_STRADDLE_SEARCH_DIPOLE = 24
+# The warn threshold cannot be set below what the geometry allows.  At the
+# classic Windom offset of exactly 1/3 the feed node can NEVER land on a
+# segment centre: that needs (k - 0.5)/n = 1/3, i.e. n = 3k - 1.5, which has no
+# integer solution, and the best attainable residual is 1/6 of a segment
+# (0.167).  A threshold under that would fire on every textbook OCFD and train
+# the user to ignore it.
+FEED_OFFSET_WARN_FRAC = 0.20    # |offset| in segments -> warn (dipole feeds)
+FEED_OFFSET_BAD_FRAC  = 0.35    # |offset| in segments -> mark the deck invalid
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ANTENNA TYPES
+# ═══════════════════════════════════════════════════════════════════════════
+# Three topologies are supported.  Everything that has to behave differently
+# between them is expressed as a FIELD of AntennaProfile, never as a test on
+# the type string scattered through the code: the string is read in exactly
+# one place (antenna_profile below) so a new type cannot half-exist.
+#
+#   long-wire        end-fed radiator + return conductor (counterpoise, ground
+#                    rod or coax stub).  The original topology; unchanged.
+#   ocfd             off-centre-fed dipole.  One straight conductor of total
+#                    length L fed at an interior point; the two "arms" are the
+#                    existing (wire_len, cp_len) pair.  No return conductor —
+#                    the antenna is its own return.  Matched with a balun.
+#   carolina-windom  an OCFD plus a deliberately radiating vertical section
+#                    hanging from the feedpoint, terminated by a line isolator
+#                    (common-mode choke).  Three conductors meet at the source
+#                    node, so the fused (straddle) feed cannot be used.
+ANTENNA_TYPE_CHOICES = ("long-wire", "ocfd", "carolina-windom")
+DEFAULT_ANTENNA_TYPE = "long-wire"
+
+# Off-centre-fed defaults --------------------------------------------------
+OCFD_DEFAULT_OFFSET_FRAC = 1.0 / 3.0   # short arm / total length (classic Windom)
+OCFD_OFFSET_MIN          = 0.10        # below this it is an end feed
+OCFD_OFFSET_MAX          = 0.49        # at 0.50 it is a centre-fed dipole
+OCFD_DEFAULT_BALUN_RATIO = 4.0
+OCFD_BALUN_RATIOS        = (2.0, 4.0, 6.0, 9.0)
+
+# Carolina Windom ----------------------------------------------------------
+CW_DEFAULT_VERT_LEN_M = 3.0    # vertical radiator: balun -> line isolator
+CW_VERT_LEN_MIN_M     = 0.5
+CW_ISOLATOR_Z_DEFAULT = (1000.0, 2000.0)   # (R, X) ohms of a real line isolator
+
+# A source sitting next to a wire junction converges more slowly in NEC-2 than
+# one on a plain segment, so the impedance uncertainty estimate is raised for
+# every deck that cannot use the fused feed.
+JUNCTION_FEED_UNC_FACTOR = 1.8
+
+
+@dataclass(frozen=True)
+class AntennaProfile:
+    """Everything that differs between antenna types, in one record."""
+    key:                   str
+    is_dipole:             bool   # feed is interior; no return conductor needed
+    has_vertical_radiator: bool
+    forced_feed_model:     Optional[str]   # None -> the user's choice stands
+    allow_no_counterpoise: bool
+    default_match_ratio:   float
+    match_device:          str    # "unun" | "balun"
+    empirical_model:       str    # "endfed" | "ocfd"
+    quality_metric:        str    # "parity" | "feedpoint"
+
+
+ANTENNA_PROFILES: Dict[str, AntennaProfile] = {
+    "long-wire": AntennaProfile(
+        key="long-wire", is_dipole=False, has_vertical_radiator=False,
+        forced_feed_model=None, allow_no_counterpoise=True,
+        default_match_ratio=AUTO_UNUN_SEED, match_device="unun",
+        empirical_model="endfed", quality_metric="parity"),
+    "ocfd": AntennaProfile(
+        key="ocfd", is_dipole=True, has_vertical_radiator=False,
+        forced_feed_model=None, allow_no_counterpoise=False,
+        default_match_ratio=OCFD_DEFAULT_BALUN_RATIO, match_device="balun",
+        empirical_model="ocfd", quality_metric="feedpoint"),
+    "carolina-windom": AntennaProfile(
+        key="carolina-windom", is_dipole=True, has_vertical_radiator=True,
+        forced_feed_model="junction", allow_no_counterpoise=False,
+        default_match_ratio=OCFD_DEFAULT_BALUN_RATIO, match_device="balun",
+        empirical_model="ocfd", quality_metric="feedpoint"),
+}
+
+
+def antenna_profile(key: Optional[str] = None) -> AntennaProfile:
+    """Resolve an antenna-type string to its profile.
+
+    The ONLY place the type string is interpreted.  `None` means "whatever the
+    module is currently configured for", which is how every function that was
+    written before antenna types existed keeps working without a new argument
+    at each of its call sites — exactly the mechanism FEED_MODEL and
+    WIRE_RADIUS_M already use.
+    """
+    if key is None:
+        key = ANTENNA_TYPE
+    return ANTENNA_PROFILES.get(key, ANTENNA_PROFILES[DEFAULT_ANTENNA_TYPE])
+
+
+# Module defaults, set once from the CLI (see main()).  They exist so that the
+# geometry/scoring functions can stay source-compatible with every existing
+# call site while still being fully overridable per call.
+ANTENNA_TYPE  = DEFAULT_ANTENNA_TYPE
+CW_VERT_LEN_M = CW_DEFAULT_VERT_LEN_M
+CW_ISOLATOR_Z: Optional[Tuple[float, float]] = None   # None -> ideal isolator
+MATCH_MODEL   = "ideal"        # "ideal" | "real"  (see _vswr_for_ratio)
 
 # ── Ground-proximity limits (NEC-2 Sommerfeld-Norton ground) ───────────────
 # NEC-2's SN ground is singular as a wire approaches z=0: the impedance does
@@ -4074,6 +4257,199 @@ def _avoidance_rating(score: float) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# CLOSED-FORM (EMPIRICAL) FEED IMPEDANCE — SINGLE SOURCE OF TRUTH
+# ═══════════════════════════════════════════════════════════════════════════
+# Three independent copies of the end-fed formulas used to live inline in
+# score_candidate() (twice) and find_best_unun().  They are gone: every
+# consumer calls empirical_impedance() so the models cannot drift apart, and
+# so a new antenna type only has to be taught here once.
+
+# Radiation resistance referenced to the CURRENT MAXIMUM, versus electrical
+# length.  Classic thin-wire values; linearly interpolated between them.
+_R_LOOP_TABLE = ((0.5, 73.0), (1.0, 93.0), (1.5, 105.0),
+                 (2.0, 113.0), (2.5, 118.0), (3.0, 120.0))
+
+# The 1/sin^2 law diverges at a current null, where the sinusoidal-current
+# assumption it rests on has already failed.  Clamp, and tell the caller.
+EMPIRICAL_R_MAX_OHM  = R_VOLTAGE_MAX      # same ceiling the end-fed model uses
+EMPIRICAL_SIN2_FLOOR = 0.02
+EMPIRICAL_X_LIMIT_OHM = 5000.0
+
+
+def _r_loop_ohm(l_over_lambda: float) -> float:
+    """Radiation resistance at the current maximum for a wire of L/lambda."""
+    x = max(float(l_over_lambda), 1e-9)
+    if x <= _R_LOOP_TABLE[0][0]:
+        # Shorter than a half wave: R falls as the square of the length.
+        return 73.0 * (x / 0.5) ** 2
+    for (x0, y0), (x1, y1) in zip(_R_LOOP_TABLE, _R_LOOP_TABLE[1:]):
+        if x <= x1:
+            t = (x - x0) / (x1 - x0)
+            return y0 + t * (y1 - y0)
+    return _R_LOOP_TABLE[-1][1]
+
+
+def _z0_arm_ohm(arm_len_m: float, wire_radius_m: float) -> float:
+    """Schelkunoff average characteristic impedance of one arm (ohms)."""
+    a = max(float(wire_radius_m), 1e-6)
+    l = max(float(arm_len_m), 2.0 * a)
+    return max(60.0 * (math.log(2.0 * l / a) - 1.0), 100.0)
+
+
+def _cot(theta: float) -> float:
+    t = math.tan(theta)
+    if abs(t) < 1e-9:
+        return math.copysign(1e9, t if t else 1.0)
+    return 1.0 / t
+
+
+def empirical_impedance(model: str,
+                        freq_mhz: float,
+                        arm_a_m: float,
+                        arm_b_m: float,
+                        wire_radius_m: Optional[float] = None
+                        ) -> Tuple[float, float, bool]:
+    """
+    Closed-form feed impedance: (R, X, trustworthy).
+
+    model="endfed"  — the original long-wire formulas, bit-for-bit unchanged:
+        R = 50 * 80^cos^2(pi*L/lambda_half),  X = -1500 * sin(2*pi*L/lambda_half)
+      They depend on the radiator length alone; `arm_b_m` is ignored.
+
+    model="ocfd"    — interior feed on a conductor of total length a+b.  With
+      the standard sinusoidal current distribution I(z) = Im*sin(k*(h-|z|)) on
+      a wire of half-length h, the current AT THE FEED is proportional to
+      sin(k*s) where s is the distance from the feed to the NEARER end, so
+
+          R = R_loop(L/lambda) / sin^2(k*s)
+          X = -[ Z0(a)*cot(k*a) + Z0(b)*cot(k*b) ]     (two arms in series,
+                                                        each an open stub)
+
+      Three properties make this the right replacement for the end-fed model:
+        * it depends on the FEED POSITION, which the end-fed formulas do not;
+        * it is self-consistent at resonance — for L = lambda/2 with a third/
+          two-thirds split, cot(60deg) + cot(120deg) = 0, so X = 0 and
+          R = 73/sin^2(60deg) = 97.3 ohm;
+        * it degenerates correctly: s -> 0 sends R -> infinity, i.e. the
+          end-fed case.
+
+      LIMITS, which the reports must repeat: undisturbed sinusoidal current,
+      no ground, infinitely thin wire.  It systematically UNDER-predicts the
+      150-400 ohm a real OCFD measures.  Use it to choose a search window,
+      never to rank a design without NEC-2.
+
+    `trustworthy` is False when the result had to be clamped (the feed sits on
+    or beside a current null).  Callers MUST propagate that into nec2_ok and
+    the candidate note rather than ranking on the clamped value.
+    """
+    f = max(float(freq_mhz), 1e-9)
+    lam = C_MHZ / f
+    radius = WIRE_RADIUS_M if wire_radius_m is None else wire_radius_m
+
+    if model != "ocfd":
+        lhalf = lam / 2.0
+        arg = math.pi * (float(arm_a_m) / lhalf if lhalf else 0.0)
+        R = max(1.0, 50.0 * (80.0 ** (math.cos(arg) ** 2)))
+        X = -1500.0 * math.sin(2.0 * arg)
+        return R, X, True
+
+    k = 2.0 * math.pi / lam
+    a_len = max(float(arm_a_m), 1e-6)
+    b_len = max(float(arm_b_m), 1e-6)
+    total = a_len + b_len
+    s = min(a_len, b_len)
+
+    sin2 = math.sin(k * s) ** 2
+    ok = sin2 >= EMPIRICAL_SIN2_FLOOR
+    sin2 = max(sin2, EMPIRICAL_SIN2_FLOOR)
+    R = min(_r_loop_ohm(total / lam) / sin2, EMPIRICAL_R_MAX_OHM)
+
+    X = -(_z0_arm_ohm(a_len, radius) * _cot(k * a_len)
+          + _z0_arm_ohm(b_len, radius) * _cot(k * b_len))
+    X = max(min(X, EMPIRICAL_X_LIMIT_OHM), -EMPIRICAL_X_LIMIT_OHM)
+    return R, X, ok
+
+
+def feedpoint_suitability(arm_a_m: float,
+                          arm_b_m: float,
+                          freq_mhz: float,
+                          match_ratio: float,
+                          wire_radius_m: Optional[float] = None) -> float:
+    """
+    0…1 — how well the FEED POINT suits the matching device on this band.
+
+    The off-centre-fed analogue of band_avoidance_score().  For an interior
+    feed the parity of the total length says nothing useful: what matters is
+    whether the feed sits on a usable point of the current distribution.
+    Scored as closeness, in log-resistance, between the predicted feed
+    resistance and the resistance the transformer actually wants
+    (match_ratio * 50 ohm).  1.0 = on target, 0.5 = a factor of 2 away,
+    0.25 = a factor of 4 away, 0.0 = the feed landed on a current null.
+    """
+    R, _X, ok = empirical_impedance("ocfd", freq_mhz, arm_a_m, arm_b_m,
+                                    wire_radius_m)
+    if not ok:
+        return 0.0
+    r_target = max(float(match_ratio), 1e-9) * 50.0
+    return math.exp(-abs(math.log(max(R, 1e-9) / r_target)))
+
+
+def band_quality_score(profile: AntennaProfile,
+                       arm_a_m: float,
+                       arm_b_m: float,
+                       freq_mhz: float,
+                       match_ratio: float,
+                       wire_radius_m: Optional[float] = None,
+                       weights: Optional[Tuple[float, float]] = None) -> float:
+    """
+    Geometry-quality metric (0…1), dispatched by antenna type.
+
+    SINGLE SOURCE OF TRUTH, for the same reason band_avoidance_score() is:
+    score_candidate(), the re-score pass that runs when the matching ratio
+    changes, and the CSV exporter must all call this and nothing else.
+    """
+    if profile.quality_metric == "feedpoint":
+        return feedpoint_suitability(arm_a_m, arm_b_m, freq_mhz, match_ratio,
+                                     wire_radius_m)
+    return band_avoidance_score(arm_a_m, freq_mhz, match_ratio, weights=weights)
+
+
+def quality_is_degenerate(profile: AntennaProfile,
+                          match_ratio: float,
+                          weights: Optional[Tuple[float, float]] = None) -> bool:
+    """True when the geometry-quality metric cannot rank geometries."""
+    if profile.quality_metric == "feedpoint":
+        return False    # the feed-point metric always discriminates
+    return avoidance_is_degenerate(match_ratio, weights)
+
+
+def quality_rating(profile: AntennaProfile, score: float) -> str:
+    """Human-readable label for band_quality_score(), per metric."""
+    if profile.quality_metric == "feedpoint":
+        # Calibrated on exp(-|ln(R/R_target)|): 0.71 = within sqrt(2) of the
+        # target resistance, 0.50 = within a factor of 2, 0.25 = factor of 4.
+        if score >= 0.71:
+            return T("rating_excellent")
+        if score >= 0.50:
+            return T("rating_good")
+        if score >= 0.25:
+            return T("rating_marginal")
+        return T("rating_risk")
+    return _avoidance_rating(score)
+
+
+def quality_label(profile: AntennaProfile, short: bool = False) -> str:
+    """Column/section heading for the geometry-quality metric.
+
+    `short` is the 8-character form the fixed-width report tables use; the
+    long form is for prose and section headings.
+    """
+    if profile.quality_metric == "feedpoint":
+        return "FeedFit" if short else "Feed-point fit"
+    return "Avoid" if short else "Avoidance"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # NEC2C BINARY DISCOVERY
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -4247,8 +4623,15 @@ def _check_kernel_ratio(g: "DeckGeometry", what: str,
     g.warnings.append(msg)
 
 
-def estimated_imp_uncertainty_pct(segs_per_half_wave: Optional[int] = None) -> float:
+def estimated_imp_uncertainty_pct(segs_per_half_wave: Optional[int] = None,
+                                  junction_feed: bool = False) -> float:
     """Estimated segmentation error on R, in percent, for a given density.
+
+    `junction_feed=True` (a source on a segment that also carries a wire
+    junction — the only feed a Carolina Windom can use, see
+    build_deck_geometry) multiplies the figure by JUNCTION_FEED_UNC_FACTOR:
+    NEC-2 converges measurably more slowly there, and a deck that cannot use
+    the fused feed must not publish the fused feed's precision.
 
     ``err% = SEGS_UNCERTAINTY_K / spw**SEGS_UNCERTAINTY_EXP`` — fitted to the
     measured convergence table against the EXTRAPOLATED limit, not against the
@@ -4262,8 +4645,9 @@ def estimated_imp_uncertainty_pct(segs_per_half_wave: Optional[int] = None) -> f
     """
     spw = int(segs_per_half_wave or SEGS_PER_HALF_WAVE)
     spw = max(5, min(spw, SEGS_PER_HALF_WAVE_MAX))
-    return max(SEGS_UNCERTAINTY_FLOOR_PCT,
-               SEGS_UNCERTAINTY_K / (float(spw) ** SEGS_UNCERTAINTY_EXP))
+    pct = max(SEGS_UNCERTAINTY_FLOOR_PCT,
+              SEGS_UNCERTAINTY_K / (float(spw) ** SEGS_UNCERTAINTY_EXP))
+    return pct * (JUNCTION_FEED_UNC_FACTOR if junction_feed else 1.0)
 
 
 def convergence_x_tol_ohm(z_mag_ohm: float) -> float:
@@ -4323,6 +4707,7 @@ def _cp_end_z(
     cp_end_height_m: Optional[float],
     cp_height_m: Optional[float] = None,
     wire_radius_m: float = WIRE_RADIUS_M,
+    allow_above_feed: Optional[bool] = None,
 ) -> float:
     """
     Resolve the requested far-end height of the counterpoise.
@@ -4338,7 +4723,15 @@ def _cp_end_z(
       • NEC2 needs every wire end at z ≥ the wire radius (never exactly 0).
       • A far end above the feedpoint is not supported by this single-mast model,
         so it is levelled to the feedpoint height (→ horizontal counterpoise).
+
+    `allow_above_feed` lifts the upper clamp.  A real off-centre-fed dipole
+    hangs between TWO supports with the balun and the coax drop at the feed,
+    so the feed is normally the LOWEST point of the flat top — a geometry the
+    single-mast clamp cannot express at all.  None means "decide from the
+    antenna type currently configured".
     """
+    if allow_above_feed is None:
+        allow_above_feed = antenna_profile().is_dipole
     if cp_end_height_m is not None:
         z = cp_end_height_m
     elif cp_height_m:
@@ -4347,7 +4740,8 @@ def _cp_end_z(
         z = wire_height_m
     z = float(z)
     z = max(z, wire_radius_m)
-    z = min(z, wire_height_m)
+    if not allow_above_feed:
+        z = min(z, wire_height_m)
     return z
 
 
@@ -4375,8 +4769,18 @@ def _cp_geometry(
     """
     drop = wire_height_m - cp_end_z_m
 
+    if drop < -1e-9:
+        # Far end ABOVE the feedpoint (two-support dipole: the feed sags below
+        # the end supports).  Same construction as the drooping case, mirrored.
+        rise = -drop
+        if cp_len_m <= rise:
+            z_end = wire_height_m + cp_len_m
+            return 0.0, 0.0, z_end, 0.0, z_end
+        x_end = math.sqrt(max(0.0, cp_len_m ** 2 - rise ** 2))
+        return 0.0, 0.0, cp_end_z_m, x_end, cp_end_z_m
+
     if drop <= 1e-9:
-        # Far end at (or above) the feedpoint → horizontal counterpoise
+        # Far end level with the feedpoint → horizontal counterpoise / arm
         return 0.0, 0.0, wire_height_m, cp_len_m, wire_height_m
 
     if cp_len_m <= drop:
@@ -4493,7 +4897,8 @@ def _dirs_collinear_opposite(ax: float, az: float,
 
 def straddle_segmentation(len_cp_m: float, len_ant_m: float,
                           seg_len_ref_m: float,
-                          search: int = FEED_STRADDLE_SEARCH):
+                          search: Optional[int] = None,
+                          dipole: bool = False):
     """Segment count / source segment for a fused (single-wire) feed.
 
     The wire runs from the counterpoise far end to the radiator far end, so the
@@ -4508,6 +4913,8 @@ def straddle_segmentation(len_cp_m: float, len_ant_m: float,
     end segment).  ``offset_m`` is the signed residual distance from the source
     segment centre to the true feed node, positive towards the radiator.
     """
+    if search is None:
+        search = FEED_STRADDLE_SEARCH_DIPOLE if dipole else FEED_STRADDLE_SEARCH
     total = float(len_cp_m) + float(len_ant_m)
     if total <= 0.0 or seg_len_ref_m <= 0.0 or len_cp_m <= 0.0 or len_ant_m <= 0.0:
         return None
@@ -4525,6 +4932,16 @@ def straddle_segmentation(len_cp_m: float, len_ant_m: float,
         # Tie-break on staying near the reference segment length so the fused
         # card keeps the density the caller asked for.
         pen = err_seg + 0.05 * abs(seg_len - seg_len_ref_m) / seg_len_ref_m
+        if dipole:
+            # Short-arm density guard.  On an off-centre feed the SHORT arm
+            # carries the steep part of the current distribution next to the
+            # source, so it must not be starved of segments just because N was
+            # chosen to centre the feed node.
+            k_short = min(k - 1, n - k + 1)
+            short_len = min(len_cp_m, len_ant_m)
+            want = short_len / seg_len_ref_m
+            if want > 0 and k_short > 0:
+                pen += 0.10 * max(0.0, (want - k_short) / want)
         if best is None or pen < best[0]:
             best = (pen, n, k, (u - (k - 0.5)) * seg_len)
     if best is None:
@@ -4561,6 +4978,18 @@ class DeckGeometry:
     feed_offset_m: float = 0.0   # source-centre → feed-node residual offset
     feed_offset_frac_seg: float = 0.5   # |offset| as a fraction of one segment
     segs_ant:    int = 0   # segments on the radiator side of the feed
+    # Antenna type / off-centre-fed dipole bookkeeping
+    antenna_type: str  = DEFAULT_ANTENNA_TYPE
+    span_m:       float = 0.0   # horizontal distance between the two end supports
+    feed_x_m:     float = 0.0   # feed offset from the short-arm support, along x
+    sag_m:        float = 0.0   # end height − feed height, when the feed hangs low
+    offset_frac:  float = 0.0   # short arm / total length
+    # Carolina Windom vertical radiator (balun → line isolator)
+    vert_len_m:   float = 0.0
+    vert_segs:    int   = 0
+    isolator_z:   Optional[Tuple[float, float]] = None
+    # Lumped series loads: (tag, seg_from, seg_to, R, X) written as LD 4 cards.
+    lumped_loads: List[Tuple[int, int, int, float, float]] = field(default_factory=list)
     # Bookkeeping
     segs_per_half_wave: int = SEGS_PER_HALF_WAVE
     ground_model: str  = DEFAULT_GROUND_MODEL
@@ -4598,6 +5027,9 @@ def build_deck_geometry(
     ground_model: str = DEFAULT_GROUND_MODEL,
     segs_per_half_wave: Optional[int] = None,
     feed_model: Optional[str] = None,   # None → module FEED_MODEL
+    antenna_type: Optional[str] = None, # None → module ANTENNA_TYPE
+    vert_len_m: Optional[float] = None,     # None → module CW_VERT_LEN_M
+    isolator_z: Optional[Tuple[float, float]] = None,   # None → module default
 ) -> DeckGeometry:
     """
     Resolve the complete NEC-2 geometry (GW/GE/GN/EX cards) for one candidate.
@@ -4625,8 +5057,26 @@ def build_deck_geometry(
        be avoided.  With `feed_model="straddle"` a collinear radiator +
        counterpoise pair is emitted as one continuous GW card and the EX card
        excites the segment containing the feed node — see FEED_MODEL_CHOICES.
+
+    Off-centre-fed types (`ocfd`, `carolina-windom`) reuse the same machinery:
+    the two "arms" ARE (wire_len_m, cp_len_m), and a horizontal collinear pair
+    fuses into exactly the single continuous wire with an interior source that
+    an OCFD is.  What changes is that
+
+      • rule 1 does not apply — a dipole is its own return path, so a
+        zero-length second arm is rejected instead of being replaced by a
+        ground rod or a coax stub;
+      • `carolina-windom` adds a THIRD conductor (the vertical radiator that
+        hangs from the feedpoint down to the line isolator), which means three
+        wires meet at the source node and the fused feed is impossible: the
+        feed model is forced to "junction" and the impedance uncertainty is
+        raised to match;
+      • the feed-node residual offset is checked, not merely reported — on an
+        interior feed it is a first-order impedance error, not rounding.
     """
     g = DeckGeometry()
+    prof = antenna_profile(antenna_type)
+    g.antenna_type = prof.key
     g.ground_model = ground_model if ground_model in GROUND_MODEL_CHOICES else DEFAULT_GROUND_MODEL
     spw = int(segs_per_half_wave or SEGS_PER_HALF_WAVE)
     spw = max(5, min(spw, SEGS_PER_HALF_WAVE_MAX))
@@ -4637,6 +5087,22 @@ def build_deck_geometry(
     g.clearance_floor_m = floor_m
 
     use_cp = bool(use_counterpoise) and cp_len_m > 1e-9
+
+    # ── Dipole types: both arms are the antenna ──────────────────────────
+    if prof.is_dipole:
+        if not use_cp:
+            raise NoReturnPathError(
+                f"{prof.key}: both arms are part of the radiator, so a "
+                f"zero-length second arm is not an off-centre-fed dipole.  "
+                f"NEC-2 would be asked to feed a wire against nothing.  Use "
+                f"--antenna-type long-wire for a single-conductor antenna."
+            )
+        if no_cp_return != DEFAULT_NO_CP_RETURN:
+            g.warnings.append(
+                f"--no-cp-return is ignored for {prof.key}: a dipole is its "
+                f"own return path and has no return-conductor model."
+            )
+
     if not use_cp:
         cp_len_m = 0.0
         if no_cp_return not in NO_CP_RETURN_CHOICES:
@@ -4771,7 +5237,8 @@ def build_deck_geometry(
         # at a different z than the GW 1 card: the two wires then share no node,
         # the EX source sits on a free end, and nec2c happily returns the
         # impedance of an open circuit (huge −jX) without reporting an error.
-        cp_z_target = _cp_end_z(z_near, cp_end_height_m, cp_height_m, wire_radius_m)
+        cp_z_target = _cp_end_z(z_near, cp_end_height_m, cp_height_m, wire_radius_m,
+                                allow_above_feed=prof.is_dipole)
         cp_z_target = _clamp_end(cp_z_target, "Counterpoise far end", result_is_final=False)
         _cvl, _chr, _cbot, cp_x_end, cp_z_end = _cp_geometry(
             cp_len_m, z_near, cp_z_target)
@@ -4814,9 +5281,12 @@ def build_deck_geometry(
             f"{cp_x_neg:.3f} 0.0 {cp_z_end:.4f} {wire_radius_m:.5f}\n"
         )
         g.comments.append(
-            f"CM Counterpoise: {cp_len_m:.3f} m  feed z={z_near:.3f} m -> "
-            f"end z={cp_z_end:.4f} m  (reach {cp_x_end:.3f} m, "
-            f"{g.cp_angle_deg:.1f} deg from vertical)"
+            (f"CM Second arm (short side): {cp_len_m:.3f} m  feed z={z_near:.3f} m "
+             f"-> end z={cp_z_end:.4f} m  (reach {cp_x_end:.3f} m)"
+             if prof.is_dipole else
+             f"CM Counterpoise: {cp_len_m:.3f} m  feed z={z_near:.3f} m -> "
+             f"end z={cp_z_end:.4f} m  (reach {cp_x_end:.3f} m, "
+             f"{g.cp_angle_deg:.1f} deg from vertical)")
         )
         if cp_z_target >= z_near - 1e-9:
             g.comments.append("CM WARNING: CP end height >= wire height; CP placed at wire height (horizontal).")
@@ -4877,6 +5347,93 @@ def build_deck_geometry(
     else:
         g.comments.append("CM Counterpoise: NONE (antenna without counterpoise)")
 
+    # ── Third conductor: Carolina Windom vertical radiator ───────────────
+    # This is NOT the coax-braid stub above.  The stub is a fiction standing in
+    # for a common-mode path; this is a conductor the antenna radiates from on
+    # purpose, and its length is a design parameter.  It hangs from the feed
+    # node down to the line isolator, and an ideal isolator forces I≈0 there —
+    # which is exactly what an open wire end does, so the default model needs
+    # no loading card at all.  A finite-impedance isolator is modelled with an
+    # LD 4 series load on the bottom segment (see `isolator_z`).
+    if prof.has_vertical_radiator:
+        v_req = CW_VERT_LEN_M if vert_len_m is None else float(vert_len_m)
+        v_req = max(v_req, CW_VERT_LEN_MIN_M)
+        # The vertical radiator is a DESIGN DIMENSION, not a wire end that may
+        # be nudged clear of the ground: shortening it silently would model a
+        # different antenna than the one requested and report it as the
+        # requested one.  On 160 m the 0.05*lambda floor is 8.1 m, so this
+        # legitimately fails for most masts — and must say so.
+        if not perfect and (z_near - v_req) < floor_m:
+            raise FeedpointHeightError(
+                f"A {v_req:.2f} m vertical radiator needs the feedpoint at "
+                f"least {floor_m + v_req:.2f} m up ({GROUND_CLEAR_FRAC_SAFE:.2f}"
+                f"*lambda floor = {floor_m:.2f} m plus the vertical section); "
+                f"the feedpoint is at {z_near:.2f} m.  Raise --height, shorten "
+                f"--cw-vert-len, or drop the lowest band."
+            )
+        z_bot = _clamp_end(z_near - v_req, "Vertical radiator bottom")
+        v_len_eff = z_near - z_bot
+        if v_len_eff < CW_VERT_LEN_MIN_M:
+            g.ok = False
+            g.warnings.append(
+                f"Carolina Windom vertical radiator cannot fit: the feedpoint "
+                f"at {z_near:.2f} m and the ground-clearance floor at "
+                f"{floor_m:.2f} m leave only {v_len_eff:.2f} m.  Raise the "
+                f"antenna height or shorten the vertical section."
+            )
+        else:
+            n_v = max(2, _segs_at_length(v_len_eff, seg_len_ref))
+            _check_kernel_ratio(g, "Vertical radiator",
+                                v_len_eff / n_v, wire_radius_m)
+            # The structural invariant below compares the FIRST endpoint of
+            # every GW card with wire 1's, so this card must start at the feed
+            # node and be formatted exactly like it (0.0 0.0 z_near:.3f).
+            g.gw_lines.append(
+                f"GW 3 {n_v} 0.0 0.0 {z_near:.3f} "
+                f"0.0 0.0 {z_bot:.4f} {wire_radius_m:.5f}\n"
+            )
+            g.vert_len_m = v_len_eff
+            g.vert_segs  = n_v
+            g.comments.append(
+                f"CM Carolina Windom vertical radiator: {v_len_eff:.3f} m from "
+                f"the feedpoint down to the line isolator at z={z_bot:.4f} m"
+            )
+            _iso = CW_ISOLATOR_Z if isolator_z is None else isolator_z
+            if _iso is not None:
+                g.isolator_z = (float(_iso[0]), float(_iso[1]))
+                g.lumped_loads.append(
+                    (3, n_v, n_v, g.isolator_z[0], g.isolator_z[1]))
+                g.comments.append(
+                    f"CM Line isolator modelled as a series load on the bottom "
+                    f"segment: R={g.isolator_z[0]:.0f} ohm, "
+                    f"X={g.isolator_z[1]:.0f} ohm (LD 4)"
+                )
+            else:
+                g.comments.append(
+                    "CM Line isolator modelled as IDEAL (open wire end: the "
+                    "common-mode current is forced to zero there)"
+                )
+
+    # ── Derived two-support dimensions (reporting / construction drawing) ─
+    # The NEC model keeps the feed at x=0; a builder needs the span between the
+    # two end supports and where the feed sits along it.
+    _cp_x_abs = abs(g.cp_x_end) if (use_cp and g.cp_x_end is not None) else 0.0
+    g.span_m   = _cp_x_abs + x_far
+    g.feed_x_m = _cp_x_abs
+    g.offset_frac = ((cp_len_m / (cp_len_m + wire_len_m))
+                     if (use_cp and (cp_len_m + wire_len_m) > 0) else 0.0)
+    if prof.is_dipole:
+        _end_z = [z_far] + ([g.cp_z_end] if g.cp_z_end is not None else [])
+        g.sag_m = max(0.0, max(_end_z) - z_near)
+        g.comments.append(
+            f"CM Antenna type: {prof.key} — total {cp_len_m + wire_len_m:.3f} m, "
+            f"arms {cp_len_m:.3f} m / {wire_len_m:.3f} m, offset "
+            f"{g.offset_frac:.4f} of the total, span {g.span_m:.3f} m, feed "
+            f"{g.feed_x_m:.3f} m from the short-arm support"
+        )
+    elif prof.key != DEFAULT_ANTENNA_TYPE:
+        g.comments.append(f"CM Antenna type: {prof.key}")
+
     # ── Structural invariant: every conductor starts at the feed node ─────
     # The EX card excites segment 1 of wire 1, i.e. the feedpoint.  If wire 2
     # does not start at EXACTLY the same coordinates, NEC-2 builds two disjoint
@@ -4912,6 +5469,23 @@ def build_deck_geometry(
     _fm = (feed_model or FEED_MODEL)
     if _fm not in FEED_MODEL_CHOICES:
         _fm = DEFAULT_FEED_MODEL
+    if prof.forced_feed_model and _fm != prof.forced_feed_model:
+        # A Carolina Windom has three conductors meeting at the source node.
+        # The fused card carries the feed node INSIDE a segment, but a third
+        # wire can only attach at a segment BOUNDARY, so the two requirements
+        # are mutually exclusive and the junction feed is the only option.
+        # Say so out loud: otherwise an OCFD run and a Windom run at the same
+        # geometry differ by the feed model as well as by the vertical wire,
+        # and nothing in the report lets the user attribute the difference.
+        g.warnings.append(
+            f"{prof.key}: three conductors meet at the feed node, so the "
+            f"straddle (fused) feed cannot be used.  Feed model forced to "
+            f"'{prof.forced_feed_model}'.  NEC-2 converges more slowly with a "
+            f"source next to a junction: the impedance uncertainty is raised "
+            f"by x{JUNCTION_FEED_UNC_FACTOR:.1f} and --converge is strongly "
+            f"recommended."
+        )
+        _fm = prof.forced_feed_model
     g.feed_model = _fm
     g.feed_seg = 1
     g.ex_line = "EX 0 1 1 0 1.0 0.0\n"
@@ -4924,7 +5498,8 @@ def build_deck_geometry(
         if _dirs_collinear_opposite(_ant_dx, _ant_dz, _cp_dx, _cp_dz):
             _len_ant = math.hypot(_ant_dx, _ant_dz)
             _len_cp  = math.hypot(_cp_dx, _cp_dz)
-            _res = straddle_segmentation(_len_cp, _len_ant, seg_len_ref)
+            _res = straddle_segmentation(_len_cp, _len_ant, seg_len_ref,
+                                         dipole=prof.is_dipole)
             if _res is not None:
                 _n, _k, _off = _res
                 _total = _len_cp + _len_ant
@@ -4955,9 +5530,12 @@ def build_deck_geometry(
                 g.segs_cp = max(1, _k - 1)
                 g.segs_ant = max(1, _n - _k + 1)
                 g.comments.append(
-                    f"CM Feed model: STRADDLE - radiator and counterpoise written "
-                    f"as one continuous wire; EX on segment {_k} of {_n}, the one "
-                    f"containing the feed node (no junction under the source)"
+                    f"CM Feed model: STRADDLE - "
+                    + ("both arms written as one continuous wire"
+                       if prof.is_dipole else
+                       "radiator and counterpoise written as one continuous wire")
+                    + f"; EX on segment {_k} of {_n}, the one "
+                      f"containing the feed node (no junction under the source)"
                 )
                 g.comments.append(
                     f"CM Feed node offset from the source segment centre: "
@@ -4970,6 +5548,29 @@ def build_deck_geometry(
             "CM Feed model: JUNCTION - EX on segment 1 of wire 1, which also "
             "carries the junction with wire 2 (slower convergence in NEC-2)"
         )
+
+    # ── Residual feed-node offset ────────────────────────────────────────
+    # On an END feed the source sits at a fixed wire end and a fraction of a
+    # segment either way is rounding.  On an INTERIOR feed it is not: near a
+    # current null the feed resistance goes as 1/sin^2(k*s), so the same
+    # fraction of a segment is a first-order impedance error on the higher
+    # bands.  It is therefore scored, not merely printed in a comment.
+    if prof.is_dipole and g.fused_feed:
+        if g.feed_offset_frac_seg > FEED_OFFSET_BAD_FRAC:
+            g.kernel_bad_kinds.add("feed-offset")
+            g.warnings.append(
+                f"Feed node sits {g.feed_offset_frac_seg * 100.0:.0f}% of a "
+                f"segment from the source-segment centre.  On an off-centre "
+                f"feed that is a first-order impedance error, not rounding; "
+                f"the deck is marked UNRELIABLE.  Change "
+                f"--segs-per-half-wave or nudge the arm lengths."
+            )
+        elif g.feed_offset_frac_seg > FEED_OFFSET_WARN_FRAC:
+            g.warnings.append(
+                f"Feed node sits {g.feed_offset_frac_seg * 100.0:.0f}% of a "
+                f"segment from the source-segment centre; on an off-centre "
+                f"feed this degrades the impedance on the higher bands."
+            )
     # Fold every validity check into `ok` here, once, at the end: kernel and
     # ground-proximity are tracked separately (kernel_bad_kinds /
     # ground_invalid) precisely so the straddle/fused-feed rebuild above can
@@ -5039,6 +5640,29 @@ def ld_card(conductivity: Optional[float] = None) -> str:
     return f"LD 5 0 0 0 {s:.4E} {WIRE_REL_PERMEABILITY:.1f}\n"
 
 
+def ld_cards(conductivity: Optional[float] = None,
+             lumped: Optional[List[Tuple[int, int, int, float, float]]] = None
+             ) -> str:
+    """
+    All loading cards for a deck, in the order NEC-2 wants them.
+
+    `lumped` is a list of (tag, seg_from, seg_to, R, X) SERIES impedance loads,
+    written as `LD 4` cards.  The Carolina Windom line isolator is the first
+    user, but the mechanism is general (traps, loading coils) and deliberately
+    kept separate from the structure-wide conductivity card.
+
+    The lumped cards are written BEFORE the conductivity card so that a
+    segment carrying both keeps its wire loss: nec2c applies type-5 loading to
+    the whole structure and the explicit series load adds to it rather than
+    replacing it.
+    """
+    out = []
+    for tag, s0, s1, r, x in (lumped or []):
+        out.append(f"LD 4 {int(tag)} {int(s0)} {int(s1)} {float(r):.3f} {float(x):.3f}\n")
+    out.append(ld_card(conductivity))
+    return "".join(out)
+
+
 def write_nec_deck(
     nec_path: str,
     wire_len_m: float,
@@ -5061,6 +5685,9 @@ def write_nec_deck(
     rp_n_phi:   int = RP_RERANK_N_PHI,
     wire_conductivity: Optional[float] = None,  # None → WIRE_CONDUCTIVITY
     feed_model: Optional[str] = None,           # None → module FEED_MODEL
+    antenna_type: Optional[str] = None,         # None → module ANTENNA_TYPE
+    vert_len_m: Optional[float] = None,         # None → module CW_VERT_LEN_M
+    isolator_z: Optional[Tuple[float, float]] = None,
 ) -> DeckGeometry:
     """
     Write a minimal NEC2 input deck for an end-fed long wire with one
@@ -5089,6 +5716,13 @@ def write_nec_deck(
     `no_cp_return` (ground rod or coax-braid stub) — a fed wire with no return
     conductor is an open circuit in NEC-2, not an antenna.
 
+    For the off-centre-fed types Wire 1 and Wire 2 are the two ARMS, and the
+    straddle feed fuses them into a single continuous conductor with the
+    source on an interior segment.  `carolina-windom` adds Wire 3, the
+    vertical radiator running from the feedpoint down to the line isolator;
+    a finite-impedance isolator becomes an `LD 4` series load on its bottom
+    segment (see ld_cards).
+
     Source (EX): see build_deck_geometry() — the segment containing the feed
     node on the fused card under the straddle feed model, otherwise segment 1
     of Wire 1.
@@ -5110,6 +5744,9 @@ def write_nec_deck(
         ground_model=ground_model,
         segs_per_half_wave=segs_per_half_wave,
         feed_model=feed_model,
+        antenna_type=antenna_type,
+        vert_len_m=vert_len_m,
+        isolator_z=isolator_z,
     )
 
     with open(nec_path, "w") as fh:
@@ -5124,7 +5761,7 @@ def write_nec_deck(
         for gw in geo.gw_lines:
             fh.write(gw)
         fh.write(f"GE {geo.ge_flag}\n")
-        fh.write(ld_card(wire_conductivity))
+        fh.write(ld_cards(wire_conductivity, geo.lumped_loads))
         fh.write(geo.gn_line)
         fh.write(geo.ex_line)
 
@@ -5259,16 +5896,34 @@ def run_nec2c(binary: str, nec_path: str, out_path: str,
 
 @dataclass
 class CandidateResult:
-    """Score for one (wire_len, cp_len) candidate pair."""
+    """Score for one (wire_len, cp_len) candidate pair.
+
+    For the off-centre-fed types the same two fields ARE the two arms of the
+    dipole: `wire_len_m` is the long arm, `cp_len_m` the short one.  They keep
+    their names deliberately — renaming them would touch a five-figure number
+    of lines for no physics benefit — and the output layer maps them to
+    "long arm"/"short arm" labels instead (see geom_labels()).
+    """
     wire_len_m: float
     cp_len_m:   float
     # Derived from the geometry (feedpoint height, CP far-end height, CP length).
     # Reported for information only — it is no longer an input.
     cp_angle_deg: float = 0.0
 
+    # Antenna type and off-centre-fed geometry (filled for every type)
+    antenna_type: str = DEFAULT_ANTENNA_TYPE
+    offset_frac:  float = 0.0     # short arm / total length (0 for a long wire)
+    total_len_m:  float = 0.0     # both arms together
+    vert_len_m:   float = 0.0     # Carolina Windom vertical radiator
+
     # Per-band VSWR seen by the transmitter (post-UnUn)
     band_vswr: Dict[str, float] = field(default_factory=dict)
+    # Geometry-quality metric, 0…1.  Resonance avoidance for an end-fed wire,
+    # feed-point fit for an off-centre-fed dipole — see band_quality_score().
     band_avoidance: Dict[str, float] = field(default_factory=dict)
+    # Bands whose empirical impedance had to be clamped (feed on a current
+    # null).  Never rank on those numbers; the report prints them as such.
+    empirical_clamped_bands: List[str] = field(default_factory=list)
 
     # Per-band antenna-side impedance  (R_ant, X_ant) in Ω
     band_R_ant: Dict[str, float] = field(default_factory=dict)
@@ -5372,6 +6027,7 @@ def score_candidate(
     cp_end_z_m: Optional[float] = None,
     cp_reach_m: Optional[float] = None,
     nec2_strict: bool = False,
+    antenna_type: Optional[str] = None,     # None → module ANTENNA_TYPE
 ) -> CandidateResult:
     """
     Compute the aggregate quality score for a candidate geometry.
@@ -5387,6 +6043,8 @@ def score_candidate(
     active = [r for r in calc_rows if r.active]
     if not active:
         raise ValueError("No active bands defined")
+
+    _prof = antenna_profile(antenna_type)
 
     res = CandidateResult(wire_len_m=wire_len_m, cp_len_m=cp_len_m,
                           cp_angle_deg=cp_angle_deg,
@@ -5455,12 +6113,15 @@ def score_candidate(
                 res.nec2_ok = False
                 res.note  += f" NEC2 miss@{freq}MHz"
             else:
-                lhalf = C_MHZ / (2.0 * freq) if freq else 1.0
-                ratio_l = wire_len_m / lhalf if lhalf else 0.0
-                arg = math.pi * ratio_l
-                cos2 = math.cos(arg) ** 2
-                best_R = max(1.0, 50.0 * (80.0 ** cos2))
-                best_X = -1500.0 * math.sin(2.0 * arg)
+                # SINGLE SOURCE OF TRUTH: the closed-form model lives in
+                # empirical_impedance() and is selected by antenna type.  For
+                # an off-centre-fed dipole it depends on the feed OFFSET, which
+                # the end-fed formulas cannot express at all.
+                best_R, best_X, _emp_ok = empirical_impedance(
+                    _prof.empirical_model, freq, wire_len_m, cp_len_m)
+                if not _emp_ok and cr.band not in res.empirical_clamped_bands:
+                    res.empirical_clamped_bands.append(cr.band)
+                    res.note += f" empirical-null@{freq:.3f}MHz"
                 if unun_ratio > 1.0:
                     R_in_emp = best_R / unun_ratio
                     X_in_emp = best_X / unun_ratio
@@ -5515,13 +6176,11 @@ def score_candidate(
                     found_R, found_X = fp.R_ohm, fp.X_ohm
                     found_src = "NEC2"
         if found_R is None and not nec2_strict:
-            lhalf = C_MHZ / (2.0 * freq) if freq else 1.0
-            ratio_l = wire_len_m / lhalf if lhalf else 0.0
-            arg = math.pi * ratio_l
-            cos2 = math.cos(arg) ** 2
-            found_R = max(1.0, 50.0 * (80.0 ** cos2))
-            found_X = -1500.0 * math.sin(2.0 * arg)
+            found_R, found_X, _emp_ok = empirical_impedance(
+                _prof.empirical_model, freq, wire_len_m, cp_len_m)
             found_src = "empirical"
+            if not _emp_ok and cr.band not in res.empirical_clamped_bands:
+                res.empirical_clamped_bands.append(cr.band)
         if found_R is not None:
             res.band_R_ant[cr.band]   = round(found_R, 2)
             res.band_X_ant[cr.band]   = round(found_X, 2)
@@ -5538,8 +6197,8 @@ def score_candidate(
     _w = resonance_preference(unun_ratio)
     _avoid_exact: Dict[str, float] = {}
     for cr in calc_rows:
-        avoidance = band_avoidance_score(wire_len_m, cr.freq_mhz, unun_ratio,
-                                         weights=_w)
+        avoidance = band_quality_score(_prof, wire_len_m, cp_len_m,
+                                       cr.freq_mhz, unun_ratio, weights=_w)
         _avoid_exact[cr.band] = avoidance
         res.band_avoidance[cr.band] = round(avoidance, 4)
         avoidances.append(avoidance)
@@ -5548,14 +6207,31 @@ def score_candidate(
     # Reward cp lengths near ODD multiples of λ/4 (1×, 3×, 5× …) — low-impedance return.
     # Even multiples (λ/2, λ, …) give high-impedance return and receive no bonus.
     cp_lambda_quarter_scores = []
-    for cr in active:
-        lq = C_MHZ / (4.0 * cr.freq_mhz)
-        cp_ratio = cp_len_m / lq           # how many λ/4 units is the CP?
-        # Map to distance from nearest odd multiple: (cp_ratio mod 2) centred on 1
-        mod2 = cp_ratio % 2.0              # 0…2: odd multiples fall near 1, even near 0 or 2
-        dist_from_odd = abs(mod2 - 1.0)   # 0 = exactly odd λ/4; 1 = exactly even λ/4
-        cp_score = 0.25 * math.cos(math.pi * dist_from_odd / 2.0) ** 2
-        cp_lambda_quarter_scores.append(cp_score)
+    if _prof.is_dipole:
+        # The second axis is the OFFSET, not a return conductor: a dipole arm
+        # is not a counterpoise and its λ/4 proximity means nothing.  Reward
+        # offsets inside the buildable window instead, peaking at the classic
+        # value: f → 0 is an end feed (no longer off-centre-FED), f → 0.5 is a
+        # centre-fed dipole (no longer OFF-centre).
+        _total = wire_len_m + cp_len_m
+        _f = (min(wire_len_m, cp_len_m) / _total) if _total > 0 else 0.0
+        res.offset_frac = _f
+        res.total_len_m = _total
+        if OCFD_OFFSET_MIN <= _f <= OCFD_OFFSET_MAX:
+            _span = OCFD_OFFSET_MAX - OCFD_OFFSET_MIN
+            cp_lambda_quarter_scores.append(
+                0.25 * math.cos(math.pi * (_f - OCFD_DEFAULT_OFFSET_FRAC) / _span) ** 2)
+        else:
+            cp_lambda_quarter_scores.append(0.0)
+    else:
+        for cr in active:
+            lq = C_MHZ / (4.0 * cr.freq_mhz)
+            cp_ratio = cp_len_m / lq           # how many λ/4 units is the CP?
+            # Map to distance from nearest odd multiple: (cp_ratio mod 2) centred on 1
+            mod2 = cp_ratio % 2.0              # 0…2: odd multiples fall near 1, even near 0 or 2
+            dist_from_odd = abs(mod2 - 1.0)   # 0 = exactly odd λ/4; 1 = exactly even λ/4
+            cp_score = 0.25 * math.cos(math.pi * dist_from_odd / 2.0) ** 2
+            cp_lambda_quarter_scores.append(cp_score)
 
     n = len(vswr_penalties)
     mean_vswr_penalty   = sum(vswr_penalties) / n if n else 999.0
@@ -5588,6 +6264,11 @@ def score_candidate(
     # radiation term later, for the shortlisted candidates only.
     res.score_gain  = 0.0
     res.score_final = res.score_combined
+    res.antenna_type = _prof.key
+    if not _prof.is_dipole:
+        res.total_len_m = wire_len_m + cp_len_m
+    if _prof.has_vertical_radiator:
+        res.vert_len_m = CW_VERT_LEN_M
 
     return res
 
@@ -5620,6 +6301,75 @@ def _grid_axis(lo: float, hi: float, step: float) -> List[float]:
         if not points or v > points[-1]:
             points.append(v)
     return points
+
+
+def _parse_isolator_z(spec: Optional[str]) -> Optional[Tuple[float, float]]:
+    """Parse --cw-isolator-z "R,X" into a tuple; None means an IDEAL isolator.
+
+    An ideal isolator forces the common-mode current to zero at its position,
+    which an open wire end already does — so the default model needs no
+    loading card, and that is what `None` selects.
+    """
+    if spec is None:
+        return None
+    s = str(spec).strip()
+    if not s or s.lower() in ("none", "ideal", "open"):
+        return None
+    parts = [p for p in re.split(r"[,;:\s]+", s) if p]
+    try:
+        if len(parts) == 1:
+            return (0.0, float(parts[0]))
+        return (float(parts[0]), float(parts[1]))
+    except ValueError:
+        raise ValueError(
+            f"--cw-isolator-z expects 'R,X' in ohms (e.g. 1000,2000); got {spec!r}"
+        )
+
+
+def build_dipole_grid(total_min: float, total_max: float, total_step: float,
+                      off_min: float, off_max: float, off_step: float
+                      ) -> List[Tuple[float, float]]:
+    """
+    (long_arm, short_arm) pairs for an off-centre-fed dipole.
+
+    Deliberately returns the SAME shape build_search_grid() does, so the sweep
+    loops, the worker pool, the CandidateResult fields and every plot keep
+    working untouched: the second axis simply means "the other arm" instead of
+    "the counterpoise".  Pairs are deduplicated after rounding to the
+    millimetre, because different (total, offset) combinations collide there
+    and each collision would otherwise cost a full NEC-2 solve.
+    """
+    if total_step <= 0 or off_step <= 0:
+        raise ValueError("grid steps must be positive")
+    if total_min > total_max:
+        raise ValueError(f"--total-len min ({total_min}) exceeds max ({total_max})")
+    off_min = max(float(off_min), OCFD_OFFSET_MIN)
+    off_max = min(float(off_max), OCFD_OFFSET_MAX)
+    if off_min > off_max:
+        raise ValueError(
+            f"offset window is empty after clamping to "
+            f"{OCFD_OFFSET_MIN}-{OCFD_OFFSET_MAX}: min {off_min}, max {off_max}")
+
+    out: List[Tuple[float, float]] = []
+    seen: Set[Tuple[float, float]] = set()
+    n_tot = int(round((total_max - total_min) / total_step)) + 1
+    n_off = int(round((off_max - off_min) / off_step)) + 1
+    for i in range(max(1, n_tot)):
+        L = total_min + i * total_step
+        if L <= 0:
+            continue
+        for j in range(max(1, n_off)):
+            f = off_min + j * off_step
+            short = L * f
+            long_ = L - short
+            key = (round(long_, 3), round(short, 3))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append((long_, short))
+    if not out:
+        raise ValueError("dipole search grid is empty")
+    return out
 
 
 def build_search_grid(
@@ -5692,7 +6442,18 @@ def empirical_sweep(
     use_counterpoise: bool = True,
     verbose: bool = False,
 ) -> List[CandidateResult]:
-    if use_counterpoise:
+    _prof_emp = antenna_profile()
+    if _prof_emp.is_dipole:
+        # The dipole model DOES depend on the offset, so the counterpoise
+        # warning below is simply untrue here — and replacing it with a more
+        # plausible-looking number makes an honest statement of the limits
+        # more important, not less.
+        print(f"\n  {Fore.YELLOW}WARNING: " + T("warn_empirical_ocfd")
+              + f"{Style.RESET_ALL}\n")
+        if _prof_emp.has_vertical_radiator:
+            print(f"  {Fore.YELLOW}WARNING: "
+                  + T("warn_empirical_cw_vertical") + f"{Style.RESET_ALL}\n")
+    elif use_counterpoise:
         print(f"\n  {Fore.YELLOW}WARNING: the empirical impedance formulas depend only on "
               f"the radiator length and the frequency — the counterpoise is NOT modelled. "
               f"Every candidate sharing a wire length scores identically on VSWR, so the "
@@ -6815,6 +7576,17 @@ class UnUnResult:
 
     band_impedances: List[Tuple[str, float, float]] = field(default_factory=list)
 
+    # Which device the ratio describes: a tapped autotransformer ("unun") for
+    # an end-fed wire, or a transmission-line balun ("balun") for a balanced
+    # off-centre feed.  They are not interchangeable — see balun_design().
+    device_kind: str = "unun"
+    # True when the continuous optimum must be published as a DIAGNOSTIC only:
+    # a balun ratio is a hardware choice from a very short list, and a
+    # 5.3:1 Guanella is not a thing anybody can wind.
+    continuous_is_advisory: bool = False
+    balun: Optional[Dict[str, object]] = None
+    isolator: Optional[Dict[str, object]] = None
+
     # The candidate this result was computed against. Kept so callers can
     # detect if `ranked[0]` / `best` has since moved on to a different
     # geometry (e.g. after `_converge_unun()` exits via the oscillation
@@ -6824,15 +7596,31 @@ class UnUnResult:
 
 
 def _vswr_for_ratio(R_ant: float, X_ant: float, n: float,
-                    z0: float = 50.0) -> float:
+                    z0: float = 50.0,
+                    xm_ohm: Optional[float] = None) -> float:
     """
     Compute VSWR at the transmitter (Z0=50Ω) through an n:1 impedance
     transformer (ideal UnUn / balun).
+
+    `xm_ohm` is the magnetising reactance appearing in SHUNT across the
+    antenna-side port.  None (the default) keeps the ideal-transformer
+    behaviour every existing caller relies on; a finite value models the real
+    device, whose finite winding inductance is the dominant departure from
+    ideal at the low-frequency end.  It is supplied by balun_design() when the
+    user asks for --match-model real.
     """
     if n <= 0:
         return 999.0
     if math.isnan(R_ant) or math.isnan(X_ant):
         return 999.0
+    if xm_ohm:
+        # Z_ant in parallel with jXm, before the ideal ratio.
+        Z = complex(R_ant, X_ant)
+        Zm = complex(0.0, float(xm_ohm))
+        Zs = Z + Zm
+        if abs(Zs) > 1e-12:
+            Z = (Z * Zm) / Zs
+            R_ant, X_ant = Z.real, Z.imag
     R_in = R_ant / n
     X_in = X_ant / n
     denom = math.hypot(R_in + z0, X_in)
@@ -6956,12 +7744,11 @@ def find_best_unun(
             if nec2_strict:
                 band_impedances.append((cr.band, math.nan, math.nan))
                 continue
-            lhalf = C_MHZ / (2.0 * freq) if freq else 1.0
-            ratio = best.wire_len_m / lhalf if lhalf else 0.0
-            arg = math.pi * ratio
-            cos2 = math.cos(arg) ** 2
-            R_ant = max(1.0, 50.0 * (80.0 ** cos2))
-            X_ant = -1500.0 * math.sin(2.0 * arg)
+            # Third and last of the inline copies of the closed-form model,
+            # now routed through empirical_impedance() like the other two.
+            R_ant, X_ant, _ = empirical_impedance(
+                antenna_profile(getattr(best, "antenna_type", None)).empirical_model,
+                freq, best.wire_len_m, best.cp_len_m)
 
         band_impedances.append((cr.band, R_ant, X_ant))
 
@@ -6972,7 +7759,18 @@ def find_best_unun(
     result.band_impedances = band_impedances
     result.source_geometry = best
 
-    ratios_to_sweep: List[float] = list(STANDARD_UNUN_RATIOS)
+    _prof_m = antenna_profile(getattr(best, "antenna_type", None))
+    result.device_kind = _prof_m.match_device
+    if _prof_m.match_device == "balun":
+        # A balun ratio is a HARDWARE choice from a very short list: a
+        # transmission-line transformer exists at 4:1, 6:1, 9:1 and not in
+        # between.  Sweeping 1…100 continuously and recommending the minimum
+        # would present an unbuildable winding as the answer.
+        _std_set: List[float] = list(OCFD_BALUN_RATIOS)
+        result.continuous_is_advisory = True
+    else:
+        _std_set = list(STANDARD_UNUN_RATIOS)
+    ratios_to_sweep: List[float] = list(_std_set)
     if current_unun not in ratios_to_sweep:
         ratios_to_sweep = sorted(ratios_to_sweep + [current_unun])
 
@@ -6983,7 +7781,7 @@ def find_best_unun(
         result.ratio_band_vswr[n] = bv
         result.ratio_score[n] = _aggregate_vswr_penalty(band_impedances, n, z0)
 
-    best_std = min(STANDARD_UNUN_RATIOS, key=lambda n: result.ratio_score[n])
+    best_std = min(_std_set, key=lambda n: result.ratio_score[n])
     result.best_standard_ratio = best_std
     result.best_standard_score = result.ratio_score[best_std]
 
@@ -7066,8 +7864,15 @@ def write_report(
     def ln(t=""):
         lines.append(f"  {t}")
 
+    # Antenna type decides which closed-form model produced any empirical
+    # number in this file, which geometry-quality metric the ratings mean, and
+    # which matching device the design section describes.  Resolve it once.
+    _prof_rep = antenna_profile(
+        getattr(ranked[0], "antenna_type", None) if ranked else None)
+
     h1(T("report_title"))
     ln(T("report_mode").format(mode.upper()))
+    ln(f"Antenna type: {_prof_rep.key}")
     # Run policy.  --jobs cannot change a single number below (results are
     # reassembled in grid order), but --fast-run CAN: it sweeps coarse, caps
     # the refined tail and the radiation shortlist and drops the 2.0x
@@ -7265,15 +8070,77 @@ def write_report(
     if ranked:
         best = ranked[0]
         h1(T("report_best_header"))
-        ln(T("report_wire_len").format(best.wire_len_m))
-        if not use_counterpoise:
-            ln(T("report_cp_disabled"))
+        if _prof_rep.is_dipole:
+            _short = min(best.wire_len_m, best.cp_len_m)
+            _long  = max(best.wire_len_m, best.cp_len_m)
+            _tot   = _short + _long
+            h2("OFF-CENTRE-FED GEOMETRY")
+            ln(f"Total length      : {_tot:.3f} m")
+            ln(f"Long arm          : {_long:.3f} m")
+            ln(f"Short arm         : {_short:.3f} m")
+            ln(f"Feed offset       : {(_short / _tot if _tot else 0.0):.4f} "
+               f"of the total ({_short:.3f} m from the short-arm end)")
+            ln(f"Matching device   : {_prof_rep.match_device} "
+               f"{unun_ratio:g}:1")
+            if _prof_rep.has_vertical_radiator:
+                ln(f"Vertical radiator : "
+                   f"{getattr(best, 'vert_len_m', 0.0) or CW_VERT_LEN_M:.3f} m "
+                   f"below the feedpoint, terminated by the line isolator")
+                ln(f"Line isolator     : "
+                   + ("ideal (modelled as an open wire end)"
+                      if CW_ISOLATOR_Z is None
+                      else f"{CW_ISOLATOR_Z[0]:.0f} + j{CW_ISOLATOR_Z[1]:.0f} ohm "
+                           f"series load (LD 4)"))
+
+            h2("ASSUMPTIONS AND LIMITS")
+            ln(f"Matching model    : {MATCH_MODEL} transformer "
+               + ("(R and X divided by the ratio)" if MATCH_MODEL == "ideal"
+                  else "(finite magnetising reactance in shunt)"))
+            if best.nec2_used:
+                ln(f"Feed model        : "
+                   f"{'straddle (fused)' if best.feed_fused else 'junction'}"
+                   + ("" if best.feed_fused else
+                      f"; impedance uncertainty raised "
+                      f"x{JUNCTION_FEED_UNC_FACTOR:.1f}"))
+                ln(f"Feed node offset  : "
+                   f"{best.feed_offset_frac_seg * 100.0:.1f}% of a segment")
+            else:
+                # No deck was solved for this candidate, so feed_fused and
+                # feed_offset_frac_seg still hold their constructor defaults.
+                # Printing them would publish a placeholder as a measurement.
+                ln("Feed model        : not determined — no NEC-2 deck was "
+                   "built for this candidate (empirical mode)")
+            if getattr(best, "empirical_clamped_bands", None):
+                ln("Empirical clamp   : the feed sits on or beside a current "
+                   "null on " + ", ".join(best.empirical_clamped_bands)
+                   + " — those impedances are CLAMPED, not computed; do not "
+                     "rank on them.")
+            if mode != "nec2":
+                ln("Closed-form model : sinusoidal current, no ground, thin "
+                   "wire.  It under-predicts the feed resistance of a real "
+                   "OCFD (150-400 ohm measured).  Re-run with --mode nec2 "
+                   "before building.")
+            if _prof_rep.has_vertical_radiator:
+                ln("Feedline          : the section above the isolator is a "
+                   "MODELLED RADIATOR by design; the coax below it is not in "
+                   "the NEC model at all.")
+        if _prof_rep.is_dipole:
+            # Same two numbers, honest labels: neither arm is a counterpoise,
+            # and the angle-from-vertical of a horizontal arm says nothing.
+            ln(f"Long arm      : {best.wire_len_m:.3f} m")
+            ln(f"Short arm     : {best.cp_len_m:.3f} m"
+               + (f"   (far end z={best.cp_end_z_m:.4f} m)"
+                  if best.cp_end_z_m is not None else ""))
         else:
-            ln(T("report_cp_len").format(
-                best.cp_len_m,
-                best.cp_end_z_m if best.cp_end_z_m is not None else wire_height_m,
-                best.cp_angle_deg))
-        if use_counterpoise and best.cp_end_z_m is not None:
+            ln(T("report_wire_len").format(best.wire_len_m))
+            if not use_counterpoise:
+                ln(T("report_cp_disabled"))
+            else:
+                ln(T("report_cp_len").format(
+                    best.cp_len_m,
+                    best.cp_end_z_m if best.cp_end_z_m is not None else wire_height_m,
+                    best.cp_angle_deg))
+        if (not _prof_rep.is_dipole) and use_counterpoise and best.cp_end_z_m is not None:
             if best.cp_reach_m is not None and best.cp_reach_m <= 1e-6:
                 ln(T("report_cp_geom_vertical"))
             else:
@@ -7355,14 +8222,16 @@ def write_report(
         lines.append("")
 
         ln(T("report_per_band"))
-        _hdr_b = f"  {'Band':>8}  {'Active':>6}  {'VSWR(Tx)':>9}  {'Avoid':>8}  {'AvoidRating':>22}  VSWR"
+        _q_hdr = quality_label(_prof_rep, short=True)
+        _hdr_b = (f"  {'Band':>8}  {'Active':>6}  {'VSWR(Tx)':>9}  "
+                  f"{_q_hdr:>8}  {_q_hdr + 'Rating':>22}  VSWR")
         ln(_hdr_b)
         ln("  " + "─" * 80)
 
         for cr in calc_rows:
             b = cr.band
             a = best.band_avoidance.get(b, 0.0)
-            rating = _avoidance_rating(a)
+            rating = quality_rating(_prof_rep, a)
             act_flag = "YES" if cr.active else "no"
             if cr.active:
                 v = best.band_vswr.get(b, 999.0)
@@ -7609,6 +8478,16 @@ def export_best_csv(
         "unun_ratio", "avoidance_score", "quality_rating",
         "cp_len_m", "cp_height_m", "num_radials",
     ]
+    # The antenna type decides which closed-form model and which
+    # geometry-quality metric this file must report — the same two choices the
+    # report makes, so the two files cannot contradict each other.
+    _prof_csv = antenna_profile(getattr(best, "antenna_type", None))
+    if _prof_csv.is_dipole:
+        # Schema marker: dipole rows describe two ARMS, not a wire and a
+        # counterpoise.  Downstream consumers branch on this rather than
+        # guessing from the numbers.
+        fieldnames = fieldnames + ["antenna_type", "total_len_m", "offset_frac",
+                                   "short_arm_m", "long_arm_m", "vert_len_m"]
 
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
@@ -7637,10 +8516,10 @@ def export_best_csv(
                 _src = best.band_imp_src.get(cr.band, "empirical")
                 r_wire_source = "nec2" if _src == "NEC2" else "empirical"
             else:
-                ratio_emp = w / lhalf if lhalf else 0.0
-                arg = math.pi * ratio_emp
-                cos2 = math.cos(arg) ** 2
-                R = max(1.0, 50.0 * (80.0 ** cos2))
+                R, X, _ = empirical_impedance(_prof_csv.empirical_model, freq,
+                                              w, best.cp_len_m)
+                _unused_arg = None
+                cos2 = 0.0   # kept so the historical note below still reads
                 # Sign convention: X = -1500·sin(2π·L/λ½), identical to
                 # score_candidate() (both branches), find_best_unun() and the
                 # X_no_cp column a few lines below.  The bare +1500 that used
@@ -7650,15 +8529,12 @@ def export_best_csv(
                 # the VSWR columns are even in X and were unaffected, so the
                 # only visible symptom was the published X_wire_ohm telling a
                 # builder to fit a series C where a series L is needed.
-                X = -1500.0 * math.sin(2.0 * arg)
                 r_wire_source = "empirical"
 
-            lhalf_emp = C_MHZ / (2.0 * freq) if freq else 1.0
-            ratio_emp = w / lhalf_emp if lhalf_emp else 0.0
-            arg_emp = math.pi * ratio_emp
-            cos2_emp = math.cos(arg_emp) ** 2
-            R_no_cp = max(1.0, 50.0 * (80.0 ** cos2_emp))
-            X_no_cp = -1500.0 * math.sin(2.0 * arg_emp)
+            # Bare-antenna reference column: the closed-form model for THIS
+            # antenna type, with no transformer.
+            R_no_cp, X_no_cp, _ = empirical_impedance(
+                _prof_csv.empirical_model, freq, w, best.cp_len_m)
             # vswr_no_cp: antenna-side VSWR ref 50 Ω, no UnUn, empirical formula.
             # This represents the bare wire impedance before the UnUn transformer.
             vswr_no = _recompute_vswr(R_no_cp, X_no_cp, 1.0)  # ratio=1 → antenna side
@@ -7679,8 +8555,9 @@ def export_best_csv(
             # shared helper for a band the candidate never scored.
             avoid = best.band_avoidance.get(cr.band)
             if avoid is None:
-                avoid = band_avoidance_score(w, freq, unun_ratio)
-            rating = _avoidance_rating(avoid)
+                avoid = band_quality_score(_prof_csv, w, best.cp_len_m, freq,
+                                           unun_ratio)
+            rating = quality_rating(_prof_csv, avoid)
 
             writer.writerow({
                 "band":           cr.band,
@@ -7700,6 +8577,16 @@ def export_best_csv(
                 "vswr_no_cp_source": "empirical",
                 "vswr_with_cp":   _recompute_vswr(R, X, unun_ratio)
                                   if cr.active else "",
+                **({"antenna_type": _prof_csv.key,
+                    "total_len_m":  round(best.wire_len_m + best.cp_len_m, 4),
+                    "offset_frac":  round(
+                        (min(best.wire_len_m, best.cp_len_m)
+                         / (best.wire_len_m + best.cp_len_m))
+                        if (best.wire_len_m + best.cp_len_m) > 0 else 0.0, 4),
+                    "short_arm_m":  round(min(best.wire_len_m, best.cp_len_m), 4),
+                    "long_arm_m":   round(max(best.wire_len_m, best.cp_len_m), 4),
+                    "vert_len_m":   round(getattr(best, "vert_len_m", 0.0), 4)}
+                   if _prof_csv.is_dipole else {}),
                 "Z_eff_ohm":      round(math.hypot(R, X), 2),
                 "unun_ratio":     unun_ratio,
                 "avoidance_score":round(avoid, 4),
@@ -7792,7 +8679,7 @@ def write_best_nec_deck(
         for gw in geo.gw_lines:
             fh.write(gw)
         fh.write(f"GE {geo.ge_flag}\n")
-        fh.write(ld_card(wire_conductivity))
+        fh.write(ld_cards(wire_conductivity, geo.lumped_loads))
         fh.write(geo.gn_line)
         # NOT a hardcoded "EX 0 1 1 0": the source segment is decided by the
         # geometry builder (straddle feed), and hardcoding it here would export
@@ -7951,7 +8838,7 @@ def plot_radiation_diagrams(
             for gw in _rad_geo.gw_lines:
                 fh.write(gw)
             fh.write(f"GE {_rad_geo.ge_flag}\n")
-            fh.write(ld_card(wire_conductivity))
+            fh.write(ld_cards(wire_conductivity, _rad_geo.lumped_loads))
             fh.write(_rad_geo.gn_line)
             fh.write(_rad_geo.ex_line)
 
@@ -9161,6 +10048,7 @@ def plot_construction_diagram(
     no_cp_return: str = DEFAULT_NO_CP_RETURN,
     cp_stub_len_m: float = DEFAULT_CP_STUB_LEN_M,
     ground_model: str = DEFAULT_GROUND_MODEL,
+    antenna_type: Optional[str] = None,     # None → best.antenna_type / module
 ) -> None:
     """
     Render a clean, modern, human-readable PNG showing the physical layout
@@ -9287,9 +10175,27 @@ def plot_construction_diagram(
     placer.register(t_feed, priority=4)
 
     # ── radiator wire ─────────────────────────────────────────────────────
+    _prof_cd = antenna_profile(
+        antenna_type if antenna_type is not None
+        else getattr(best, "antenna_type", None))
+    # Neither arm of a dipole is a counterpoise, and calling one "Radiator
+    # (long wire)" on a construction drawing is how an antenna gets built
+    # wrong.
+    _lbl_rad = (T("construction_long_arm_label") if _prof_cd.is_dipole
+                else T("construction_radiator_label"))
+    _lbl_cp  = (T("construction_short_arm_label") if _prof_cd.is_dipole
+                else T("construction_cp_label"))
+    # Dimension-box wording follows the same rule as the legend: on a dipole
+    # drawing "Counterpoise length" and "CP reach from mast" name things that
+    # do not exist, and a builder reading them will build the wrong antenna.
+    _dim_cp_lbl  = (T("construction_short_arm_label") if _prof_cd.is_dipole
+                    else T("construction_dim_cp"))
+    _dim_rad_lbl = (T("construction_long_arm_label") if _prof_cd.is_dipole
+                    else T("construction_dim_radiator"))
+
     ax.plot([0, x_far], [z_near, z_far], color=ACCENT, linewidth=3.2,
             zorder=4, solid_capstyle="round",
-            label=T("construction_radiator_label"))
+            label=_lbl_rad)
     ax.scatter([x_far], [z_far], s=60, color=ACCENT, edgecolors=TEXT,
                linewidths=1, zorder=5)
 
@@ -9319,7 +10225,7 @@ def plot_construction_diagram(
     elif _rad_angle_deg < -90:
         _rad_angle_deg += 180
     t_rad = ax.text(_rad_mid_x, _rad_mid_z,
-                    f"{T('construction_dim_radiator')}\n{wire_len:.2f} m",
+                    f"{_dim_rad_lbl}\n{wire_len:.2f} m",
                     color=TEXT, fontsize=8.5, ha="center", va="center",
                     fontweight="bold",
                     rotation=_rad_angle_deg,
@@ -9397,7 +10303,7 @@ def plot_construction_diagram(
                 color=ACCENT2, linewidth=3, zorder=3, linestyle=(0, (1, 0)))
         ax.plot([-_cxe, -(_cxe + horiz_rem)], [cp_bottom_z, cp_bottom_z],
                 color=ACCENT2, linewidth=3, zorder=3,
-                label=T("construction_cp_label"))
+                label=_lbl_cp)
         ax.scatter([-(_cxe + horiz_rem)], [cp_bottom_z],
                    s=55, color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
 
@@ -9405,19 +10311,20 @@ def plot_construction_diagram(
         if horiz_rem > 0.05:
             # Above the horizontal segment
             t_cp = _wire_label(ax, -_cxe, cp_bottom_z, -(_cxe + horiz_rem), cp_bottom_z,
-                               f"{T('construction_dim_cp')}\n{cp_label_total}",
+                               f"{_dim_cp_lbl}\n{cp_label_total}",
                                ACCENT2, BG, gap=0.5)
         else:
             # Above the angled segment
             t_cp = _wire_label(ax, cp_x0, z_near, -_cxe, cp_bottom_z,
-                               f"{T('construction_dim_cp')}\n{cp_label_total}",
+                               f"{_dim_cp_lbl}\n{cp_label_total}",
                                ACCENT2, BG, gap=0.5)
         placer.register(t_cp, priority=7)
 
         # Angle annotation on the angled segment
         if vert_len > 0.05:
             t_ang = ax.text(cp_x0 + 0.15, (z_near + cp_bottom_z) / 2,
-                            f"{cp_angle_deg:.1f}°", color=ACCENT2, fontsize=8,
+                            f"{cp_angle_deg:.1f}°" if not _prof_cd.is_dipole else "",
+                            color=ACCENT2, fontsize=8,
                             rotation=90, va="center", ha="left",
                             bbox=dict(boxstyle="round,pad=0.15", facecolor=BG,
                                       edgecolor="none", alpha=0.85))
@@ -9425,30 +10332,32 @@ def plot_construction_diagram(
 
         # Ground-level reach dim line
         _cp_reach_x = _cxe + horiz_rem
-        t_reach = _dim_line(ax, (0, -0.9), (-_cp_reach_x, -0.9),
-                            f"{T('construction_dim_cp_reach')}\n{_cp_reach_x:.2f} m",
-                            color=ACCENT2, text_color=TEXT, below=True, bg=BG)
-        placer.register(t_reach, priority=5)
+        if not _prof_cd.is_dipole:
+            t_reach = _dim_line(ax, (0, -0.9), (-_cp_reach_x, -0.9),
+                                f"{T('construction_dim_cp_reach')}\n{_cp_reach_x:.2f} m",
+                                color=ACCENT2, text_color=TEXT, below=True, bg=BG)
+            placer.register(t_reach, priority=5)
 
     else:
         # Straight wire at angle
         ax.plot([cp_x0, -_cxe], [z_near, _cze],
                 color=ACCENT2, linewidth=3, zorder=3,
-                label=T("construction_cp_label"))
+                label=_lbl_cp)
         ax.scatter([cp_x0, -_cxe], [z_near, _cze],
                    s=55, color=ACCENT2, edgecolors=TEXT, linewidths=1, zorder=5)
 
         # CP label above the wire segment
         t_cp = _wire_label(ax, cp_x0, z_near, -_cxe, _cze,
-                           f"{T('construction_dim_cp')}\n{cp_label_total}",
+                           f"{_dim_cp_lbl}\n{cp_label_total}",
                            ACCENT2, BG, gap=0.5)
         placer.register(t_cp, priority=7)
 
         # Ground-level reach dim line
-        t_reach = _dim_line(ax, (0, -0.9), (-_cxe, -0.9),
-                            f"{T('construction_dim_cp_reach')}\n{_cxe:.2f} m",
-                            color=ACCENT2, text_color=TEXT, below=True, bg=BG)
-        placer.register(t_reach, priority=5)
+        if not _prof_cd.is_dipole:
+            t_reach = _dim_line(ax, (0, -0.9), (-_cxe, -0.9),
+                                f"{T('construction_dim_cp_reach')}\n{_cxe:.2f} m",
+                                color=ACCENT2, text_color=TEXT, below=True, bg=BG)
+            placer.register(t_reach, priority=5)
 
     # ── height annotations ────────────────────────────────────────────────
     t_ht = _vdim_line(ax, -1.1, 0, z_near,
@@ -9511,6 +10420,39 @@ def plot_construction_diagram(
     )
     placer.register(t_diam, priority=2)
 
+    # ── Carolina Windom vertical radiator and line isolator ─────────────
+    # The section between the balun and the isolator radiates on purpose, so
+    # it belongs on the construction drawing as a dimensioned conductor, not
+    # as an afterthought: its length and the isolator's position are what a
+    # builder has to get right.
+    if _prof_cd.has_vertical_radiator:
+        _v_len = (getattr(best, "vert_len_m", 0.0) or CW_VERT_LEN_M)
+        _v_bot = max(0.0, z_near - _v_len)
+        ax.plot([0, 0], [z_near, _v_bot], color="#c0392b", linewidth=3.2,
+                zorder=4, solid_capstyle="round",
+                label=T("construction_vert_label"))
+        ax.scatter([0], [_v_bot], s=110, marker="s", color="#c0392b",
+                   edgecolors=TEXT, linewidths=1.2, zorder=6)
+        t_iso = ax.text(0.35, _v_bot, T("construction_isolator_label"),
+                        fontsize=8.5, color="#c0392b", ha="left",
+                        va="center", fontweight="bold")
+        placer.register(t_iso, priority=4)
+        t_vlen = ax.text(-0.35, (z_near + _v_bot) / 2.0, f"{_v_len:.2f} m",
+                         fontsize=8.5, color="#c0392b", ha="right",
+                         va="center", rotation=90)
+        placer.register(t_vlen, priority=4)
+
+    if _prof_cd.is_dipole:
+        _short = min(best.wire_len_m, best.cp_len_m)
+        _tot   = best.wire_len_m + best.cp_len_m
+        t_off = ax.text(
+            0.5, 0.02,
+            T("construction_offset_note").format(
+                _tot, _short, (_short / _tot) if _tot else 0.0),
+            transform=ax.transAxes, color=TEXT, fontsize=9,
+            ha="center", va="bottom", fontweight="bold")
+        placer.register(t_off, priority=2)
+
     # ── resolve all label overlaps and clamp inside the axes box ─────────
     placer.resolve(fig, ax, margin=0.18)
 
@@ -9572,6 +10514,10 @@ def write_pdf_brochure(
         construction_png = None
     if not radiation_png or not os.path.isfile(radiation_png):
         radiation_png = None
+
+    # Antenna type: decides which geometry-quality metric the per-band ratings
+    # below actually mean, and which matching device the design pages describe.
+    _prof_pdf = antenna_profile(getattr(best, "antenna_type", None))
 
     # ── palette ────────────────────────────────────────────────────────
     NAVY    = colors.HexColor("#0f2a43")
@@ -9728,7 +10674,8 @@ def write_pdf_brochure(
         b = cr.band
         v = best.band_vswr.get(b, 999.0)
         a = best.band_avoidance.get(b, 0.0)
-        rating = re.sub(r'[^\w\s★]', '', _avoidance_rating(a)).strip()
+        rating = re.sub(r'[^\w\s★]', '',
+                        quality_rating(_prof_pdf, a)).strip()
         if v <= 1.5:
             vcolor = GOOD
         elif v <= 3.0:
@@ -9893,7 +10840,8 @@ def write_pdf_brochure(
             b = cr.band
             v = best.band_vswr.get(b, 999.0)
             a = best.band_avoidance.get(b, 0.0)
-            rating = re.sub(r'[^\w\s★]', '', _avoidance_rating(a)).strip()
+            rating = re.sub(r'[^\w\s★]', '',
+                            quality_rating(_prof_pdf, a)).strip()
             if v <= 1.5:
                 vlabel = T("vswr_excellent"); vc = GOOD
             elif v <= 3.0:
@@ -10764,6 +11712,282 @@ def solenoid_srf_mhz(l_uh: float, c_pf: float) -> float:
         return 1.0 / (2.0 * math.pi * math.sqrt(l_uh * 1e-6 * c_pf * 1e-12)) / 1e6
     except (ValueError, ZeroDivisionError):
         return float("nan")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TRANSMISSION-LINE BALUN  +  LINE ISOLATOR (COMMON-MODE CHOKE)
+# ═══════════════════════════════════════════════════════════════════════════
+# An off-centre-fed dipole is a BALANCED load fed from unbalanced coax.  The
+# tapped autotransformer unun_design() builds is galvanically common and
+# unbalanced on both ports: it delivers the right RATIO with the wrong
+# winding, and it puts the whole common-mode current on the coax with no
+# design control.  What the antenna needs instead is a transmission-line
+# transformer, and — for a Carolina Windom — a choke that decides where the
+# radiating section of that coax stops.
+
+BALUN_KINDS = ("guanella", "ruthroff")
+MAGNETISING_X_FACTOR = 4.0     # require X_L(f_min) >= 4 * Z_in (10 is stricter)
+BALUN_Z0_TOL_PCT     = 15.0    # buildable tolerance on the line impedance
+ISOLATOR_Z_TARGET_OHM = 2000.0 # |Z_cm| wanted across the whole design range
+
+
+def pair_z0_ohm(wire_dia_mm: float, centre_spacing_mm: float,
+                eps_r: float = 2.1) -> float:
+    """Characteristic impedance of a two-wire line (PTFE-sleeved pair), ohm.
+
+    Z0 = (120/sqrt(eps_r)) * acosh(s/d), with s the centre-to-centre spacing.
+    This is what decides whether a Guanella winding can actually be wound to
+    the impedance the ratio demands: for a 4:1 (50 -> 200 ohm) the two lines
+    must each be 100 ohm, and a tightly twisted enamelled pair is nearer 50.
+    """
+    d = max(float(wire_dia_mm), 1e-6)
+    s = max(float(centre_spacing_mm), d * 1.001)
+    return (120.0 / math.sqrt(max(eps_r, 1.0))) * math.acosh(s / d)
+
+
+def pair_spacing_for_z0_mm(z0_ohm: float, wire_dia_mm: float,
+                           eps_r: float = 2.1) -> float:
+    """Centre-to-centre spacing that yields `z0_ohm` — the inverse of above."""
+    d = max(float(wire_dia_mm), 1e-6)
+    arg = float(z0_ohm) * math.sqrt(max(eps_r, 1.0)) / 120.0
+    return d * math.cosh(max(arg, 0.0))
+
+
+def balun_design(freq_min_mhz: float,
+                 freq_max_mhz: float,
+                 ratio: float,
+                 z_in: float = 50.0,
+                 core: str = DEFAULT_TOROID,
+                 kind: str = "guanella",
+                 turns: int = 10,
+                 wire_dia_mm: float = 1.6,
+                 eps_r: float = 2.1,
+                 power_w: float = 100.0) -> Dict[str, object]:
+    """
+    Transmission-line balun for an off-centre-fed feedpoint.
+
+    Guanella n:1 is built from sqrt(n) transmission-line sections whose
+    characteristic impedance is the geometric mean of the two port
+    impedances:
+        4:1 (50 -> 200) : 2 lines of 100 ohm
+        9:1 (50 -> 450) : 3 lines of 150 ohm
+        6:1 (50 -> 300) : a hybrid (4:1 Guanella + 1.5:1); ~122 ohm lines,
+                          and its bandwidth is poorer at the top of HF.
+    Ruthroff 4:1 uses a single bifilar 100-ohm line, but its delay error
+    degrades the ratio above roughly 10x f_min; it is offered for
+    completeness and always flagged when the range is that wide.
+
+    Checks (returned as status strings, never as exceptions, so the report can
+    print an imperfect design rather than losing it):
+      * magnetising reactance at f_min vs MAGNETISING_X_FACTOR * z_in
+      * the line impedance the winding can actually achieve
+      * core loss from mu'' at both ends of the range vs core_dissipation_w()
+      * the winding fitting the bore (same 0.8 * pi * ID / d rule as
+        unun_design)
+    """
+    out: Dict[str, object] = {}
+    f_lo = max(float(freq_min_mhz), 1e-6)
+    f_hi = max(float(freq_max_mhz), f_lo)
+    n = max(float(ratio), 1.0)
+    kind = kind if kind in BALUN_KINDS else "guanella"
+    core_d = TOROID_DB.get(core)
+
+    z_out = z_in * n
+    z0_line = math.sqrt(z_in * z_out)
+    n_lines = int(round(math.sqrt(n))) if abs(math.sqrt(n) - round(math.sqrt(n))) < 1e-6 else 0
+
+    out.update(core=core, kind=kind, ratio=n, turns=int(turns),
+               z_in=z_in, z_out=z_out, z0_line_target=z0_line,
+               n_lines=(n_lines or None), wire_dia_mm=wire_dia_mm,
+               freq_min_mhz=f_lo, freq_max_mhz=f_hi, power_w=power_w)
+    notes: List[str] = []
+    status = "ok"
+
+    if kind == "guanella" and not n_lines:
+        notes.append(
+            f"{n:g}:1 is not a pure Guanella ratio (sqrt({n:g}) is not an "
+            f"integer); it is built as a hybrid and its bandwidth is narrower "
+            f"than a 4:1 or 9:1.")
+        status = "hybrid"
+    if kind == "ruthroff" and f_hi > 10.0 * f_lo:
+        notes.append(
+            f"A Ruthroff {n:g}:1 spans {f_lo:.2f}-{f_hi:.2f} MHz here; its "
+            f"delay-line error degrades the ratio above ~{10.0 * f_lo:.0f} MHz. "
+            f"Prefer a Guanella (current) balun for a multi-band OCFD.")
+        status = "bandwidth"
+
+    # ── Line impedance the winding can reach ─────────────────────────────
+    spacing = pair_spacing_for_z0_mm(z0_line, wire_dia_mm, eps_r)
+    out["pair_spacing_mm"] = spacing
+    out["z0_line_check"] = pair_z0_ohm(wire_dia_mm, spacing, eps_r)
+    if spacing > 4.0 * wire_dia_mm:
+        notes.append(
+            f"A {z0_line:.0f}-ohm line needs {spacing:.2f} mm centre spacing on "
+            f"{wire_dia_mm:.2f} mm wire — too loose to wind tidily on a toroid. "
+            f"Use thinner wire, or sleeve the pair.")
+        status = "line-impedance"
+
+    # ── Magnetising reactance and core loss ──────────────────────────────
+    if core_d:
+        al = float(core_d["AL"])                       # nH/N^2
+        l_uh = al * (int(turns) ** 2) / 1000.0         # uH
+        out["l_uh"] = l_uh
+        xl_lo = 2.0 * math.pi * f_lo * 1e6 * l_uh * 1e-6
+        out["xl_min_ohm"] = xl_lo
+        out["xl_required_ohm"] = MAGNETISING_X_FACTOR * z_in
+        if xl_lo < MAGNETISING_X_FACTOR * z_in:
+            _need = math.sqrt(MAGNETISING_X_FACTOR * z_in
+                              / max(xl_lo, 1e-9)) * int(turns)
+            notes.append(
+                f"Magnetising reactance at {f_lo:.2f} MHz is {xl_lo:.0f} ohm, "
+                f"below the {MAGNETISING_X_FACTOR:.0f}x{z_in:.0f} = "
+                f"{MAGNETISING_X_FACTOR * z_in:.0f} ohm wanted: the balun will "
+                f"load the transmitter on the lowest band.  Use about "
+                f"{math.ceil(_need):d} turns, or a higher-AL core.")
+            status = "low" if status == "ok" else status
+        # Loss from the complex permeability at both ends of the range.
+        mu_lo = core_mu(str(core_d["material"]), f_lo)
+        mu_hi = core_mu(str(core_d["material"]), f_hi)
+        a_surf = core_surface_area_cm2(core_d)
+        out["p_diss_w"] = core_dissipation_w(a_surf)
+        for _tag, _mu, _f in (("lo", mu_lo, f_lo), ("hi", mu_hi, f_hi)):
+            mu_p, mu_pp = _mu
+            if not (isinstance(mu_p, float) and math.isfinite(mu_p)
+                    and math.isfinite(mu_pp) and mu_p > 0):
+                continue
+            q = mu_p / max(mu_pp, 1e-9)
+            out[f"q_{_tag}"] = q
+            # The magnetising branch sits in SHUNT across the input port, so
+            # the loss is taken against its parallel equivalent resistance
+            # R_p = X*Q, with V^2 = P*Z_in at the port.
+            x_at = 2.0 * math.pi * _f * 1e6 * l_uh * 1e-6
+            r_par = max(x_at * q, 1e-9)
+            p_loss = power_w * z_in / r_par
+            out[f"p_core_{_tag}_w"] = p_loss
+            if p_loss > out["p_diss_w"]:
+                notes.append(
+                    f"Estimated core loss at {_f:.2f} MHz ({p_loss:.1f} W) "
+                    f"exceeds what this core can shed for a "
+                    f"{CORE_DELTA_T_C:.0f} C rise ({out['p_diss_w']:.1f} W) at "
+                    f"{power_w:.0f} W drive.  Use a bigger core or stack two.")
+                # First finding wins the single status slot; `notes` carries
+                # every one of them, so a core that is both under-wound and
+                # over-heated does not have its first problem overwritten.
+                status = "thermal" if status == "ok" else status
+        # Winding fit: same rule unun_design uses for the bore.
+        max_turns = int(0.8 * math.pi * float(core_d["ID"]) / max(wire_dia_mm, 1e-6))
+        out["max_turns_bore"] = max_turns
+        _lines_needed = n_lines or 2
+        if int(turns) * _lines_needed > max_turns:
+            notes.append(
+                f"{turns} turns x {_lines_needed} lines will not fit the "
+                f"{core_d['ID']:.1f} mm bore (about {max_turns} conductor "
+                f"passes max).  Use a larger core or thinner wire.")
+            status = "fit" if status == "ok" else status
+    else:
+        notes.append(f"Unknown core '{core}': no inductance or loss figures.")
+        status = "unknown-core"
+
+    out["status"] = status
+    out["notes"] = notes
+    return out
+
+
+def line_isolator_design(freq_min_mhz: float,
+                         freq_max_mhz: float,
+                         core: str = DEFAULT_TOROID,
+                         turns: int = 12,
+                         cable: str = "RG-58",
+                         cable_dia_mm: float = 5.0,
+                         z_target_ohm: float = ISOLATOR_Z_TARGET_OHM,
+                         power_w: float = 100.0) -> Dict[str, object]:
+    """
+    Common-mode choke for the bottom of the Carolina Windom vertical section
+    (and a useful option on a plain OCFD feedline).
+
+    This is the component that DEFINES the antenna: everything above it
+    radiates on purpose, everything below it should not.  Its common-mode
+    impedance follows the core's complex permeability,
+
+        Z_cm(f) = j*w*L * (mu' - j*mu'')/mu'   ->   R_cm + j*X_cm,
+
+    and the useful range is bounded above by the winding's self-resonance,
+    which is why more turns is not automatically better.
+    """
+    out: Dict[str, object] = {}
+    f_lo = max(float(freq_min_mhz), 1e-6)
+    f_hi = max(float(freq_max_mhz), f_lo)
+    core_d = TOROID_DB.get(core)
+    notes: List[str] = []
+    status = "ok"
+
+    out.update(core=core, turns=int(turns), cable=cable,
+               freq_min_mhz=f_lo, freq_max_mhz=f_hi,
+               z_target_ohm=z_target_ohm, power_w=power_w)
+
+    if not core_d:
+        out.update(status="unknown-core",
+                   notes=[f"Unknown core '{core}': no impedance figures."])
+        return out
+
+    al = float(core_d["AL"])
+    l_uh = al * (int(turns) ** 2) / 1000.0
+    out["l_uh"] = l_uh
+
+    # Winding self-capacitance.  For a toroid the winding runs around the mean
+    # circumference rather than along a cylinder, so that is the length fed to
+    # the Medhurst estimate; the diameter is the core OD.
+    c_self = medhurst_self_c_pf(
+        float(core_d["OD"]),
+        max(math.pi * (float(core_d["OD"]) + float(core_d["ID"])) / 2.0, 1.0))
+    srf = solenoid_srf_mhz(l_uh, c_self)
+
+    def _z_cm(f_mhz: float) -> Tuple[float, float, float]:
+        """Common-mode impedance: the lossy magnetising branch IN PARALLEL
+        with the winding self-capacitance.  The capacitance matters: without
+        it the model reports hundreds of kilo-ohms above self-resonance, where
+        the real choke has stopped working."""
+        mu_p, mu_pp = core_mu(str(core_d["material"]), f_mhz)
+        x = 2.0 * math.pi * f_mhz * 1e6 * l_uh * 1e-6
+        if not (math.isfinite(mu_p) and math.isfinite(mu_pp) and mu_p > 0):
+            z_series = complex(0.0, x)
+        else:
+            z_series = complex(x * (mu_pp / mu_p), x)
+        if c_self > 0:
+            z_c = complex(0.0, -1.0 / (2.0 * math.pi * f_mhz * 1e6
+                                       * c_self * 1e-12))
+            denom = z_series + z_c
+            if abs(denom) > 1e-12:
+                z_series = (z_series * z_c) / denom
+        return z_series.real, z_series.imag, abs(z_series)
+
+    r_lo, x_lo, z_lo = _z_cm(f_lo)
+    r_hi, x_hi, z_hi = _z_cm(f_hi)
+    out.update(r_cm_lo=r_lo, x_cm_lo=x_lo, z_cm_lo=z_lo,
+               r_cm_hi=r_hi, x_cm_hi=x_hi, z_cm_hi=z_hi)
+
+    # An isolator resonant inside the band stops isolating above resonance.
+    out.update(c_self_pf=c_self, srf_mhz=srf)
+    if math.isfinite(srf) and f_lo <= srf <= f_hi:
+        notes.append(
+            f"The choke self-resonates at {srf:.1f} MHz, inside the "
+            f"{f_lo:.2f}-{f_hi:.2f} MHz range: above resonance it stops being "
+            f"an isolator.  Use fewer turns or split it into two chokes.")
+        status = "srf"
+
+    if min(z_lo, z_hi) < z_target_ohm:
+        notes.append(
+            f"|Z_cm| falls to {min(z_lo, z_hi):.0f} ohm inside the range, "
+            f"below the {z_target_ohm:.0f} ohm target: common-mode current "
+            f"will continue past the isolator and the feedline below it will "
+            f"radiate.  More turns, or a Mix 31 core.")
+        status = "low" if status == "ok" else status
+
+    a_surf = core_surface_area_cm2(core_d)
+    out["p_diss_w"] = core_dissipation_w(a_surf)
+    out["status"] = status
+    out["notes"] = notes
+    return out
 
 
 def wheeler_solenoid_uh(turns: int, coil_dia_mm: float, wire_dia_mm: float,
@@ -11982,6 +13206,68 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--feed-model", choices=list(FEED_MODEL_CHOICES),
                    default=DEFAULT_FEED_MODEL, dest="feed_model",
                    help=T("help_feed_model"))
+
+    # ── Antenna type ─────────────────────────────────────────────────────
+    g_ant = p.add_argument_group("antenna type")
+    g_ant.add_argument("--antenna-type", choices=list(ANTENNA_TYPE_CHOICES),
+                       default=DEFAULT_ANTENNA_TYPE, dest="antenna_type",
+                       help="long-wire (default): end-fed radiator plus a "
+                            "return conductor.  ocfd: off-centre-fed dipole — "
+                            "the two arms are --wire-len and --cp-len.  "
+                            "carolina-windom: an OCFD plus a radiating "
+                            "vertical section terminated by a line isolator.")
+    g_ant.add_argument("--total-len", metavar="M", type=float, default=None,
+                       dest="total_len",
+                       help="Dipole types only: total length of BOTH arms. "
+                            "With --offset it derives --wire-len and --cp-len, "
+                            "which is usually how an OCFD is specified.")
+    g_ant.add_argument("--offset", metavar="F", type=float,
+                       default=OCFD_DEFAULT_OFFSET_FRAC, dest="offset",
+                       help=f"Dipole types only: short arm / total length "
+                            f"(default {OCFD_DEFAULT_OFFSET_FRAC:.4f}, the "
+                            f"classic Windom third).  Valid range "
+                            f"{OCFD_OFFSET_MIN}-{OCFD_OFFSET_MAX}.")
+    g_ant.add_argument("--offset-min", metavar="F", type=float, default=0.20,
+                       dest="offset_min",
+                       help="Dipole types only: low end of the offset sweep.")
+    g_ant.add_argument("--offset-max", metavar="F", type=float, default=0.45,
+                       dest="offset_max",
+                       help="Dipole types only: high end of the offset sweep.")
+    g_ant.add_argument("--offset-step", metavar="F", type=float, default=0.01,
+                       dest="offset_step",
+                       help="Dipole types only: offset sweep step.")
+    g_ant.add_argument("--balun-ratio", metavar="N", default="auto",
+                       dest="balun_ratio",
+                       help="Dipole types only: 'auto' (default) or one of "
+                            + "/".join(f"{r:g}" for r in OCFD_BALUN_RATIOS)
+                            + ".  A balun ratio is a hardware choice, so the "
+                              "search is restricted to buildable values.")
+    g_ant.add_argument("--balun-kind", choices=list(BALUN_KINDS),
+                       default="guanella", dest="balun_kind",
+                       help="Transmission-line balun topology (default "
+                            "guanella: a current balun, correct for a "
+                            "balanced feed across all of HF).")
+    g_ant.add_argument("--cw-vert-len", metavar="M", type=float,
+                       default=CW_DEFAULT_VERT_LEN_M, dest="cw_vert_len",
+                       help=f"Carolina Windom only: length of the vertical "
+                            f"radiator between the balun and the line "
+                            f"isolator (default {CW_DEFAULT_VERT_LEN_M} m).")
+    g_ant.add_argument("--cw-isolator-z", metavar="R,X", default=None,
+                       dest="cw_isolator_z",
+                       help="Carolina Windom only: model the line isolator as "
+                            "a finite series impedance (e.g. 1000,2000) "
+                            "instead of an ideal open.  Use this to study what "
+                            "an inadequate choke does.")
+    g_ant.add_argument("--feed-choke", action="store_true", dest="feed_choke",
+                       help="Also design a feedline common-mode choke (always "
+                            "designed for carolina-windom, where it is the "
+                            "line isolator).")
+    g_ant.add_argument("--match-model", choices=("ideal", "real"),
+                       default="ideal", dest="match_model",
+                       help="VSWR through the matching device: 'ideal' "
+                            "(default) divides R and X by the ratio; 'real' "
+                            "also applies the finite magnetising reactance "
+                            "from the balun design.")
     p.add_argument("--ground-cond", metavar="S/M", type=float,
                    default=DEFAULT_GROUND_COND,
                    help=T("ap_ground_cond").format(DEFAULT_GROUND_COND))
@@ -12100,6 +13386,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     global WIRE_RADIUS_M, WIRE_CONDUCTIVITY, FEED_MODEL
+    global ANTENNA_TYPE, CW_VERT_LEN_M, CW_ISOLATOR_Z, MATCH_MODEL
     print()
     print(f"{Fore.CYAN}{'═'*70}")
 
@@ -12137,6 +13424,80 @@ def main() -> None:
     # A counterpoise-less antenna needs no CP inputs at all, so every
     # counterpoise setting becomes optional (and ignored) in that mode.
     use_counterpoise = not getattr(args, "no_counterpoise", False)
+
+    # ── Antenna type: reject the combinations that cannot mean anything ──
+    # Every one of these used to be silently ignored, which is the worst
+    # outcome: the run completes and reports a different antenna than the one
+    # the flags describe.
+    _at = getattr(args, "antenna_type", DEFAULT_ANTENNA_TYPE)
+    _p_at = antenna_profile(_at)
+    _at_bad: List[str] = []
+    if _p_at.is_dipole and not use_counterpoise:
+        _at_bad.append(
+            f"--antenna-type {_at} cannot be combined with --no-counterpoise: "
+            f"both arms are the radiator, and a dipole is its own return path. "
+            f"Use --antenna-type long-wire for a single-conductor antenna.")
+    if not _p_at.has_vertical_radiator:
+        for _flag, _dest in (("--cw-vert-len", "cw_vert_len"),
+                             ("--cw-isolator-z", "cw_isolator_z")):
+            _dflt = (CW_DEFAULT_VERT_LEN_M if _dest == "cw_vert_len" else None)
+            if getattr(args, _dest, _dflt) != _dflt:
+                _at_bad.append(
+                    f"{_flag} only applies to --antenna-type carolina-windom.")
+    if not _p_at.is_dipole:
+        if getattr(args, "total_len", None) is not None:
+            _at_bad.append("--total-len only applies to the off-centre-fed types "
+                           "(--antenna-type ocfd|carolina-windom).")
+        if abs(float(getattr(args, "offset", OCFD_DEFAULT_OFFSET_FRAC))
+               - OCFD_DEFAULT_OFFSET_FRAC) > 1e-9:
+            _at_bad.append("--offset only applies to the off-centre-fed types.")
+        if str(getattr(args, "balun_ratio", "auto")).lower() != "auto":
+            _at_bad.append("--balun-ratio only applies to the off-centre-fed types; "
+                           "a long wire is matched with an unun (--unun).")
+    else:
+        _off = float(getattr(args, "offset", OCFD_DEFAULT_OFFSET_FRAC))
+        if not (OCFD_OFFSET_MIN <= _off <= OCFD_OFFSET_MAX):
+            _at_bad.append(
+                f"--offset must be between {OCFD_OFFSET_MIN} and "
+                f"{OCFD_OFFSET_MAX} (got {_off}): below that it is an end feed, "
+                f"at 0.5 it is a centre-fed dipole.")
+        _br = str(getattr(args, "balun_ratio", "auto")).lower()
+        if _br != "auto":
+            try:
+                if float(_br) not in OCFD_BALUN_RATIOS:
+                    raise ValueError
+            except ValueError:
+                _at_bad.append(
+                    "--balun-ratio must be 'auto' or one of "
+                    + "/".join(f"{r:g}" for r in OCFD_BALUN_RATIOS)
+                    + ": a transmission-line balun exists at those ratios and "
+                      "not in between.")
+        try:
+            _parse_isolator_z(getattr(args, "cw_isolator_z", None))
+        except ValueError as _iso_err:
+            _at_bad.append(str(_iso_err))
+    if (_p_at.forced_feed_model
+            and getattr(args, "feed_model", DEFAULT_FEED_MODEL)
+            != _p_at.forced_feed_model):
+        print(f"  {Fore.YELLOW}" + (
+            f"--antenna-type {_at} has three conductors at the feed node, so "
+            f"the straddle feed is impossible; the feed model is forced to "
+            f"'{_p_at.forced_feed_model}'.  --converge is strongly recommended."
+        ) + f"{Style.RESET_ALL}")
+        args.feed_model = _p_at.forced_feed_model
+    if _at_bad:
+        print(f"{Fore.RED}ERROR:{Style.RESET_ALL}")
+        for _m in _at_bad:
+            print(f"  - {_m}")
+        sys.exit(1)
+
+    # --total-len + --offset is how an OCFD is normally specified; translate it
+    # into the (wire, cp) pair the rest of the program already understands.
+    if _p_at.is_dipole and getattr(args, "total_len", None) is not None:
+        _L = float(args.total_len)
+        _f = float(getattr(args, "offset", OCFD_DEFAULT_OFFSET_FRAC))
+        args.wire_len = _L * (1.0 - _f)      # long arm
+        args.cp_len   = _L * _f              # short arm
 
     # ── Sanity-check numeric inputs before anything downstream uses them ──
     # (step sizes feed a division in build_search_grid; min/max bound a
@@ -12330,7 +13691,12 @@ def main() -> None:
     # finds the best UnUn for it and then re-ranks everything under that ratio
     # (see "UnUn optimisation" below).  AUTO_UNUN_SEED only scores the very
     # first sweep, before there is a geometry to optimise the ratio for.
-    unun_ratio = AUTO_UNUN_SEED
+    # The seed is the profile's default: 9:1 for an end-fed wire, 4:1 for an
+    # off-centre feed.  Seeding a balun-matched dipole at 9:1 would score the
+    # first sweep against a load the antenna never presents.
+    unun_ratio = _p_at.default_match_ratio
+    if str(getattr(args, "balun_ratio", "auto")).lower() not in ("auto", ""):
+        unun_ratio = float(args.balun_ratio)
     print(T("unun_auto_mode"))
 
     # ── Resolve range / height defaults ──────────────────────────────────
@@ -12417,17 +13783,38 @@ def main() -> None:
     wire_range = (args.wire_min, args.wire_max, args.wire_step)
     cp_range   = (args.cp_min,  args.cp_max,  args.cp_step)
     try:
-        grid = build_search_grid(*wire_range, *cp_range,
-                                 use_counterpoise=use_counterpoise)
+        if _p_at.is_dipole:
+            # The natural axes of an off-centre-fed dipole are TOTAL LENGTH and
+            # OFFSET, not two independent arms — a user thinks "20 m at a
+            # third", not "13.4 m and 6.7 m".  The grid is built in those axes
+            # and converted to the (long arm, short arm) pairs the rest of the
+            # program already handles, so no sweep loop, worker pool or plot
+            # has to know that the second axis changed meaning.
+            _tot_min = args.wire_min + args.cp_min
+            _tot_max = args.wire_max + args.cp_max
+            grid = build_dipole_grid(_tot_min, _tot_max, args.wire_step,
+                                     float(args.offset_min),
+                                     float(args.offset_max),
+                                     float(args.offset_step))
+        else:
+            grid = build_search_grid(*wire_range, *cp_range,
+                                     use_counterpoise=use_counterpoise)
     except ValueError as _grid_err:
         print(f"{Fore.RED}ERROR: {_grid_err}{Style.RESET_ALL}")
         sys.exit(1)
-    _n_wire = round((args.wire_max - args.wire_min) / args.wire_step) + 1
-    _n_cp = (
-        1 if not use_counterpoise
-        else round((args.cp_max - args.cp_min) / args.cp_step) + 1
-    )
-    print(T("grid_size").format(_n_wire, _n_cp, len(grid)))
+    if _p_at.is_dipole:
+        _n_tot = round(((args.wire_max + args.cp_max)
+                        - (args.wire_min + args.cp_min)) / args.wire_step) + 1
+        _n_off = round((float(args.offset_max) - float(args.offset_min))
+                       / float(args.offset_step)) + 1
+        print(T("dipole_grid_size").format(_n_tot, _n_off, len(grid)))
+    else:
+        _n_wire = round((args.wire_max - args.wire_min) / args.wire_step) + 1
+        _n_cp = (
+            1 if not use_counterpoise
+            else round((args.cp_max - args.cp_min) / args.cp_step) + 1
+        )
+        print(T("grid_size").format(_n_wire, _n_cp, len(grid)))
 
     # ── Counterpoise far-end height ───────────────────────────────
     # The counterpoise is built exactly like the sloping radiator: it runs from
@@ -12653,6 +14040,28 @@ def main() -> None:
     # the radiation run and the convergence check cannot end up disagreeing.
     _fm_arg = getattr(args, "feed_model", DEFAULT_FEED_MODEL)
     FEED_MODEL = _fm_arg if _fm_arg in FEED_MODEL_CHOICES else DEFAULT_FEED_MODEL
+
+    # ── Antenna type ─────────────────────────────────────────────────────
+    # Same mechanism, same reason: the geometry builder, the scorer, the CSV
+    # writer and the report all resolve the type through antenna_profile(),
+    # so they cannot end up describing three different antennas.
+    ANTENNA_TYPE = getattr(args, "antenna_type", DEFAULT_ANTENNA_TYPE)
+    if ANTENNA_TYPE not in ANTENNA_TYPE_CHOICES:
+        ANTENNA_TYPE = DEFAULT_ANTENNA_TYPE
+    _prof_run = antenna_profile(ANTENNA_TYPE)
+    MATCH_MODEL = getattr(args, "match_model", "ideal")
+    if _prof_run.has_vertical_radiator:
+        CW_VERT_LEN_M = max(float(getattr(args, "cw_vert_len",
+                                          CW_DEFAULT_VERT_LEN_M)),
+                            CW_VERT_LEN_MIN_M)
+        CW_ISOLATOR_Z = _parse_isolator_z(getattr(args, "cw_isolator_z", None))
+    if ANTENNA_TYPE != DEFAULT_ANTENNA_TYPE:
+        print("  " + T("antenna_type_msg").format(_prof_run.key))
+        if _prof_run.has_vertical_radiator:
+            print("  " + T("cw_vert_msg").format(
+                CW_VERT_LEN_M,
+                "ideal (open)" if CW_ISOLATOR_Z is None
+                else f"{CW_ISOLATOR_Z[0]:.0f}+j{CW_ISOLATOR_Z[1]:.0f} ohm"))
 
     if mode == "nec2":
         print("  " + T("feed_model_msg").format(FEED_MODEL))
@@ -13153,9 +14562,10 @@ def main() -> None:
             _new.band_avoidance = {}
             _avoid_all = []
             _avoid_exact_r: Dict[str, float] = {}
+            _prof_rs = antenna_profile(getattr(_c, "antenna_type", None))
             for _cr in calc_rows:
-                _av = band_avoidance_score(_c.wire_len_m, _cr.freq_mhz, ratio,
-                                           weights=_w)
+                _av = band_quality_score(_prof_rs, _c.wire_len_m, _c.cp_len_m,
+                                         _cr.freq_mhz, ratio, weights=_w)
                 _avoid_exact_r[_cr.band] = _av
                 _new.band_avoidance[_cr.band] = round(_av, 4)
                 _avoid_all.append(_av)
@@ -14168,6 +15578,18 @@ def _launch_gui() -> None:
             "tab_physics":        "  Physics  ",
             "tab_output":         "  Output Files  ",
             "tab_run":            "  Run  ",
+            "antenna_type_lf":    "Antenna Type",
+            "antenna_type_label": "Type:",
+            "antenna_type_hint":  ("ocfd / carolina-windom: the wire and CP lengths "
+                                   "become the two ARMS of a dipole, and the "
+                                   "counterpoise options no longer apply."),
+            "offset_label":       "Feed offset (short arm / total):",
+            "offset_hint":        "0.3333 = the classic Windom third",
+            "cw_vert_label":      "Vertical radiator (m):",
+            "cw_vert_hint":       "Carolina Windom only: balun down to the line isolator",
+            "cw_iso_label":       "Line isolator R,X (ohm):",
+            "cw_iso_hint":        "blank = ideal isolator (modelled as an open end)",
+            "balun_kind_label":   "Balun type:",
             "band_source_lf":     "Band Source",
             "bands_label":        "Bands (comma-separated):",
             "known_prefix":       "Known: ",
@@ -14693,6 +16115,19 @@ def _launch_gui() -> None:
             "tab_physics":        "  Física  ",
             "tab_output":         "  Archivos de Salida  ",
             "tab_run":            "  Ejecutar  ",
+            "antenna_type_lf":    "Tipo de Antena",
+            "antenna_type_label": "Tipo:",
+            "antenna_type_hint":  ("ocfd / carolina-windom: las longitudes de hilo "
+                                   "y contrapeso pasan a ser los dos BRAZOS de un "
+                                   "dipolo y las opciones de contrapeso dejan de "
+                                   "aplicarse."),
+            "offset_label":       "Desplazamiento (brazo corto / total):",
+            "offset_hint":        "0.3333 = el tercio clásico de la Windom",
+            "cw_vert_label":      "Radiador vertical (m):",
+            "cw_vert_hint":       "Sólo Carolina Windom: del balun al aislador de línea",
+            "cw_iso_label":       "Aislador de línea R,X (ohm):",
+            "cw_iso_hint":        "vacío = aislador ideal (extremo abierto)",
+            "balun_kind_label":   "Tipo de balun:",
             "band_source_lf":     "Fuente de Bandas",
             "bands_label":        "Bandas (separadas por coma):",
             "known_prefix":       "Conocidas: ",
@@ -15223,6 +16658,19 @@ def _launch_gui() -> None:
             "tab_physics": '  Fisica  ',
             "tab_output": '  File di Output  ',
             "tab_run": '  Esegui  ',
+            "antenna_type_lf": 'Tipo di Antenna',
+            "antenna_type_label": 'Tipo:',
+            "antenna_type_hint": ("ocfd / carolina-windom: le lunghezze del filo e "
+                                  "del contrappeso diventano i due BRACCI di un "
+                                  "dipolo e le opzioni di contrappeso non si "
+                                  "applicano piu."),
+            "offset_label": 'Sfalsamento (braccio corto / totale):',
+            "offset_hint": '0.3333 = il classico terzo della Windom',
+            "cw_vert_label": 'Radiatore verticale (m):',
+            "cw_vert_hint": 'Solo Carolina Windom: dal balun all\'isolatore di linea',
+            "cw_iso_label": 'Isolatore di linea R,X (ohm):',
+            "cw_iso_hint": 'vuoto = isolatore ideale (estremita aperta)',
+            "balun_kind_label": 'Tipo di balun:',
             "band_source_lf": 'Origine Banda',
             "bands_label": 'Bande (separate da virgola):',
             "known_prefix": 'Note: ',
@@ -16983,15 +18431,118 @@ def _launch_gui() -> None:
             # Counterpoise fields follow the "Use counterpoise" checkbox
             # (enabled by default).
             self._toggle_cp_fields()
+            self._toggle_antenna_fields()
 
             # Every setting feeds the command preview, so bind them all now
             # that the widgets (and their variables) exist.
             self._bind_auto_refresh()
 
+        def _toggle_antenna_fields(self):
+            """Grey out whatever the selected antenna type cannot use.
+
+            A dipole has no counterpoise and no return-path model, so leaving
+            those controls live would let the user configure an antenna the
+            run will then reject (or, worse, silently ignore).
+            """
+            prof = antenna_profile(self._antenna_type_var.get().strip())
+            for w in getattr(self, "_dipole_widgets", []):
+                try:
+                    w.configure(state=("normal" if prof.is_dipole else "disabled"))
+                except tk.TclError:
+                    pass
+            for w in getattr(self, "_cw_widgets", []):
+                try:
+                    w.configure(state=("normal" if prof.has_vertical_radiator
+                                       else "disabled"))
+                except tk.TclError:
+                    pass
+            if prof.is_dipole:
+                # Both arms are the radiator: the counterpoise checkbox has no
+                # meaning, and unchecking it would make the run fail.
+                self._use_cp_var.set(True)
+            self._toggle_cp_fields()
+            try:
+                self._use_cp_chk.configure(
+                    state=("disabled" if prof.is_dipole else "normal"))
+            except (AttributeError, tk.TclError):
+                pass
+
         # ── Tab: Band / Source ────────────────────────────────────────────
 
         def _build_tab_input(self):
             t = self._scrollable(self._tab_input)
+
+            # ── Antenna type ──────────────────────────────────────────────
+            # First thing on the first tab, because it changes what every
+            # other field on every other tab MEANS: for a dipole the wire and
+            # CP lengths are the two arms, and the counterpoise options stop
+            # applying entirely.
+            ant_lf = ttk.LabelFrame(t, padding=8)
+            ant_lf.pack(fill="x", pady=(0, 8))
+            self._reg(ant_lf, "antenna_type_lf")
+            _al = ttk.Label(ant_lf)
+            _al.grid(row=0, column=0, sticky="w")
+            self._reg(_al, "antenna_type_label")
+            self._antenna_type_var = tk.StringVar(value=DEFAULT_ANTENNA_TYPE)
+            _ant_cb = ttk.Combobox(ant_lf, textvariable=self._antenna_type_var,
+                                   values=list(ANTENNA_TYPE_CHOICES),
+                                   state="readonly", width=20)
+            _ant_cb.grid(row=0, column=1, padx=6, sticky="w")
+            _ant_cb.bind("<<ComboboxSelected>>",
+                         lambda _e: self._toggle_antenna_fields())
+            self._ant_hint_lbl = ttk.Label(ant_lf, style="Muted.TLabel",
+                                           wraplength=520)
+            self._ant_hint_lbl.grid(row=1, column=0, columnspan=3, sticky="w",
+                                    pady=(2, 0))
+            self._reg(self._ant_hint_lbl, "antenna_type_hint")
+
+            self._dipole_widgets = []
+            self._cw_widgets = []
+
+            _ol = ttk.Label(ant_lf)
+            _ol.grid(row=2, column=0, sticky="w", pady=(6, 0))
+            self._reg(_ol, "offset_label")
+            self._offset_var = tk.StringVar(
+                value=f"{OCFD_DEFAULT_OFFSET_FRAC:.4f}")
+            _off_ent = ttk.Entry(ant_lf, textvariable=self._offset_var, width=12)
+            _off_ent.grid(row=2, column=1, padx=6, pady=(6, 0), sticky="w")
+            _oh = ttk.Label(ant_lf, style="Muted.TLabel")
+            _oh.grid(row=2, column=2, sticky="w", padx=(4, 0), pady=(6, 0))
+            self._reg(_oh, "offset_hint")
+            self._dipole_widgets += [_ol, _off_ent, _oh]
+
+            _bl = ttk.Label(ant_lf)
+            _bl.grid(row=3, column=0, sticky="w", pady=(4, 0))
+            self._reg(_bl, "balun_kind_label")
+            self._balun_kind_var = tk.StringVar(value="guanella")
+            _bk = ttk.Combobox(ant_lf, textvariable=self._balun_kind_var,
+                               values=list(BALUN_KINDS), state="readonly",
+                               width=14)
+            _bk.grid(row=3, column=1, padx=6, pady=(4, 0), sticky="w")
+            self._dipole_widgets += [_bl, _bk]
+
+            _vl = ttk.Label(ant_lf)
+            _vl.grid(row=4, column=0, sticky="w", pady=(4, 0))
+            self._reg(_vl, "cw_vert_label")
+            self._cw_vert_var = tk.StringVar(value=f"{CW_DEFAULT_VERT_LEN_M:g}")
+            _v_ent = ttk.Entry(ant_lf, textvariable=self._cw_vert_var, width=12)
+            _v_ent.grid(row=4, column=1, padx=6, pady=(4, 0), sticky="w")
+            _vh = ttk.Label(ant_lf, style="Muted.TLabel")
+            _vh.grid(row=4, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
+            self._reg(_vh, "cw_vert_hint")
+            self._cw_widgets += [_vl, _v_ent, _vh]
+
+            _il = ttk.Label(ant_lf)
+            _il.grid(row=5, column=0, sticky="w", pady=(4, 0))
+            self._reg(_il, "cw_iso_label")
+            self._cw_iso_var = tk.StringVar(value="")
+            _i_ent = ttk.Entry(ant_lf, textvariable=self._cw_iso_var, width=14)
+            _i_ent.grid(row=5, column=1, padx=6, pady=(4, 0), sticky="w")
+            _ih = ttk.Label(ant_lf, style="Muted.TLabel")
+            _ih.grid(row=5, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
+            self._reg(_ih, "cw_iso_hint")
+            self._cw_widgets += [_il, _i_ent, _ih]
+
             src_lf = ttk.LabelFrame(t, padding=8)
             src_lf.pack(fill="x", pady=(0, 8))
             self._reg(src_lf, "band_source_lf")
@@ -19742,6 +21293,24 @@ def _launch_gui() -> None:
             if not script:
                 raise ValueError("Optimizer script path is not set.")
             cmd = [sys.executable, script]
+            _at = (self._antenna_type_var.get().strip()
+                   if hasattr(self, "_antenna_type_var") else DEFAULT_ANTENNA_TYPE)
+            _prof_gui = antenna_profile(_at)
+            if _at and _at != DEFAULT_ANTENNA_TYPE:
+                cmd += ["--antenna-type", _at]
+                _off = self._offset_var.get().strip()
+                if _off:
+                    cmd += ["--offset", _off]
+                _bk = self._balun_kind_var.get().strip()
+                if _bk and _bk != "guanella":
+                    cmd += ["--balun-kind", _bk]
+                if _prof_gui.has_vertical_radiator:
+                    _vv = self._cw_vert_var.get().strip()
+                    if _vv:
+                        cmd += ["--cw-vert-len", _vv]
+                    _iv = self._cw_iso_var.get().strip()
+                    if _iv:
+                        cmd += ["--cw-isolator-z", _iv]
             bands = self._bands_var.get().strip()
             if bands:
                 cmd += ["--bands", bands]
