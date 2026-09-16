@@ -3955,6 +3955,10 @@ FEED_STRADDLE_SEARCH_DIPOLE = 24
 # (0.167).  A threshold under that would fire on every textbook OCFD and train
 # the user to ignore it.
 FEED_OFFSET_WARN_FRAC = 0.20    # |offset| in segments -> warn (dipole feeds)
+# Fewest segments the SHORT arm of a dipole may carry before its share of the
+# current distribution stops being resolved at all.  Absolute, not a density:
+# see check_segmentation_convergence.
+SHORT_ARM_MIN_SEGS = 10
 FEED_OFFSET_BAD_FRAC  = 0.35    # |offset| in segments -> mark the deck invalid
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7188,6 +7192,14 @@ class ConvergenceRow:
     segs_cp:   int = 0
     seg_len_wire_m: float = 0.0
     seg_len_cp_m:   float = 0.0
+    # Off-centre-fed attribution.  A single drift figure for the whole
+    # structure cannot say WHICH conductor is under-resolved, and on a dipole
+    # it is almost always the short arm: it carries the steep part of the
+    # current distribution beside the source, and the fused card's uniform
+    # segment length is chosen to centre the feed node, not to resolve it.
+    segs_short_arm: int = 0
+    segs_long_arm:  int = 0
+    segs_vert:      int = 0     # Carolina Windom vertical radiator
     band_R: Dict[str, float] = field(default_factory=dict)
     band_X: Dict[str, float] = field(default_factory=dict)
     ok: bool = True
@@ -7207,6 +7219,14 @@ class ConvergenceReport:
     x_trend_ratio: Optional[float] = None      # worst |dX(fine)| / |dX(coarse)| seen
     x_trend_bands: List[str] = field(default_factory=list)    # bands failing the trend test
     x_trend_checked: bool = False              # True once >=3 good rows made the test possible
+    # Set when the SHORT arm of an off-centre-fed dipole never reached a
+    # usable segment count at any density tried.  Reported separately from
+    # converged_r/x because it is a different failure: the structure-wide
+    # drift can look fine while the arm that sets the feed impedance is
+    # carrying five segments.
+    short_arm_under_segmented: bool = False
+    short_arm_min_segs: int = 0
+    short_arm_segs_per_wave: float = 0.0
     converged_r: bool = True              # max_r_drift_pct <= CONVERGENCE_R_TOL_PCT
     converged_x: bool = True              # every band inside its X tolerance, no sign flip, no bad trend
     converged: bool = True                # converged_r AND converged_x
@@ -7383,6 +7403,22 @@ def check_segmentation_convergence(
                 else:
                     row.segs_cp = _segs_at_length(best.cp_len_m, row.seg_len_wire_m)
                     row.seg_len_cp_m = best.cp_len_m / row.segs_cp
+            # Per-arm attribution for the off-centre-fed types.  With a fused
+            # card the two "arms" are slices of one wire, so the counts come
+            # from the feed-node split rather than from segs_ant/segs_cp.
+            if antenna_profile().is_dipole:
+                if geo.fused_feed and geo.feed_segs_total and geo.feed_seg:
+                    _k, _n = geo.feed_seg, geo.feed_segs_total
+                    _cp_side, _ant_side = _k - 1, _n - _k + 1
+                    if best.cp_len_m <= best.wire_len_m:
+                        row.segs_short_arm, row.segs_long_arm = _cp_side, _ant_side
+                    else:
+                        row.segs_short_arm, row.segs_long_arm = _ant_side, _cp_side
+                else:
+                    row.segs_short_arm = min(row.segs_wire, row.segs_cp)
+                    row.segs_long_arm  = max(row.segs_wire, row.segs_cp)
+            row.segs_vert = geo.vert_segs
+
             if verbose:
                 print(T("converge_running").format(spw, row.segs_wire, row.segs_cp),
                       end="\r")
@@ -7505,6 +7541,31 @@ def check_segmentation_convergence(
     rep.converged_x = (not rep.x_drift_bands and not rep.sign_flip_bands
                         and not rep.x_trend_bands)
     rep.converged = rep.converged_r and rep.converged_x
+
+    # ── Short-arm verdict (off-centre-fed types) ─────────────────────────
+    # Judged at the HIGHEST band, where the arm is longest in wavelengths and
+    # therefore needs the most segments.  The threshold is the same
+    # segments-per-half-wave density the rest of the program asks for: an arm
+    # resolved more coarsely than that is under-segmented no matter what the
+    # structure-wide drift says.
+    _good_rows = [r for r in rep.rows if r.ok and r.segs_short_arm]
+    if _good_rows and antenna_profile().is_dipole:
+        _hi_f = max((cr.freq_mhz for cr in calc_rows if cr.active), default=0.0)
+        _short_len = min(best.wire_len_m, best.cp_len_m)
+        _finest = _good_rows[-1]
+        rep.short_arm_min_segs = min(r.segs_short_arm for r in _good_rows)
+        if _hi_f > 0 and _short_len > 0:
+            _half_waves = _short_len / (C_MHZ / (2.0 * _hi_f))
+            if _half_waves > 0:
+                rep.short_arm_segs_per_wave = _finest.segs_short_arm / _half_waves
+        # The criterion is the ABSOLUTE segment count, not the density.  With
+        # a fused card the segment length is uniform, so the short arm's
+        # segments-per-wavelength always matches the rest of the structure and
+        # a density test can never fire — yet a physically short arm still
+        # ends up with a handful of segments, and it is the one carrying the
+        # steep current gradient beside the source.
+        rep.short_arm_under_segmented = (
+            _finest.segs_short_arm < SHORT_ARM_MIN_SEGS)
     return rep
 
 
@@ -7523,16 +7584,23 @@ def convergence_lines(rep: ConvergenceReport,
         if b not in good[-1].band_R:
             continue
         out.append(f"{b} ({cr.freq_mhz:.3f} MHz)")
-        out.append(f"    {'seg/½λ':>7}  {'segs w/cp':>11}  {'seg len (m)':>12}  "
+        _dip = any(r.segs_short_arm for r in good)
+        _col2 = "segs short/long" if _dip else "segs w/cp"
+        out.append(f"    {'seg/½λ':>7}  {_col2:>15}  {'seg len (m)':>12}  "
                    f"{'R (Ω)':>9}  {'X (Ω)':>9}")
         for row in good:
             R = row.band_R.get(b)
             X = row.band_X.get(b)
             if R is None:
                 continue
+            if _dip:
+                _c2 = f"{row.segs_short_arm:6d}/{row.segs_long_arm:<6d}"
+                if row.segs_vert:
+                    _c2 = f"{row.segs_short_arm:4d}/{row.segs_long_arm:<4d}+{row.segs_vert:<3d}"
+            else:
+                _c2 = f"{row.segs_wire:7d}/{row.segs_cp:<7d}"
             out.append(
-                f"    {row.segs_per_half_wave:7d}  "
-                f"{row.segs_wire:5d}/{row.segs_cp:<5d}  "
+                f"    {row.segs_per_half_wave:7d}  {_c2:>15}  "
                 f"{row.seg_len_wire_m:12.3f}  {R:9.1f}  {X:+9.1f}"
             )
     out.append("")
@@ -7540,6 +7608,22 @@ def convergence_lines(rep: ConvergenceReport,
                                           rep.max_r_drift_pct, rep.max_x_drift_ohm))
     if rep.sign_flip_bands:
         out.append(T("converge_sign_flip").format(", ".join(rep.sign_flip_bands)))
+    _sa_rows = [r for r in rep.rows if r.ok and r.segs_short_arm]
+    if _sa_rows:
+        out.append(
+            f"Short arm: {rep.short_arm_min_segs} segments at the coarsest "
+            f"density, {_sa_rows[-1].segs_short_arm} at the finest "
+            f"({rep.short_arm_segs_per_wave:.0f} per half wave on the highest "
+            f"band).")
+        if rep.short_arm_under_segmented:
+            out.append(
+                f"  WARNING: the SHORT arm carries fewer than "
+                f"{SHORT_ARM_MIN_SEGS} segments even at the finest density "
+                f"tried.  It holds the steep part of the current "
+                f"distribution beside the source, so the feed impedance is "
+                f"less trustworthy than the drift figure above suggests.  "
+                f"Raise --segs-per-half-wave, or move the offset away from "
+                f"the extreme.")
     # R and X get separate verdicts: they do not converge at the same rate.
     if rep.converged_r:
         out.append(T("converge_r_ok").format(CONVERGENCE_R_TOL_PCT))
@@ -10840,11 +10924,17 @@ def write_pdf_brochure(
     else:
         slope_note = T("report_wire_geom_horizontal_const")
 
-    spec_rows = [
+    # A dipole has no radiator-plus-counterpoise: it has two arms, described
+    # by the block appended below.  Printing the old rows as well would state
+    # the same two lengths twice under names that do not apply, and a
+    # "counterpoise geometry, 90 degrees from vertical" line on a flat-top
+    # dipole is simply wrong.
+    spec_rows = ([] if _prof_pdf.is_dipole else [
         [T("pdf_spec_wire_len"),  f"{best.wire_len_m:.3f} m"],
         [T("pdf_spec_cp_len"),    (f"{best.cp_len_m:.3f} m" if use_counterpoise
                                    else cp_type_label)],
         [T("pdf_spec_cp_type"),   cp_type_label],
+    ]) + [
         [T("pdf_spec_height"),    f"{wire_height_m:.2f} m"],
         [T("pdf_spec_wire_diam"), f"{WIRE_RADIUS_M * 2000.0:.2f} mm"],
         [T("pdf_spec_unun"),      f"{unun_ratio:g} : 1"],
@@ -10865,6 +10955,41 @@ def write_pdf_brochure(
             _txt = f"{_t:.0f}\u00b0 ({_low_band.band}"
             _txt += f", {_g:.1f} dBi)" if _g is not None else ")"
             spec_rows.append([T("pdf_spec_toa"), _txt])
+
+    # The cover is what a builder reads first, so for an off-centre-fed
+    # antenna it must carry the one dimension that cannot be recovered from
+    # the others: where along the wire the feedpoint goes.
+    if _prof_pdf.is_dipole:
+        _s_pdf = min(best.wire_len_m, best.cp_len_m)
+        _l_pdf = max(best.wire_len_m, best.cp_len_m)
+        _t_pdf = _s_pdf + _l_pdf
+        spec_rows.insert(0, ["Antenna type", _prof_pdf.key])
+        spec_rows.append(["Total length", f"{_t_pdf:.3f} m"])
+        spec_rows.append(["Arms (short / long)",
+                          f"{_s_pdf:.3f} m / {_l_pdf:.3f} m"])
+        spec_rows.append(["Feed offset",
+                          f"{_s_pdf:.3f} m from the short-arm end "
+                          f"({(_s_pdf / _t_pdf if _t_pdf else 0):.1%})"])
+        if _prof_pdf.has_vertical_radiator:
+            spec_rows.append([
+                "Vertical radiator",
+                f"{(getattr(best, 'vert_len_m', 0.0) or CW_VERT_LEN_M):.2f} m "
+                f"below the feedpoint, to the line isolator"])
+    if best.band_gain_vert or best.band_gain_horiz:
+        _pol_bits = []
+        for _cr in [c for c in calc_rows if c.active]:
+            _gv = best.band_gain_vert.get(_cr.band)
+            _gh = best.band_gain_horiz.get(_cr.band)
+            if _gv is None and _gh is None:
+                continue
+            _pol_bits.append(
+                f"{_cr.band}: "
+                + (f"{_gv:.1f}" if _gv is not None else "null") + " V / "
+                + (f"{_gh:.1f}" if _gh is not None else "null") + " H")
+        if _pol_bits:
+            spec_rows.append(["Polarisation (dBi at target TOA)",
+                              "; ".join(_pol_bits)])
+
     spec_table = Table(
         [[Paragraph(f"<b>{k}</b>", style_body), Paragraph(v, style_body)]
          for k, v in spec_rows],
@@ -11231,6 +11356,90 @@ def write_pdf_brochure(
             ]))
             story.append(KeepTogether([Paragraph(T("report_ant_impedance"), style_h2), imp_table2]))
         story.append(Spacer(1, 6 * mm))
+
+    # ── 2d. BALUN AND LINE ISOLATOR ───────────────────────────────────────
+    # The ratio table above says WHICH transformer; these say whether it can
+    # be built and, for a Carolina Windom, where its radiating section stops.
+    # Without them the brochure would hand a builder a ratio and no device.
+    _bd_pdf = getattr(unun_result, "balun", None) if unun_result else None
+    _id_pdf = getattr(unun_result, "isolator", None) if unun_result else None
+    if _bd_pdf or _id_pdf:
+        story.append(PageBreak())
+        story.append(Paragraph("Matching device", style_h1))
+
+    if _bd_pdf:
+        _b_rows = [["Property", "Value"],
+                   ["Topology", f"{_bd_pdf.get('kind', '')} "
+                                f"{_bd_pdf.get('ratio', 0):g}:1"],
+                   ["Impedance", f"{_bd_pdf.get('z_in', 50):.0f} -> "
+                                 f"{_bd_pdf.get('z_out', 0):.0f} ohm"],
+                   ["Core", str(_bd_pdf.get("core", ""))],
+                   ["Windings", (f"{_bd_pdf['n_lines']} lines of "
+                                 f"{_bd_pdf.get('z0_line_target', 0):.0f} ohm, "
+                                 f"{_bd_pdf.get('turns')} turns each"
+                                 if _bd_pdf.get("n_lines") else
+                                 f"hybrid, {_bd_pdf.get('turns')} turns")],
+                   ["Pair spacing",
+                    f"{_bd_pdf.get('pair_spacing_mm', 0):.2f} mm on "
+                    f"{_bd_pdf.get('wire_dia_mm', 0):.2f} mm wire"],
+                   ["Magnetising X",
+                    f"{_bd_pdf.get('xl_min_ohm', 0):.0f} ohm at "
+                    f"{_bd_pdf.get('freq_min_mhz', 0):.3f} MHz "
+                    f"(need at least {_bd_pdf.get('xl_required_ohm', 0):.0f} ohm)"],
+                   ["Status", str(_bd_pdf.get("status", ""))]]
+        _bt = Table(_b_rows, colWidths=[45 * mm, 125 * mm])
+        _bt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ]))
+        story.append(KeepTogether(
+            [Paragraph("Balun (transmission-line transformer)", style_h2), _bt]))
+        for _n in _bd_pdf.get("notes", [])[:4]:
+            story.append(Paragraph(f"- {_n}", style_body))
+        story.append(Spacer(1, 5 * mm))
+
+    if _id_pdf:
+        _i_rows = [["Property", "Value"],
+                   ["Core / turns", f"{_id_pdf.get('core', '')}, "
+                                    f"{_id_pdf.get('turns')} turns of "
+                                    f"{_id_pdf.get('cable', '')}"],
+                   ["|Z| common-mode",
+                    f"{_id_pdf.get('z_cm_lo', 0):.0f} ohm at "
+                    f"{_id_pdf.get('freq_min_mhz', 0):.3f} MHz, "
+                    f"{_id_pdf.get('z_cm_hi', 0):.0f} ohm at "
+                    f"{_id_pdf.get('freq_max_mhz', 0):.3f} MHz"],
+                   ["Target", f"{_id_pdf.get('z_target_ohm', 0):.0f} ohm"],
+                   ["Self-resonance",
+                    f"~{_id_pdf.get('srf_mhz', float('nan')):.1f} MHz "
+                    f"(rough: Medhurst is a solenoid formula)"],
+                   ["Status", str(_id_pdf.get("status", ""))]]
+        _it = Table(_i_rows, colWidths=[45 * mm, 125 * mm])
+        _it.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d6dee3")),
+            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d6dee3")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ]))
+        story.append(KeepTogether(
+            [Paragraph("Line isolator (common-mode choke)", style_h2), _it]))
+        for _n in _id_pdf.get("notes", [])[:4]:
+            story.append(Paragraph(f"- {_n}", style_body))
+        story.append(Spacer(1, 5 * mm))
+
     story.append(PageBreak())
     story.append(Paragraph(T("pdf_section_radiation"), style_h1))
     if radiation_png:
@@ -17420,6 +17629,28 @@ def _launch_gui() -> None:
             "footer_project": "Progetto: ",
         },
     }
+
+    # Every GUI string must exist in every language.  A missing key would
+    # otherwise surface as a blank label or a raw key in one language only —
+    # the kind of defect that survives a release because nobody runs the GUI
+    # in Italian.  Checked at start-up, where it costs microseconds, and
+    # reported rather than raised so a translation gap can never stop a user
+    # from running the optimizer.
+    try:
+        _gs_keys = {_lang: set(_d.keys()) for _lang, _d in _GUI_STRINGS.items()}
+        _gs_all = set().union(*_gs_keys.values())
+        _gs_missing = {_lang: sorted(_gs_all - _ks)
+                       for _lang, _ks in _gs_keys.items()
+                       if _gs_all - _ks}
+        if _gs_missing:
+            print(f"  {Fore.YELLOW}GUI translation gap: "
+                  + "; ".join(f"{_lang} is missing {len(_m)} key(s) "
+                              f"({', '.join(_m[:5])}"
+                              + (", …" if len(_m) > 5 else "") + ")"
+                              for _lang, _m in _gs_missing.items())
+                  + f"{Style.RESET_ALL}")
+    except Exception:
+        pass
 
     # ── Help-badge tooltip strings ──────────────────────────────────────────
     #
