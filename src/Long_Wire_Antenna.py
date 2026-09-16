@@ -548,6 +548,607 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "it": ("Il radiatore verticale NON e rappresentato in modalita "
                "empirica: questi valori descrivono solo la OCFD orizzontale."),
     },
+    # ── Off-centre-fed / Carolina Windom strings ───────────────────────────
+    # Everything the report and the PDF render for the dipole types.  They go
+    # here, not inline, for the same reason every other user-visible string in
+    # this file does: an English literal in a report body is a defect the
+    # Spanish and Italian users see and nobody else does.
+    "lbl_antenna_type": {
+        "en": "Antenna type", "es": "Tipo de antena", "it": "Tipo di antenna",
+    },
+    "rep_antenna_type": {
+        "en": "Antenna type: {0}",
+        "es": "Tipo de antena: {0}",
+        "it": "Tipo di antenna: {0}",
+    },
+    "sec_ocfd_geometry": {
+        "en": "OFF-CENTRE-FED GEOMETRY",
+        "es": "GEOMETRÍA ALIMENTADA DESCENTRADA",
+        "it": "GEOMETRIA ALIMENTATA FUORI CENTRO",
+    },
+    "lbl_total_length": {
+        "en": "Total length", "es": "Longitud total", "it": "Lunghezza totale",
+    },
+    "lbl_long_arm": {
+        "en": "Long arm", "es": "Brazo largo", "it": "Braccio lungo",
+    },
+    "lbl_short_arm": {
+        "en": "Short arm", "es": "Brazo corto", "it": "Braccio corto",
+    },
+    "lbl_arms_short_long": {
+        "en": "Arms (short / long)",
+        "es": "Brazos (corto / largo)",
+        "it": "Bracci (corto / lungo)",
+    },
+    "lbl_feed_offset": {
+        "en": "Feed offset",
+        "es": "Desplazamiento del punto",
+        "it": "Sfalsamento alimentazione",
+    },
+    "ocfd_offset_val": {
+        "en": "{0:.4f} of the total ({1:.3f} m from the short-arm end)",
+        "es": "{0:.4f} del total ({1:.3f} m desde el extremo del brazo corto)",
+        "it": "{0:.4f} del totale ({1:.3f} m dall\'estremità del braccio corto)",
+    },
+    "lbl_matching_device": {
+        "en": "Matching device",
+        "es": "Dispositivo de adaptación",
+        "it": "Dispositivo di adattamento",
+    },
+    "lbl_vertical_radiator": {
+        "en": "Vertical radiator",
+        "es": "Radiador vertical",
+        "it": "Radiatore verticale",
+    },
+    "vert_radiator_val": {
+        "en": "{0:.3f} m below the feedpoint, terminated by the line isolator",
+        "es": "{0:.3f} m bajo el punto de alimentación, terminado por el aislador de línea",
+        "it": "{0:.3f} m sotto il punto di alimentazione, terminato dall\'isolatore di linea",
+    },
+    "pdf_vert_radiator_val": {
+        "en": "{0:.2f} m below the feedpoint, to the line isolator",
+        "es": "{0:.2f} m bajo el punto de alimentación, hasta el aislador de línea",
+        "it": "{0:.2f} m sotto il punto di alimentazione, fino all\'isolatore di linea",
+    },
+    "lbl_line_isolator": {
+        "en": "Line isolator",
+        "es": "Aislador de línea",
+        "it": "Isolatore di linea",
+    },
+    "isolator_ideal_val": {
+        "en": "ideal (modelled as an open wire end)",
+        "es": "ideal (modelado como un extremo de hilo abierto)",
+        "it": "ideale (modellato come estremità di filo aperta)",
+    },
+    "isolator_series_val": {
+        "en": "{0:.0f} + j{1:.0f} ohm series load (LD 4)",
+        "es": "carga serie de {0:.0f} + j{1:.0f} ohm (LD 4)",
+        "it": "carico serie di {0:.0f} + j{1:.0f} ohm (LD 4)",
+    },
+    # ── Balun ──────────────────────────────────────────────────────────────
+    "sec_balun": {
+        "en": "BALUN (TRANSMISSION-LINE TRANSFORMER)",
+        "es": "BALUN (TRANSFORMADOR DE LÍNEA DE TRANSMISIÓN)",
+        "it": "BALUN (TRASFORMATORE A LINEA DI TRASMISSIONE)",
+    },
+    "pdf_balun_title": {
+        "en": "Balun (transmission-line transformer)",
+        "es": "Balun (transformador de línea de transmisión)",
+        "it": "Balun (trasformatore a linea di trasmissione)",
+    },
+    "lbl_topology": {"en": "Topology", "es": "Topología", "it": "Topologia"},
+    "lbl_impedance": {"en": "Impedance", "es": "Impedancia", "it": "Impedenza"},
+    "lbl_core": {"en": "Core", "es": "Núcleo", "it": "Nucleo"},
+    "lbl_windings": {"en": "Windings", "es": "Devanados", "it": "Avvolgimenti"},
+    "lbl_lines": {"en": "Lines", "es": "Líneas", "it": "Linee"},
+    "lbl_property": {"en": "Property", "es": "Propiedad", "it": "Proprietà"},
+    "lbl_value": {"en": "Value", "es": "Valor", "it": "Valore"},
+    "lbl_status": {"en": "Status", "es": "Estado", "it": "Stato"},
+    "lbl_target": {"en": "Target", "es": "Objetivo", "it": "Obiettivo"},
+    "balun_lines_pure": {
+        "en": "{0} x {1:.0f} ohm, {2} turns each on {3}",
+        "es": "{0} x {1:.0f} ohm, {2} espiras cada una en {3}",
+        "it": "{0} x {1:.0f} ohm, {2} spire ciascuna su {3}",
+    },
+    "balun_lines_hybrid": {
+        "en": "hybrid winding, {0:.0f} ohm nominal, {1} turns on {2}",
+        "es": "devanado híbrido, {0:.0f} ohm nominal, {1} espiras en {2}",
+        "it": "avvolgimento ibrido, {0:.0f} ohm nominale, {1} spire su {2}",
+    },
+    "lbl_pair_spacing": {
+        "en": "Pair spacing",
+        "es": "Separación del par",
+        "it": "Spaziatura della coppia",
+    },
+    "pair_spacing_val": {
+        "en": "{0:.2f} mm centre-to-centre on {1:.2f} mm wire",
+        "es": "{0:.2f} mm entre centros sobre hilo de {1:.2f} mm",
+        "it": "{0:.2f} mm tra i centri su filo da {1:.2f} mm",
+    },
+    "lbl_magnetising_x": {
+        "en": "Magnetising X",
+        "es": "X de magnetización",
+        "it": "X di magnetizzazione",
+    },
+    "magnetising_x_val": {
+        "en": "{0:.0f} ohm at {1:.3f} MHz (want at least {2:.0f} ohm)",
+        "es": "{0:.0f} ohm a {1:.3f} MHz (se requieren al menos {2:.0f} ohm)",
+        "it": "{0:.0f} ohm a {1:.3f} MHz (ne servono almeno {2:.0f})",
+    },
+    # ── Line isolator ──────────────────────────────────────────────────────
+    "sec_isolator": {
+        "en": "LINE ISOLATOR (COMMON-MODE CHOKE)",
+        "es": "AISLADOR DE LÍNEA (CHOKE DE MODO COMÚN)",
+        "it": "ISOLATORE DI LINEA (CHOKE DI MODO COMUNE)",
+    },
+    "pdf_isolator_title": {
+        "en": "Line isolator (common-mode choke)",
+        "es": "Aislador de línea (choke de modo común)",
+        "it": "Isolatore di linea (choke di modo comune)",
+    },
+    "lbl_core_turns": {
+        "en": "Core / turns", "es": "Núcleo / espiras", "it": "Nucleo / spire",
+    },
+    "iso_core_turns_val": {
+        "en": "{0}, {1} turns of {2}",
+        "es": "{0}, {1} espiras de {2}",
+        "it": "{0}, {1} spire di {2}",
+    },
+    "lbl_z_common_mode": {
+        "en": "|Z common-mode|",
+        "es": "|Z modo común|",
+        "it": "|Z modo comune|",
+    },
+    "iso_zcm_val": {
+        "en": "{0:.0f} ohm at {1:.3f} MHz, {2:.0f} ohm at {3:.3f} MHz (target {4:.0f} ohm)",
+        "es": "{0:.0f} ohm a {1:.3f} MHz, {2:.0f} ohm a {3:.3f} MHz (objetivo {4:.0f} ohm)",
+        "it": "{0:.0f} ohm a {1:.3f} MHz, {2:.0f} ohm a {3:.3f} MHz (obiettivo {4:.0f} ohm)",
+    },
+    "lbl_self_resonance": {
+        "en": "Self-resonance", "es": "Autorresonancia", "it": "Autorisonanza",
+    },
+    "iso_srf_val": {
+        "en": ("~{0:.1f} MHz (rough estimate — the Medhurst formula is for a "
+               "solenoid, not a toroid; above resonance |Z_cm| falls with "
+               "frequency, which the figures above already reflect)"),
+        "es": ("~{0:.1f} MHz (estimación aproximada — la fórmula de Medhurst es "
+               "para un solenoide, no para un toroide; por encima de la "
+               "resonancia |Z_cm| cae con la frecuencia, lo que las cifras "
+               "anteriores ya reflejan)"),
+        "it": ("~{0:.1f} MHz (stima approssimativa — la formula di Medhurst è "
+               "per un solenoide, non per un toroide; sopra la risonanza "
+               "|Z_cm| cala con la frequenza, cosa che i valori sopra già "
+               "riflettono)"),
+    },
+    # ── Assumptions and limits ─────────────────────────────────────────────
+    "sec_assumptions": {
+        "en": "ASSUMPTIONS AND LIMITS",
+        "es": "SUPUESTOS Y LÍMITES",
+        "it": "IPOTESI E LIMITI",
+    },
+    "lbl_matching_model": {
+        "en": "Matching model",
+        "es": "Modelo de adaptación",
+        "it": "Modello di adattamento",
+    },
+    "match_model_ideal_val": {
+        "en": "ideal transformer (R and X divided by the ratio)",
+        "es": "transformador ideal (R y X divididos por la relación)",
+        "it": "trasformatore ideale (R e X divisi per il rapporto)",
+    },
+    "match_model_real_val": {
+        "en": "real transformer (finite magnetising reactance in shunt)",
+        "es": "transformador real (reactancia de magnetización finita en paralelo)",
+        "it": "trasformatore reale (reattanza di magnetizzazione finita in parallelo)",
+    },
+    "lbl_feed_model": {
+        "en": "Feed model",
+        "es": "Modelo de alimentación",
+        "it": "Modello di alimentazione",
+    },
+    "feed_model_straddle_val": {
+        "en": "straddle (fused)", "es": "a horcajadas (fusionado)",
+        "it": "a cavallo (fuso)",
+    },
+    "feed_model_junction_val": {
+        "en": "junction", "es": "unión", "it": "giunzione",
+    },
+    "feed_model_unc_suffix": {
+        "en": "; impedance uncertainty raised x{0:.1f}",
+        "es": "; incertidumbre de impedancia aumentada x{0:.1f}",
+        "it": "; incertezza di impedenza aumentata x{0:.1f}",
+    },
+    "lbl_feed_node_offset": {
+        "en": "Feed node offset",
+        "es": "Desplazamiento del nodo",
+        "it": "Sfalsamento del nodo",
+    },
+    "feed_node_offset_val": {
+        "en": "{0:.1f}% of a segment",
+        "es": "{0:.1f}% de un segmento",
+        "it": "{0:.1f}% di un segmento",
+    },
+    "feed_model_undetermined": {
+        "en": ("not determined — no NEC-2 deck was built for this candidate "
+               "(empirical mode)"),
+        "es": ("no determinado — no se construyó ningún mazo NEC-2 para este "
+               "candidato (modo empírico)"),
+        "it": ("non determinato — nessun mazzo NEC-2 è stato costruito per "
+               "questo candidato (modalità empirica)"),
+    },
+    "lbl_empirical_clamp": {
+        "en": "Empirical clamp", "es": "Recorte empírico", "it": "Limite empirico",
+    },
+    "empirical_clamp_val": {
+        "en": ("the feed sits on or beside a current null on {0} — those "
+               "impedances are CLAMPED, not computed; do not rank on them."),
+        "es": ("el punto de alimentación cae sobre o junto a un nulo de "
+               "corriente en {0} — esas impedancias están RECORTADAS, no "
+               "calculadas; no las use para clasificar."),
+        "it": ("il punto di alimentazione cade su o accanto a un nullo di "
+               "corrente su {0} — quelle impedenze sono LIMITATE, non "
+               "calcolate; non usarle per la classifica."),
+    },
+    "lbl_closed_form": {
+        "en": "Closed-form model", "es": "Modelo analítico", "it": "Modello analitico",
+    },
+    "closed_form_limits": {
+        "en": ("sinusoidal current, no ground, thin wire.  It under-predicts "
+               "the feed resistance of a real OCFD (150-400 ohm measured).  "
+               "Re-run with --mode nec2 before building."),
+        "es": ("corriente sinusoidal, sin suelo, hilo delgado.  Subestima la "
+               "resistencia real de una OCFD (150-400 ohm medidos).  Vuelva a "
+               "ejecutar con --mode nec2 antes de construir."),
+        "it": ("corrente sinusoidale, senza suolo, filo sottile.  Sottostima "
+               "la resistenza reale di una OCFD (150-400 ohm misurati).  "
+               "Rieseguire con --mode nec2 prima di costruire."),
+    },
+    "lbl_feedline": {
+        "en": "Feedline", "es": "Línea de alimentación", "it": "Linea di alimentazione",
+    },
+    "feedline_cw_note": {
+        "en": ("the section above the isolator is a MODELLED RADIATOR by "
+               "design; the coax below it is not in the NEC model at all."),
+        "es": ("la sección por encima del aislador es un RADIADOR MODELADO a "
+               "propósito; el coaxial por debajo no está en el modelo NEC."),
+        "it": ("la sezione sopra l\'isolatore è un RADIATORE MODELLATO per "
+               "scelta; il coassiale sotto non è affatto nel modello NEC."),
+    },
+    # ── Polarisation ───────────────────────────────────────────────────────
+    "pol_table_title": {
+        "en": "Polarisation at {0:.0f}° take-off (informational; ranking uses TOTAL gain)",
+        "es": "Polarización a {0:.0f}° de elevación (informativo; la clasificación usa la ganancia TOTAL)",
+        "it": "Polarizzazione a {0:.0f}° di elevazione (informativo; la classifica usa il guadagno TOTALE)",
+    },
+    "pol_col_vert":  {"en": "Vert dBi",  "es": "Vert dBi",  "it": "Vert dBi"},
+    "pol_col_horiz": {"en": "Horiz dBi", "es": "Horiz dBi", "it": "Orizz dBi"},
+    "pol_col_total": {"en": "Total dBi", "es": "Total dBi", "it": "Totale dBi"},
+    "pol_null": {"en": "null", "es": "nulo", "it": "nullo"},
+    "pol_cw_note": {
+        "en": ("The vertical component originates in the feedline section "
+               "above the line isolator, by design.  Compare against a "
+               "horizontally polarised antenna using the TOTAL figure, not "
+               "the horizontal one."),
+        "es": ("La componente vertical se origina, a propósito, en la sección "
+               "de línea por encima del aislador.  Compare con una antena de "
+               "polarización horizontal usando la cifra TOTAL, no la "
+               "horizontal."),
+        "it": ("La componente verticale nasce, per scelta, nella sezione di "
+               "linea sopra l\'isolatore.  Confrontare con un\'antenna a "
+               "polarizzazione orizzontale usando il valore TOTALE, non "
+               "quello orizzontale."),
+    },
+    "pdf_pol_label": {
+        "en": "Polarisation (dBi at target TOA)",
+        "es": "Polarización (dBi al ángulo objetivo)",
+        "it": "Polarizzazione (dBi all\'angolo obiettivo)",
+    },
+    "pdf_sec_matching_device": {
+        "en": "Matching device",
+        "es": "Dispositivo de adaptación",
+        "it": "Dispositivo di adattamento",
+    },
+    # ── Convergence: short-arm attribution ─────────────────────────────────
+    "converge_col_short_long": {
+        "en": "segs short/long", "es": "segs corto/largo", "it": "segm corto/lungo",
+    },
+    "converge_short_arm": {
+        "en": ("Short arm: {0} segments at the coarsest density, {1} at the "
+               "finest ({2:.0f} per half wave on the highest band)."),
+        "es": ("Brazo corto: {0} segmentos con la densidad más gruesa, {1} con "
+               "la más fina ({2:.0f} por media onda en la banda más alta)."),
+        "it": ("Braccio corto: {0} segmenti alla densità più grossolana, {1} "
+               "alla più fine ({2:.0f} per mezza onda sulla banda più alta)."),
+    },
+    "converge_short_arm_warn": {
+        "en": ("  WARNING: the SHORT arm carries fewer than {0} segments even "
+               "at the finest density tried.  It holds the steep part of the "
+               "current distribution beside the source, so the feed impedance "
+               "is less trustworthy than the drift figure above suggests.  "
+               "Raise --segs-per-half-wave, or move the offset away from the "
+               "extreme."),
+        "es": ("  AVISO: el brazo CORTO tiene menos de {0} segmentos incluso "
+               "con la densidad más fina probada.  Contiene la parte abrupta "
+               "de la distribución de corriente junto a la fuente, así que la "
+               "impedancia de alimentación es menos fiable de lo que sugiere "
+               "la deriva anterior.  Suba --segs-per-half-wave o aleje el "
+               "desplazamiento del extremo."),
+        "it": ("  ATTENZIONE: il braccio CORTO ha meno di {0} segmenti anche "
+               "alla densità più fine provata.  Contiene la parte ripida "
+               "della distribuzione di corrente accanto alla sorgente, quindi "
+               "l\'impedenza di alimentazione è meno affidabile di quanto "
+               "suggerisca la deriva sopra.  Aumentare --segs-per-half-wave o "
+               "allontanare lo sfalsamento dall\'estremo."),
+    },
+    # ── Geometry-quality metric labels ─────────────────────────────────────
+    "quality_lbl_feedpoint": {
+        "en": "Feed-point fit",
+        "es": "Ajuste del punto de alimentación",
+        "it": "Adattamento del punto di alimentazione",
+    },
+    "quality_lbl_feedpoint_short": {
+        "en": "FeedFit", "es": "Ajuste", "it": "Adatt.",
+    },
+    "quality_lbl_avoid": {
+        "en": "Avoidance", "es": "Evitación", "it": "Evitamento",
+    },
+    "quality_lbl_avoid_short": {
+        "en": "Avoid", "es": "Evitar", "it": "Evita",
+    },
+    # ── Balun / isolator design diagnostics ────────────────────────────────
+    # These are rendered inside translated report sections, so they follow the
+    # report's language rather than the English convention this file keeps for
+    # exceptions and NEC deck comments.
+    "balun_note_not_pure": {
+        "en": ("{0:g}:1 is not a pure Guanella ratio (sqrt({0:g}) is not an "
+               "integer); it is built as a hybrid and its bandwidth is "
+               "narrower than a 4:1 or 9:1."),
+        "es": ("{0:g}:1 no es una relación Guanella pura (sqrt({0:g}) no es "
+               "entero); se construye como híbrido y su ancho de banda es "
+               "menor que el de un 4:1 o 9:1."),
+        "it": ("{0:g}:1 non è un rapporto Guanella puro (sqrt({0:g}) non è "
+               "intero); si costruisce come ibrido e la sua banda è più "
+               "stretta di un 4:1 o 9:1."),
+    },
+    "balun_note_ruthroff_bw": {
+        "en": ("A Ruthroff {0:g}:1 spans {1:.2f}-{2:.2f} MHz here; its "
+               "delay-line error degrades the ratio above ~{3:.0f} MHz.  "
+               "Prefer a Guanella (current) balun for a multi-band OCFD."),
+        "es": ("Un Ruthroff {0:g}:1 cubre aquí {1:.2f}-{2:.2f} MHz; su error "
+               "de línea de retardo degrada la relación por encima de "
+               "~{3:.0f} MHz.  Prefiera un balun Guanella (de corriente) para "
+               "una OCFD multibanda."),
+        "it": ("Un Ruthroff {0:g}:1 copre qui {1:.2f}-{2:.2f} MHz; il suo "
+               "errore di linea di ritardo degrada il rapporto sopra "
+               "~{3:.0f} MHz.  Preferire un balun Guanella (di corrente) per "
+               "una OCFD multibanda."),
+    },
+    "balun_note_line_spacing": {
+        "en": ("A {0:.0f}-ohm line needs {1:.2f} mm centre spacing on {2:.2f} "
+               "mm wire — too loose to wind tidily on a toroid.  Use thinner "
+               "wire, or sleeve the pair."),
+        "es": ("Una línea de {0:.0f} ohm necesita {1:.2f} mm entre centros con "
+               "hilo de {2:.2f} mm — demasiado suelta para bobinar con orden "
+               "en un toroide.  Use hilo más fino o enfunde el par."),
+        "it": ("Una linea da {0:.0f} ohm richiede {1:.2f} mm tra i centri su "
+               "filo da {2:.2f} mm — troppo larga per avvolgere ordinatamente "
+               "su un toroide.  Usare filo più sottile o guainare la coppia."),
+    },
+    "balun_note_low_xl": {
+        "en": ("Magnetising reactance at {0:.2f} MHz is {1:.0f} ohm, below the "
+               "{2:.0f}x{3:.0f} = {4:.0f} ohm wanted: the balun will load the "
+               "transmitter on the lowest band.  Use about {5:d} turns, or a "
+               "higher-AL core."),
+        "es": ("La reactancia de magnetización a {0:.2f} MHz es {1:.0f} ohm, "
+               "por debajo de los {2:.0f}x{3:.0f} = {4:.0f} ohm requeridos: el "
+               "balun cargará el transmisor en la banda más baja.  Use unas "
+               "{5:d} espiras o un núcleo de AL mayor."),
+        "it": ("La reattanza di magnetizzazione a {0:.2f} MHz è {1:.0f} ohm, "
+               "sotto i {2:.0f}x{3:.0f} = {4:.0f} ohm richiesti: il balun "
+               "caricherà il trasmettitore sulla banda più bassa.  Usare circa "
+               "{5:d} spire o un nucleo con AL maggiore."),
+    },
+    "balun_note_thermal": {
+        "en": ("Estimated core loss at {0:.2f} MHz ({1:.1f} W) exceeds what "
+               "this core can shed for a {2:.0f} C rise ({3:.1f} W) at "
+               "{4:.0f} W drive.  Use a bigger core or stack two."),
+        "es": ("La pérdida estimada del núcleo a {0:.2f} MHz ({1:.1f} W) supera "
+               "lo que este núcleo puede disipar con {2:.0f} C de aumento "
+               "({3:.1f} W) a {4:.0f} W de excitación.  Use un núcleo mayor o "
+               "apile dos."),
+        "it": ("La perdita stimata del nucleo a {0:.2f} MHz ({1:.1f} W) supera "
+               "quanto questo nucleo può dissipare per un aumento di {2:.0f} C "
+               "({3:.1f} W) a {4:.0f} W di pilotaggio.  Usare un nucleo più "
+               "grande o impilarne due."),
+    },
+    "balun_note_fit": {
+        "en": ("{0} turns x {1} lines will not fit the {2:.1f} mm bore (about "
+               "{3} conductor passes max).  Use a larger core or thinner wire."),
+        "es": ("{0} espiras x {1} líneas no caben en el agujero de {2:.1f} mm "
+               "(unos {3} pasos de conductor como máximo).  Use un núcleo "
+               "mayor o hilo más fino."),
+        "it": ("{0} spire x {1} linee non entrano nel foro da {2:.1f} mm "
+               "(circa {3} passaggi di conduttore al massimo).  Usare un "
+               "nucleo più grande o filo più sottile."),
+    },
+    "balun_note_unknown_core": {
+        "en": "Unknown core '{0}': no inductance or loss figures.",
+        "es": "Núcleo desconocido '{0}': sin datos de inductancia ni de pérdidas.",
+        "it": "Nucleo sconosciuto '{0}': nessun dato di induttanza o di perdita.",
+    },
+    "iso_note_unknown_core": {
+        "en": "Unknown core '{0}': no impedance figures.",
+        "es": "Núcleo desconocido '{0}': sin datos de impedancia.",
+        "it": "Nucleo sconosciuto '{0}': nessun dato di impedenza.",
+    },
+    "iso_note_srf_inside": {
+        "en": ("The choke self-resonates at about {0:.1f} MHz, inside the "
+               "{1:.2f}-{2:.2f} MHz range; above that it turns capacitive and "
+               "|Z_cm| falls with frequency.  Check the |Z_cm| figure at the "
+               "top band before trusting it, or split it into two chokes."),
+        "es": ("El choke autorresuena hacia {0:.1f} MHz, dentro del rango "
+               "{1:.2f}-{2:.2f} MHz; por encima se vuelve capacitivo y |Z_cm| "
+               "cae con la frecuencia.  Compruebe |Z_cm| en la banda superior "
+               "antes de fiarse, o divídalo en dos chokes."),
+        "it": ("Il choke autorisuona verso {0:.1f} MHz, dentro l\'intervallo "
+               "{1:.2f}-{2:.2f} MHz; sopra diventa capacitivo e |Z_cm| cala "
+               "con la frequenza.  Verificare |Z_cm| sulla banda più alta "
+               "prima di fidarsi, o dividerlo in due choke."),
+    },
+    "iso_note_above_srf": {
+        "en": ("The choke is above self-resonance ({0:.1f} MHz) across the "
+               "whole range, so it works as a lossy capacitive impedance "
+               "rather than as an inductive choke.  The |Z_cm| figures above "
+               "still apply, but fewer turns would give a more predictable "
+               "device."),
+        "es": ("El choke está por encima de su autorresonancia ({0:.1f} MHz) en "
+               "todo el rango, así que trabaja como una impedancia capacitiva "
+               "con pérdidas y no como un choke inductivo.  Las cifras de "
+               "|Z_cm| siguen valiendo, pero menos espiras darían un "
+               "dispositivo más predecible."),
+        "it": ("Il choke è sopra la propria autorisonanza ({0:.1f} MHz) su "
+               "tutto l\'intervallo, quindi lavora come impedenza capacitiva "
+               "con perdite e non come choke induttivo.  I valori di |Z_cm| "
+               "restano validi, ma meno spire darebbero un dispositivo più "
+               "prevedibile."),
+    },
+    "iso_note_low_z": {
+        "en": ("|Z_cm| falls to {0:.0f} ohm inside the range, below the "
+               "{1:.0f} ohm target: common-mode current will continue past the "
+               "isolator and the feedline below it will radiate.  More turns, "
+               "or a Mix 31 core."),
+        "es": ("|Z_cm| baja a {0:.0f} ohm dentro del rango, por debajo del "
+               "objetivo de {1:.0f} ohm: la corriente de modo común seguirá "
+               "más allá del aislador y la línea por debajo radiará.  Más "
+               "espiras o un núcleo Mix 31."),
+        "it": ("|Z_cm| scende a {0:.0f} ohm dentro l\'intervallo, sotto "
+               "l\'obiettivo di {1:.0f} ohm: la corrente di modo comune "
+               "proseguirà oltre l\'isolatore e la linea sotto irradierà.  "
+               "Più spire, o un nucleo Mix 31."),
+    },
+    # ── CLI help for the antenna-type options ──────────────────────────────
+    "help_antenna_type": {
+        "en": ("long-wire (default): end-fed radiator plus a return conductor. "
+               "ocfd: off-centre-fed dipole — the two arms are --wire-len and "
+               "--cp-len.  carolina-windom: an OCFD plus a radiating vertical "
+               "section terminated by a line isolator."),
+        "es": ("long-wire (por defecto): radiador alimentado en el extremo más "
+               "un conductor de retorno.  ocfd: dipolo alimentado descentrado "
+               "— los dos brazos son --wire-len y --cp-len.  carolina-windom: "
+               "una OCFD más una sección vertical radiante terminada por un "
+               "aislador de línea."),
+        "it": ("long-wire (predefinito): radiatore alimentato all\'estremità "
+               "più un conduttore di ritorno.  ocfd: dipolo alimentato fuori "
+               "centro — i due bracci sono --wire-len e --cp-len.  "
+               "carolina-windom: una OCFD più una sezione verticale radiante "
+               "terminata da un isolatore di linea."),
+    },
+    "help_total_len": {
+        "en": ("Dipole types only: total length of BOTH arms.  With --offset "
+               "it derives --wire-len and --cp-len, which is usually how an "
+               "OCFD is specified."),
+        "es": ("Sólo tipos dipolo: longitud total de AMBOS brazos.  Con "
+               "--offset deriva --wire-len y --cp-len, que es como se suele "
+               "especificar una OCFD."),
+        "it": ("Solo tipi dipolo: lunghezza totale di ENTRAMBI i bracci.  Con "
+               "--offset ricava --wire-len e --cp-len, il modo in cui di "
+               "solito si specifica una OCFD."),
+    },
+    "help_offset": {
+        "en": ("Dipole types only: short arm / total length (default {0:.4f}, "
+               "the classic Windom third).  Valid range {1}-{2}."),
+        "es": ("Sólo tipos dipolo: brazo corto / longitud total (por defecto "
+               "{0:.4f}, el tercio clásico de la Windom).  Rango válido "
+               "{1}-{2}."),
+        "it": ("Solo tipi dipolo: braccio corto / lunghezza totale "
+               "(predefinito {0:.4f}, il classico terzo della Windom).  "
+               "Intervallo valido {1}-{2}."),
+    },
+    "help_offset_min": {
+        "en": "Dipole types only: low end of the offset sweep.",
+        "es": "Sólo tipos dipolo: extremo inferior del barrido de desplazamiento.",
+        "it": "Solo tipi dipolo: estremo inferiore della scansione di sfalsamento.",
+    },
+    "help_offset_max": {
+        "en": "Dipole types only: high end of the offset sweep.",
+        "es": "Sólo tipos dipolo: extremo superior del barrido de desplazamiento.",
+        "it": "Solo tipi dipolo: estremo superiore della scansione di sfalsamento.",
+    },
+    "help_offset_step": {
+        "en": "Dipole types only: offset sweep step.",
+        "es": "Sólo tipos dipolo: paso del barrido de desplazamiento.",
+        "it": "Solo tipi dipolo: passo della scansione di sfalsamento.",
+    },
+    "help_balun_ratio": {
+        "en": ("Dipole types only: 'auto' (default) or one of {0}.  A balun "
+               "ratio is a hardware choice, so the search is restricted to "
+               "buildable values."),
+        "es": ("Sólo tipos dipolo: 'auto' (por defecto) o uno de {0}.  La "
+               "relación de un balun es una elección de hardware, así que la "
+               "búsqueda se limita a valores construibles."),
+        "it": ("Solo tipi dipolo: 'auto' (predefinito) o uno di {0}.  Il "
+               "rapporto di un balun è una scelta hardware, quindi la ricerca "
+               "è limitata a valori costruibili."),
+    },
+    "help_balun_kind": {
+        "en": ("Transmission-line balun topology (default guanella: a current "
+               "balun, correct for a balanced feed across all of HF)."),
+        "es": ("Topología del balun de línea de transmisión (por defecto "
+               "guanella: un balun de corriente, correcto para alimentación "
+               "balanceada en toda HF)."),
+        "it": ("Topologia del balun a linea di trasmissione (predefinito "
+               "guanella: un balun di corrente, corretto per alimentazione "
+               "bilanciata su tutta l\'HF)."),
+    },
+    "help_cw_vert_len": {
+        "en": ("Carolina Windom only: length of the vertical radiator between "
+               "the balun and the line isolator (default {0} m)."),
+        "es": ("Sólo Carolina Windom: longitud del radiador vertical entre el "
+               "balun y el aislador de línea (por defecto {0} m)."),
+        "it": ("Solo Carolina Windom: lunghezza del radiatore verticale tra il "
+               "balun e l\'isolatore di linea (predefinito {0} m)."),
+    },
+    "help_cw_isolator_z": {
+        "en": ("Carolina Windom only: model the line isolator as a finite "
+               "series impedance (e.g. 1000,2000) instead of an ideal open.  "
+               "Use this to study what an inadequate choke does."),
+        "es": ("Sólo Carolina Windom: modela el aislador de línea como una "
+               "impedancia serie finita (p. ej. 1000,2000) en vez de un "
+               "abierto ideal.  Úselo para estudiar qué hace un choke "
+               "insuficiente."),
+        "it": ("Solo Carolina Windom: modella l\'isolatore di linea come "
+               "impedenza serie finita (es. 1000,2000) invece di un aperto "
+               "ideale.  Da usare per studiare cosa fa un choke inadeguato."),
+    },
+    "help_feed_choke": {
+        "en": ("Also design a feedline common-mode choke (always designed for "
+               "carolina-windom, where it is the line isolator)."),
+        "es": ("Diseña también un choke de modo común para la línea (siempre "
+               "se diseña en carolina-windom, donde es el aislador de línea)."),
+        "it": ("Progetta anche un choke di modo comune per la linea (sempre "
+               "progettato per carolina-windom, dove è l\'isolatore di linea)."),
+    },
+    "help_match_model": {
+        "en": ("VSWR through the matching device: 'ideal' (default) divides R "
+               "and X by the ratio; 'real' also applies the finite "
+               "magnetising reactance from the balun design."),
+        "es": ("ROE a través del dispositivo de adaptación: 'ideal' (por "
+               "defecto) divide R y X por la relación; 'real' aplica además la "
+               "reactancia de magnetización finita del diseño del balun."),
+        "it": ("ROS attraverso il dispositivo di adattamento: 'ideal' "
+               "(predefinito) divide R e X per il rapporto; 'real' applica "
+               "anche la reattanza di magnetizzazione finita del balun."),
+    },
+    "help_balun_core": {
+        "en": "Toroid for the balun and the line isolator (default {0}).",
+        "es": "Toroide para el balun y el aislador de línea (por defecto {0}).",
+        "it": "Toroide per il balun e l\'isolatore di linea (predefinito {0}).",
+    },
+    "help_balun_turns": {
+        "en": "Turns per transmission line on the balun (default 10).",
+        "es": "Espiras por línea de transmisión en el balun (por defecto 10).",
+        "it": "Spire per linea di trasmissione sul balun (predefinito 10).",
+    },
     "feed_model_msg": {
         "en": "Feed model: {0} (collinear geometries only; others fall back to the junction feed)",
         "es": "Modelo de alimentación: {0} (sólo geometrías colineales; el resto usa la unión)",
@@ -4514,8 +5115,8 @@ def quality_label(profile: AntennaProfile, short: bool = False) -> str:
     long form is for prose and section headings.
     """
     if profile.quality_metric == "feedpoint":
-        return "FeedFit" if short else "Feed-point fit"
-    return "Avoid" if short else "Avoidance"
+        return T("quality_lbl_feedpoint_short" if short else "quality_lbl_feedpoint")
+    return T("quality_lbl_avoid_short" if short else "quality_lbl_avoid")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7585,7 +8186,7 @@ def convergence_lines(rep: ConvergenceReport,
             continue
         out.append(f"{b} ({cr.freq_mhz:.3f} MHz)")
         _dip = any(r.segs_short_arm for r in good)
-        _col2 = "segs short/long" if _dip else "segs w/cp"
+        _col2 = T("converge_col_short_long") if _dip else "segs w/cp"
         out.append(f"    {'seg/½λ':>7}  {_col2:>15}  {'seg len (m)':>12}  "
                    f"{'R (Ω)':>9}  {'X (Ω)':>9}")
         for row in good:
@@ -7610,20 +8211,11 @@ def convergence_lines(rep: ConvergenceReport,
         out.append(T("converge_sign_flip").format(", ".join(rep.sign_flip_bands)))
     _sa_rows = [r for r in rep.rows if r.ok and r.segs_short_arm]
     if _sa_rows:
-        out.append(
-            f"Short arm: {rep.short_arm_min_segs} segments at the coarsest "
-            f"density, {_sa_rows[-1].segs_short_arm} at the finest "
-            f"({rep.short_arm_segs_per_wave:.0f} per half wave on the highest "
-            f"band).")
+        out.append(T("converge_short_arm").format(
+            rep.short_arm_min_segs, _sa_rows[-1].segs_short_arm,
+            rep.short_arm_segs_per_wave))
         if rep.short_arm_under_segmented:
-            out.append(
-                f"  WARNING: the SHORT arm carries fewer than "
-                f"{SHORT_ARM_MIN_SEGS} segments even at the finest density "
-                f"tried.  It holds the steep part of the current "
-                f"distribution beside the source, so the feed impedance is "
-                f"less trustworthy than the drift figure above suggests.  "
-                f"Raise --segs-per-half-wave, or move the offset away from "
-                f"the extreme.")
+            out.append(T("converge_short_arm_warn").format(SHORT_ARM_MIN_SEGS))
     # R and X get separate verdicts: they do not converge at the same rate.
     if rep.converged_r:
         out.append(T("converge_r_ok").format(CONVERGENCE_R_TOL_PCT))
@@ -8091,7 +8683,7 @@ def write_report(
 
     h1(T("report_title"))
     ln(T("report_mode").format(mode.upper()))
-    ln(f"Antenna type: {_prof_rep.key}")
+    ln(T("rep_antenna_type").format(_prof_rep.key))
     # Run policy.  --jobs cannot change a single number below (results are
     # reassembled in grid order), but --fast-run CAN: it sweeps coarse, caps
     # the refined tail and the radiation shortlist and drops the 2.0x
@@ -8293,109 +8885,129 @@ def write_report(
             _short = min(best.wire_len_m, best.cp_len_m)
             _long  = max(best.wire_len_m, best.cp_len_m)
             _tot   = _short + _long
-            h2("OFF-CENTRE-FED GEOMETRY")
-            ln(f"Total length      : {_tot:.3f} m")
-            ln(f"Long arm          : {_long:.3f} m")
-            ln(f"Short arm         : {_short:.3f} m")
-            ln(f"Feed offset       : {(_short / _tot if _tot else 0.0):.4f} "
-               f"of the total ({_short:.3f} m from the short-arm end)")
-            ln(f"Matching device   : {_prof_rep.match_device} "
-               f"{unun_ratio:g}:1")
+            h2(T("sec_ocfd_geometry"))
+            # One label column width for the whole block, computed from the
+            # translated labels: a fixed 18-character pad lines up in English
+            # and nowhere else.
+            _lk = ["lbl_total_length", "lbl_long_arm", "lbl_short_arm",
+                   "lbl_feed_offset", "lbl_matching_device",
+                   "lbl_vertical_radiator", "lbl_line_isolator"]
+            _lw = max(len(T(k)) for k in _lk)
+
+            def _kv(key, val):
+                ln(f"{T(key):<{_lw}} : {val}")
+
+            _kv("lbl_total_length", f"{_tot:.3f} m")
+            _kv("lbl_long_arm", f"{_long:.3f} m")
+            _kv("lbl_short_arm", f"{_short:.3f} m")
+            _kv("lbl_feed_offset", T("ocfd_offset_val").format(
+                (_short / _tot if _tot else 0.0), _short))
+            _kv("lbl_matching_device",
+                f"{_prof_rep.match_device} {unun_ratio:g}:1")
             if _prof_rep.has_vertical_radiator:
-                ln(f"Vertical radiator : "
-                   f"{getattr(best, 'vert_len_m', 0.0) or CW_VERT_LEN_M:.3f} m "
-                   f"below the feedpoint, terminated by the line isolator")
-                ln(f"Line isolator     : "
-                   + ("ideal (modelled as an open wire end)"
-                      if CW_ISOLATOR_Z is None
-                      else f"{CW_ISOLATOR_Z[0]:.0f} + j{CW_ISOLATOR_Z[1]:.0f} ohm "
-                           f"series load (LD 4)"))
+                _kv("lbl_vertical_radiator", T("vert_radiator_val").format(
+                    getattr(best, "vert_len_m", 0.0) or CW_VERT_LEN_M))
+                _kv("lbl_line_isolator",
+                    T("isolator_ideal_val") if CW_ISOLATOR_Z is None
+                    else T("isolator_series_val").format(CW_ISOLATOR_Z[0],
+                                                         CW_ISOLATOR_Z[1]))
 
             _bd = getattr(unun_result, "balun", None) if unun_result else None
             if _bd:
-                h2("BALUN (TRANSMISSION-LINE TRANSFORMER)")
-                ln(f"Topology          : {_bd.get('kind')} "
-                   f"{_bd.get('ratio', 0):g}:1  "
-                   f"({_bd.get('z_in', 50):.0f} -> {_bd.get('z_out', 0):.0f} ohm)")
-                if _bd.get("n_lines"):
-                    ln(f"Lines             : {_bd['n_lines']} x "
-                       f"{_bd.get('z0_line_target', 0):.0f} ohm, "
-                       f"{_bd.get('turns')} turns each on {_bd.get('core')}")
-                else:
-                    ln(f"Lines             : hybrid winding, "
-                       f"{_bd.get('z0_line_target', 0):.0f} ohm nominal, "
-                       f"{_bd.get('turns')} turns on {_bd.get('core')}")
+                h2(T("sec_balun"))
+                _bk = ["lbl_topology", "lbl_lines", "lbl_pair_spacing",
+                       "lbl_magnetising_x", "lbl_status"]
+                _bw = max(len(T(k)) for k in _bk)
+
+                def _bkv(key, val):
+                    ln(f"{T(key):<{_bw}} : {val}")
+
+                _bkv("lbl_topology",
+                     f"{_bd.get('kind')} {_bd.get('ratio', 0):g}:1  "
+                     f"({_bd.get('z_in', 50):.0f} -> "
+                     f"{_bd.get('z_out', 0):.0f} ohm)")
+                _bkv("lbl_lines",
+                     T("balun_lines_pure").format(
+                         _bd["n_lines"], _bd.get("z0_line_target", 0),
+                         _bd.get("turns"), _bd.get("core"))
+                     if _bd.get("n_lines") else
+                     T("balun_lines_hybrid").format(
+                         _bd.get("z0_line_target", 0), _bd.get("turns"),
+                         _bd.get("core")))
                 if _bd.get("pair_spacing_mm") is not None:
-                    ln(f"Pair spacing      : "
-                       f"{_bd['pair_spacing_mm']:.2f} mm centre-to-centre on "
-                       f"{_bd.get('wire_dia_mm', 0):.2f} mm wire")
+                    _bkv("lbl_pair_spacing", T("pair_spacing_val").format(
+                        _bd["pair_spacing_mm"], _bd.get("wire_dia_mm", 0)))
                 if _bd.get("xl_min_ohm") is not None:
-                    ln(f"Magnetising X     : {_bd['xl_min_ohm']:.0f} ohm at "
-                       f"{_bd.get('freq_min_mhz', 0):.3f} MHz "
-                       f"(want >= {_bd.get('xl_required_ohm', 0):.0f} ohm)")
-                ln(f"Status            : {_bd.get('status')}")
+                    _bkv("lbl_magnetising_x", T("magnetising_x_val").format(
+                        _bd["xl_min_ohm"], _bd.get("freq_min_mhz", 0),
+                        _bd.get("xl_required_ohm", 0)))
+                _bkv("lbl_status", str(_bd.get("status")))
                 for _n in _bd.get("notes", []):
                     ln(f"  - {_n}")
 
             _id = getattr(unun_result, "isolator", None) if unun_result else None
             if _id:
-                h2("LINE ISOLATOR (COMMON-MODE CHOKE)")
-                ln(f"Core / turns      : {_id.get('core')}, "
-                   f"{_id.get('turns')} turns of {_id.get('cable')}")
+                h2(T("sec_isolator"))
+                _ik = ["lbl_core_turns", "lbl_z_common_mode",
+                       "lbl_self_resonance", "lbl_status"]
+                _iw = max(len(T(k)) for k in _ik)
+
+                def _ikv(key, val):
+                    ln(f"{T(key):<{_iw}} : {val}")
+
+                _ikv("lbl_core_turns", T("iso_core_turns_val").format(
+                    _id.get("core"), _id.get("turns"), _id.get("cable")))
                 if _id.get("z_cm_lo") is not None:
-                    ln(f"|Z common-mode|   : {_id['z_cm_lo']:.0f} ohm at "
-                       f"{_id.get('freq_min_mhz', 0):.3f} MHz, "
-                       f"{_id.get('z_cm_hi', 0):.0f} ohm at "
-                       f"{_id.get('freq_max_mhz', 0):.3f} MHz "
-                       f"(target {_id.get('z_target_ohm', 0):.0f} ohm)")
+                    _ikv("lbl_z_common_mode", T("iso_zcm_val").format(
+                        _id["z_cm_lo"], _id.get("freq_min_mhz", 0),
+                        _id.get("z_cm_hi", 0), _id.get("freq_max_mhz", 0),
+                        _id.get("z_target_ohm", 0)))
                 if _id.get("srf_mhz") is not None:
-                    ln(f"Self-resonance    : ~{_id['srf_mhz']:.1f} MHz "
-                       f"(rough estimate — the Medhurst formula is for a "
-                       f"solenoid, not a toroid; above resonance |Z_cm| falls "
-                       f"with frequency, which the figures above already "
-                       f"reflect)")
-                ln(f"Status            : {_id.get('status')}")
+                    _ikv("lbl_self_resonance",
+                         T("iso_srf_val").format(_id["srf_mhz"]))
+                _ikv("lbl_status", str(_id.get("status")))
                 for _n in _id.get("notes", []):
                     ln(f"  - {_n}")
 
-            h2("ASSUMPTIONS AND LIMITS")
-            ln(f"Matching model    : {MATCH_MODEL} transformer "
-               + ("(R and X divided by the ratio)" if MATCH_MODEL == "ideal"
-                  else "(finite magnetising reactance in shunt)"))
+            h2(T("sec_assumptions"))
+            _ak = ["lbl_matching_model", "lbl_feed_model",
+                   "lbl_feed_node_offset", "lbl_empirical_clamp",
+                   "lbl_closed_form", "lbl_feedline"]
+            _aw = max(len(T(k)) for k in _ak)
+
+            def _akv(key, val):
+                ln(f"{T(key):<{_aw}} : {val}")
+
+            _akv("lbl_matching_model",
+                 T("match_model_ideal_val") if MATCH_MODEL == "ideal"
+                 else T("match_model_real_val"))
             if best.nec2_used:
-                ln(f"Feed model        : "
-                   f"{'straddle (fused)' if best.feed_fused else 'junction'}"
-                   + ("" if best.feed_fused else
-                      f"; impedance uncertainty raised "
-                      f"x{JUNCTION_FEED_UNC_FACTOR:.1f}"))
-                ln(f"Feed node offset  : "
-                   f"{best.feed_offset_frac_seg * 100.0:.1f}% of a segment")
+                _akv("lbl_feed_model",
+                     (T("feed_model_straddle_val") if best.feed_fused
+                      else T("feed_model_junction_val")
+                      + T("feed_model_unc_suffix").format(
+                          JUNCTION_FEED_UNC_FACTOR)))
+                _akv("lbl_feed_node_offset", T("feed_node_offset_val").format(
+                    best.feed_offset_frac_seg * 100.0))
             else:
                 # No deck was solved for this candidate, so feed_fused and
                 # feed_offset_frac_seg still hold their constructor defaults.
                 # Printing them would publish a placeholder as a measurement.
-                ln("Feed model        : not determined — no NEC-2 deck was "
-                   "built for this candidate (empirical mode)")
+                _akv("lbl_feed_model", T("feed_model_undetermined"))
             if getattr(best, "empirical_clamped_bands", None):
-                ln("Empirical clamp   : the feed sits on or beside a current "
-                   "null on " + ", ".join(best.empirical_clamped_bands)
-                   + " — those impedances are CLAMPED, not computed; do not "
-                     "rank on them.")
+                _akv("lbl_empirical_clamp", T("empirical_clamp_val").format(
+                    ", ".join(best.empirical_clamped_bands)))
             if mode != "nec2":
-                ln("Closed-form model : sinusoidal current, no ground, thin "
-                   "wire.  It under-predicts the feed resistance of a real "
-                   "OCFD (150-400 ohm measured).  Re-run with --mode nec2 "
-                   "before building.")
+                _akv("lbl_closed_form", T("closed_form_limits"))
             if _prof_rep.has_vertical_radiator:
-                ln("Feedline          : the section above the isolator is a "
-                   "MODELLED RADIATOR by design; the coax below it is not in "
-                   "the NEC model at all.")
+                _akv("lbl_feedline", T("feedline_cw_note"))
         if _prof_rep.is_dipole:
             # Same two numbers, honest labels: neither arm is a counterpoise,
             # and the angle-from-vertical of a horizontal arm says nothing.
-            ln(f"Long arm      : {best.wire_len_m:.3f} m")
-            ln(f"Short arm     : {best.cp_len_m:.3f} m"
-               + (f"   (far end z={best.cp_end_z_m:.4f} m)"
+            _aw2 = max(len(T("lbl_long_arm")), len(T("lbl_short_arm")))
+            ln(f"{T('lbl_long_arm'):<{_aw2}} : {best.wire_len_m:.3f} m")
+            ln(f"{T('lbl_short_arm'):<{_aw2}} : {best.cp_len_m:.3f} m"
+               + (f"   (z={best.cp_end_z_m:.4f} m)"
                   if best.cp_end_z_m is not None else ""))
         else:
             ln(T("report_wire_len").format(best.wire_len_m))
@@ -8460,10 +9072,10 @@ def write_report(
             # like with like unless the reader knows the split.
             if best.band_gain_vert or best.band_gain_horiz:
                 ln("")
-                ln(f"    Polarisation at {target_toa_deg:.0f}° take-off "
-                   f"(informational; ranking uses TOTAL gain)")
-                ln(f"    {'Band':>8}  {'Vert dBi':>10}  {'Horiz dBi':>10}  "
-                   f"{'Total dBi':>10}")
+                ln("    " + T("pol_table_title").format(target_toa_deg))
+                ln(f"    {T('radiation_col_band'):>8}  "
+                   f"{T('pol_col_vert'):>10}  {T('pol_col_horiz'):>10}  "
+                   f"{T('pol_col_total'):>10}")
                 ln("    " + "─" * 46)
                 for _cr in [c for c in calc_rows if c.active]:
                     _gv = best.band_gain_vert.get(_cr.band)
@@ -8473,17 +9085,16 @@ def write_report(
                         continue
                     # "null" is not "-999 dBi": a polarisation with no field
                     # on this ring has no gain figure at all.
-                    _fv = f"{_gv:10.2f}" if _gv is not None else f"{'null':>10}"
-                    _fh = f"{_gh:10.2f}" if _gh is not None else f"{'null':>10}"
+                    _fv = (f"{_gv:10.2f}" if _gv is not None
+                           else f"{T('pol_null'):>10}")
+                    _fh = (f"{_gh:10.2f}" if _gh is not None
+                           else f"{T('pol_null'):>10}")
                     _ft = f"{_gt2:10.2f}" if _gt2 is not None else f"{'n/a':>10}"
                     ln(f"    {_cr.band:>8}  {_fv}  {_fh}  {_ft}")
                 if _prof_rep.has_vertical_radiator:
                     ln("")
-                    ln("    The vertical component originates in the feedline "
-                       "section above the line")
-                    ln("    isolator, by design.  Compare against a "
-                       "horizontally polarised antenna")
-                    ln("    using the TOTAL figure, not the horizontal one.")
+                    for _pl in textwrap.wrap(T("pol_cw_note"), 72):
+                        ln("    " + _pl)
 
             _no_s = [b for b in best.bands_no_toa_sample
                      if b in {c.band for c in calc_rows if c.active}]
@@ -10963,18 +11574,18 @@ def write_pdf_brochure(
         _s_pdf = min(best.wire_len_m, best.cp_len_m)
         _l_pdf = max(best.wire_len_m, best.cp_len_m)
         _t_pdf = _s_pdf + _l_pdf
-        spec_rows.insert(0, ["Antenna type", _prof_pdf.key])
-        spec_rows.append(["Total length", f"{_t_pdf:.3f} m"])
-        spec_rows.append(["Arms (short / long)",
+        spec_rows.insert(0, [T("lbl_antenna_type"), _prof_pdf.key])
+        spec_rows.append([T("lbl_total_length"), f"{_t_pdf:.3f} m"])
+        spec_rows.append([T("lbl_arms_short_long"),
                           f"{_s_pdf:.3f} m / {_l_pdf:.3f} m"])
-        spec_rows.append(["Feed offset",
-                          f"{_s_pdf:.3f} m from the short-arm end "
-                          f"({(_s_pdf / _t_pdf if _t_pdf else 0):.1%})"])
+        spec_rows.append([T("lbl_feed_offset"),
+                          T("ocfd_offset_val").format(
+                              (_s_pdf / _t_pdf if _t_pdf else 0.0), _s_pdf)])
         if _prof_pdf.has_vertical_radiator:
             spec_rows.append([
-                "Vertical radiator",
-                f"{(getattr(best, 'vert_len_m', 0.0) or CW_VERT_LEN_M):.2f} m "
-                f"below the feedpoint, to the line isolator"])
+                T("lbl_vertical_radiator"),
+                T("pdf_vert_radiator_val").format(
+                    getattr(best, "vert_len_m", 0.0) or CW_VERT_LEN_M)])
     if best.band_gain_vert or best.band_gain_horiz:
         _pol_bits = []
         for _cr in [c for c in calc_rows if c.active]:
@@ -10984,11 +11595,10 @@ def write_pdf_brochure(
                 continue
             _pol_bits.append(
                 f"{_cr.band}: "
-                + (f"{_gv:.1f}" if _gv is not None else "null") + " V / "
-                + (f"{_gh:.1f}" if _gh is not None else "null") + " H")
+                + (f"{_gv:.1f}" if _gv is not None else T("pol_null")) + " V / "
+                + (f"{_gh:.1f}" if _gh is not None else T("pol_null")) + " H")
         if _pol_bits:
-            spec_rows.append(["Polarisation (dBi at target TOA)",
-                              "; ".join(_pol_bits)])
+            spec_rows.append([T("pdf_pol_label"), "; ".join(_pol_bits)])
 
     spec_table = Table(
         [[Paragraph(f"<b>{k}</b>", style_body), Paragraph(v, style_body)]
@@ -11365,28 +11975,31 @@ def write_pdf_brochure(
     _id_pdf = getattr(unun_result, "isolator", None) if unun_result else None
     if _bd_pdf or _id_pdf:
         story.append(PageBreak())
-        story.append(Paragraph("Matching device", style_h1))
+        story.append(Paragraph(T("pdf_sec_matching_device"), style_h1))
 
     if _bd_pdf:
-        _b_rows = [["Property", "Value"],
-                   ["Topology", f"{_bd_pdf.get('kind', '')} "
-                                f"{_bd_pdf.get('ratio', 0):g}:1"],
-                   ["Impedance", f"{_bd_pdf.get('z_in', 50):.0f} -> "
-                                 f"{_bd_pdf.get('z_out', 0):.0f} ohm"],
-                   ["Core", str(_bd_pdf.get("core", ""))],
-                   ["Windings", (f"{_bd_pdf['n_lines']} lines of "
-                                 f"{_bd_pdf.get('z0_line_target', 0):.0f} ohm, "
-                                 f"{_bd_pdf.get('turns')} turns each"
-                                 if _bd_pdf.get("n_lines") else
-                                 f"hybrid, {_bd_pdf.get('turns')} turns")],
-                   ["Pair spacing",
-                    f"{_bd_pdf.get('pair_spacing_mm', 0):.2f} mm on "
-                    f"{_bd_pdf.get('wire_dia_mm', 0):.2f} mm wire"],
-                   ["Magnetising X",
-                    f"{_bd_pdf.get('xl_min_ohm', 0):.0f} ohm at "
-                    f"{_bd_pdf.get('freq_min_mhz', 0):.3f} MHz "
-                    f"(need at least {_bd_pdf.get('xl_required_ohm', 0):.0f} ohm)"],
-                   ["Status", str(_bd_pdf.get("status", ""))]]
+        _b_rows = [[T("lbl_property"), T("lbl_value")],
+                   [T("lbl_topology"), f"{_bd_pdf.get('kind', '')} "
+                                       f"{_bd_pdf.get('ratio', 0):g}:1"],
+                   [T("lbl_impedance"), f"{_bd_pdf.get('z_in', 50):.0f} -> "
+                                        f"{_bd_pdf.get('z_out', 0):.0f} ohm"],
+                   [T("lbl_core"), str(_bd_pdf.get("core", ""))],
+                   [T("lbl_windings"),
+                    (T("balun_lines_pure").format(
+                        _bd_pdf["n_lines"], _bd_pdf.get("z0_line_target", 0),
+                        _bd_pdf.get("turns"), _bd_pdf.get("core", ""))
+                     if _bd_pdf.get("n_lines") else
+                     T("balun_lines_hybrid").format(
+                        _bd_pdf.get("z0_line_target", 0), _bd_pdf.get("turns"),
+                        _bd_pdf.get("core", "")))],
+                   [T("lbl_pair_spacing"), T("pair_spacing_val").format(
+                       _bd_pdf.get("pair_spacing_mm", 0),
+                       _bd_pdf.get("wire_dia_mm", 0))],
+                   [T("lbl_magnetising_x"), T("magnetising_x_val").format(
+                       _bd_pdf.get("xl_min_ohm", 0),
+                       _bd_pdf.get("freq_min_mhz", 0),
+                       _bd_pdf.get("xl_required_ohm", 0))],
+                   [T("lbl_status"), str(_bd_pdf.get("status", ""))]]
         _bt = Table(_b_rows, colWidths=[45 * mm, 125 * mm])
         _bt.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), NAVY),
@@ -11401,26 +12014,26 @@ def write_pdf_brochure(
             ("FONTSIZE", (0, 0), (-1, -1), 8),
         ]))
         story.append(KeepTogether(
-            [Paragraph("Balun (transmission-line transformer)", style_h2), _bt]))
+            [Paragraph(T("pdf_balun_title"), style_h2), _bt]))
         for _n in _bd_pdf.get("notes", [])[:4]:
             story.append(Paragraph(f"- {_n}", style_body))
         story.append(Spacer(1, 5 * mm))
 
     if _id_pdf:
-        _i_rows = [["Property", "Value"],
-                   ["Core / turns", f"{_id_pdf.get('core', '')}, "
-                                    f"{_id_pdf.get('turns')} turns of "
-                                    f"{_id_pdf.get('cable', '')}"],
-                   ["|Z| common-mode",
-                    f"{_id_pdf.get('z_cm_lo', 0):.0f} ohm at "
-                    f"{_id_pdf.get('freq_min_mhz', 0):.3f} MHz, "
-                    f"{_id_pdf.get('z_cm_hi', 0):.0f} ohm at "
-                    f"{_id_pdf.get('freq_max_mhz', 0):.3f} MHz"],
-                   ["Target", f"{_id_pdf.get('z_target_ohm', 0):.0f} ohm"],
-                   ["Self-resonance",
-                    f"~{_id_pdf.get('srf_mhz', float('nan')):.1f} MHz "
-                    f"(rough: Medhurst is a solenoid formula)"],
-                   ["Status", str(_id_pdf.get("status", ""))]]
+        _i_rows = [[T("lbl_property"), T("lbl_value")],
+                   [T("lbl_core_turns"), T("iso_core_turns_val").format(
+                       _id_pdf.get("core", ""), _id_pdf.get("turns"),
+                       _id_pdf.get("cable", ""))],
+                   [T("lbl_z_common_mode"), T("iso_zcm_val").format(
+                       _id_pdf.get("z_cm_lo", 0),
+                       _id_pdf.get("freq_min_mhz", 0),
+                       _id_pdf.get("z_cm_hi", 0),
+                       _id_pdf.get("freq_max_mhz", 0),
+                       _id_pdf.get("z_target_ohm", 0))],
+                   [T("lbl_target"), f"{_id_pdf.get('z_target_ohm', 0):.0f} ohm"],
+                   [T("lbl_self_resonance"), T("iso_srf_val").format(
+                       _id_pdf.get("srf_mhz", float("nan")))],
+                   [T("lbl_status"), str(_id_pdf.get("status", ""))]]
         _it = Table(_i_rows, colWidths=[45 * mm, 125 * mm])
         _it.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), NAVY),
@@ -11435,7 +12048,7 @@ def write_pdf_brochure(
             ("FONTSIZE", (0, 0), (-1, -1), 8),
         ]))
         story.append(KeepTogether(
-            [Paragraph("Line isolator (common-mode choke)", style_h2), _it]))
+            [Paragraph(T("pdf_isolator_title"), style_h2), _it]))
         for _n in _id_pdf.get("notes", [])[:4]:
             story.append(Paragraph(f"- {_n}", style_body))
         story.append(Spacer(1, 5 * mm))
@@ -12251,16 +12864,11 @@ def balun_design(freq_min_mhz: float,
     status = "ok"
 
     if kind == "guanella" and not n_lines:
-        notes.append(
-            f"{n:g}:1 is not a pure Guanella ratio (sqrt({n:g}) is not an "
-            f"integer); it is built as a hybrid and its bandwidth is narrower "
-            f"than a 4:1 or 9:1.")
+        notes.append(T("balun_note_not_pure").format(n))
         status = "hybrid"
     if kind == "ruthroff" and f_hi > 10.0 * f_lo:
-        notes.append(
-            f"A Ruthroff {n:g}:1 spans {f_lo:.2f}-{f_hi:.2f} MHz here; its "
-            f"delay-line error degrades the ratio above ~{10.0 * f_lo:.0f} MHz. "
-            f"Prefer a Guanella (current) balun for a multi-band OCFD.")
+        notes.append(T("balun_note_ruthroff_bw").format(
+            n, f_lo, f_hi, 10.0 * f_lo))
         status = "bandwidth"
 
     # ── Line impedance the winding can reach ─────────────────────────────
@@ -12268,10 +12876,8 @@ def balun_design(freq_min_mhz: float,
     out["pair_spacing_mm"] = spacing
     out["z0_line_check"] = pair_z0_ohm(wire_dia_mm, spacing, eps_r)
     if spacing > 4.0 * wire_dia_mm:
-        notes.append(
-            f"A {z0_line:.0f}-ohm line needs {spacing:.2f} mm centre spacing on "
-            f"{wire_dia_mm:.2f} mm wire — too loose to wind tidily on a toroid. "
-            f"Use thinner wire, or sleeve the pair.")
+        notes.append(T("balun_note_line_spacing").format(
+            z0_line, spacing, wire_dia_mm))
         status = "line-impedance"
 
     # ── Magnetising reactance and core loss ──────────────────────────────
@@ -12285,12 +12891,9 @@ def balun_design(freq_min_mhz: float,
         if xl_lo < MAGNETISING_X_FACTOR * z_in:
             _need = math.sqrt(MAGNETISING_X_FACTOR * z_in
                               / max(xl_lo, 1e-9)) * int(turns)
-            notes.append(
-                f"Magnetising reactance at {f_lo:.2f} MHz is {xl_lo:.0f} ohm, "
-                f"below the {MAGNETISING_X_FACTOR:.0f}x{z_in:.0f} = "
-                f"{MAGNETISING_X_FACTOR * z_in:.0f} ohm wanted: the balun will "
-                f"load the transmitter on the lowest band.  Use about "
-                f"{math.ceil(_need):d} turns, or a higher-AL core.")
+            notes.append(T("balun_note_low_xl").format(
+                f_lo, xl_lo, MAGNETISING_X_FACTOR, z_in,
+                MAGNETISING_X_FACTOR * z_in, int(math.ceil(_need))))
             status = "low" if status == "ok" else status
         # Loss from the complex permeability at both ends of the range.
         mu_lo = core_mu(str(core_d["material"]), f_lo)
@@ -12312,11 +12915,8 @@ def balun_design(freq_min_mhz: float,
             p_loss = power_w * z_in / r_par
             out[f"p_core_{_tag}_w"] = p_loss
             if p_loss > out["p_diss_w"]:
-                notes.append(
-                    f"Estimated core loss at {_f:.2f} MHz ({p_loss:.1f} W) "
-                    f"exceeds what this core can shed for a "
-                    f"{CORE_DELTA_T_C:.0f} C rise ({out['p_diss_w']:.1f} W) at "
-                    f"{power_w:.0f} W drive.  Use a bigger core or stack two.")
+                notes.append(T("balun_note_thermal").format(
+                    _f, p_loss, CORE_DELTA_T_C, out["p_diss_w"], power_w))
                 # First finding wins the single status slot; `notes` carries
                 # every one of them, so a core that is both under-wound and
                 # over-heated does not have its first problem overwritten.
@@ -12326,13 +12926,11 @@ def balun_design(freq_min_mhz: float,
         out["max_turns_bore"] = max_turns
         _lines_needed = n_lines or 2
         if int(turns) * _lines_needed > max_turns:
-            notes.append(
-                f"{turns} turns x {_lines_needed} lines will not fit the "
-                f"{core_d['ID']:.1f} mm bore (about {max_turns} conductor "
-                f"passes max).  Use a larger core or thinner wire.")
+            notes.append(T("balun_note_fit").format(
+                turns, _lines_needed, core_d["ID"], max_turns))
             status = "fit" if status == "ok" else status
     else:
-        notes.append(f"Unknown core '{core}': no inductance or loss figures.")
+        notes.append(T("balun_note_unknown_core").format(core))
         status = "unknown-core"
 
     out["status"] = status
@@ -12374,7 +12972,7 @@ def line_isolator_design(freq_min_mhz: float,
 
     if not core_d:
         out.update(status="unknown-core",
-                   notes=[f"Unknown core '{core}': no impedance figures."])
+                   notes=[T("iso_note_unknown_core").format(core)])
         return out
 
     al = float(core_d["AL"])
@@ -12420,25 +13018,13 @@ def line_isolator_design(freq_min_mhz: float,
     # figures above already say whether it still clears the target — so this
     # reports the fact and lets the impedance numbers decide.
     if math.isfinite(srf) and f_lo <= srf <= f_hi:
-        notes.append(
-            f"The choke self-resonates at about {srf:.1f} MHz, inside the "
-            f"{f_lo:.2f}-{f_hi:.2f} MHz range; above that it turns capacitive "
-            f"and |Z_cm| falls with frequency.  Check the |Z_cm| figure at the "
-            f"top band before trusting it, or split it into two chokes.")
+        notes.append(T("iso_note_srf_inside").format(srf, f_lo, f_hi))
         status = "srf"
     elif math.isfinite(srf) and srf < f_lo:
-        notes.append(
-            f"The choke is above self-resonance ({srf:.1f} MHz) across the "
-            f"whole range, so it works as a lossy capacitive impedance rather "
-            f"than as an inductive choke.  The |Z_cm| figures above still "
-            f"apply, but fewer turns would give a more predictable device.")
+        notes.append(T("iso_note_above_srf").format(srf))
 
     if min(z_lo, z_hi) < z_target_ohm:
-        notes.append(
-            f"|Z_cm| falls to {min(z_lo, z_hi):.0f} ohm inside the range, "
-            f"below the {z_target_ohm:.0f} ohm target: common-mode current "
-            f"will continue past the isolator and the feedline below it will "
-            f"radiate.  More turns, or a Mix 31 core.")
+        notes.append(T("iso_note_low_z").format(min(z_lo, z_hi), z_target_ohm))
         status = "low" if status == "ok" else status
 
     a_surf = core_surface_area_cm2(core_d)
@@ -13666,74 +14252,51 @@ def _build_parser() -> argparse.ArgumentParser:
                    help=T("help_feed_model"))
 
     # ── Antenna type ─────────────────────────────────────────────────────
-    g_ant = p.add_argument_group("antenna type")
+    g_ant = p.add_argument_group(T("lbl_antenna_type"))
     g_ant.add_argument("--antenna-type", choices=list(ANTENNA_TYPE_CHOICES),
                        default=DEFAULT_ANTENNA_TYPE, dest="antenna_type",
-                       help="long-wire (default): end-fed radiator plus a "
-                            "return conductor.  ocfd: off-centre-fed dipole — "
-                            "the two arms are --wire-len and --cp-len.  "
-                            "carolina-windom: an OCFD plus a radiating "
-                            "vertical section terminated by a line isolator.")
+                       help=T("help_antenna_type"))
     g_ant.add_argument("--total-len", metavar="M", type=float, default=None,
                        dest="total_len",
-                       help="Dipole types only: total length of BOTH arms. "
-                            "With --offset it derives --wire-len and --cp-len, "
-                            "which is usually how an OCFD is specified.")
+                       help=T("help_total_len"))
     g_ant.add_argument("--offset", metavar="F", type=float,
                        default=OCFD_DEFAULT_OFFSET_FRAC, dest="offset",
-                       help=f"Dipole types only: short arm / total length "
-                            f"(default {OCFD_DEFAULT_OFFSET_FRAC:.4f}, the "
-                            f"classic Windom third).  Valid range "
-                            f"{OCFD_OFFSET_MIN}-{OCFD_OFFSET_MAX}.")
+                       help=T("help_offset").format(
+                           OCFD_DEFAULT_OFFSET_FRAC, OCFD_OFFSET_MIN,
+                           OCFD_OFFSET_MAX))
     g_ant.add_argument("--offset-min", metavar="F", type=float, default=0.20,
                        dest="offset_min",
-                       help="Dipole types only: low end of the offset sweep.")
+                       help=T("help_offset_min"))
     g_ant.add_argument("--offset-max", metavar="F", type=float, default=0.45,
                        dest="offset_max",
-                       help="Dipole types only: high end of the offset sweep.")
+                       help=T("help_offset_max"))
     g_ant.add_argument("--offset-step", metavar="F", type=float, default=0.01,
                        dest="offset_step",
-                       help="Dipole types only: offset sweep step.")
+                       help=T("help_offset_step"))
     g_ant.add_argument("--balun-ratio", metavar="N", default="auto",
                        dest="balun_ratio",
-                       help="Dipole types only: 'auto' (default) or one of "
-                            + "/".join(f"{r:g}" for r in OCFD_BALUN_RATIOS)
-                            + ".  A balun ratio is a hardware choice, so the "
-                              "search is restricted to buildable values.")
+                       help=T("help_balun_ratio").format(
+                           "/".join(f"{r:g}" for r in OCFD_BALUN_RATIOS)))
     g_ant.add_argument("--balun-kind", choices=list(BALUN_KINDS),
                        default="guanella", dest="balun_kind",
-                       help="Transmission-line balun topology (default "
-                            "guanella: a current balun, correct for a "
-                            "balanced feed across all of HF).")
+                       help=T("help_balun_kind"))
     g_ant.add_argument("--cw-vert-len", metavar="M", type=float,
                        default=CW_DEFAULT_VERT_LEN_M, dest="cw_vert_len",
-                       help=f"Carolina Windom only: length of the vertical "
-                            f"radiator between the balun and the line "
-                            f"isolator (default {CW_DEFAULT_VERT_LEN_M} m).")
+                       help=T("help_cw_vert_len").format(CW_DEFAULT_VERT_LEN_M))
     g_ant.add_argument("--cw-isolator-z", metavar="R,X", default=None,
                        dest="cw_isolator_z",
-                       help="Carolina Windom only: model the line isolator as "
-                            "a finite series impedance (e.g. 1000,2000) "
-                            "instead of an ideal open.  Use this to study what "
-                            "an inadequate choke does.")
+                       help=T("help_cw_isolator_z"))
     g_ant.add_argument("--balun-core", metavar="CORE", default=DEFAULT_TOROID,
                        dest="balun_core",
-                       help=f"Toroid for the balun and the line isolator "
-                            f"(default {DEFAULT_TOROID}).")
+                       help=T("help_balun_core").format(DEFAULT_TOROID))
     g_ant.add_argument("--balun-turns", metavar="N", type=int, default=10,
                        dest="balun_turns",
-                       help="Turns per transmission line on the balun "
-                            "(default 10).")
+                       help=T("help_balun_turns"))
     g_ant.add_argument("--feed-choke", action="store_true", dest="feed_choke",
-                       help="Also design a feedline common-mode choke (always "
-                            "designed for carolina-windom, where it is the "
-                            "line isolator).")
+                       help=T("help_feed_choke"))
     g_ant.add_argument("--match-model", choices=("ideal", "real"),
                        default="ideal", dest="match_model",
-                       help="VSWR through the matching device: 'ideal' "
-                            "(default) divides R and X by the ratio; 'real' "
-                            "also applies the finite magnetising reactance "
-                            "from the balun design.")
+                       help=T("help_match_model"))
     p.add_argument("--ground-cond", metavar="S/M", type=float,
                    default=DEFAULT_GROUND_COND,
                    help=T("ap_ground_cond").format(DEFAULT_GROUND_COND))
