@@ -6200,7 +6200,7 @@ def build_deck_geometry(
                 g.segs_cp = max(1, _k - 1)
                 g.segs_ant = max(1, _n - _k + 1)
                 g.comments.append(
-                    f"CM Feed model: STRADDLE - "
+                    "CM Feed model: STRADDLE - "
                     + ("both arms written as one continuous wire"
                        if prof.is_dipole else
                        "radiator and counterpoise written as one continuous wire")
@@ -9429,8 +9429,6 @@ def export_best_csv(
             else:
                 R, X, _ = empirical_impedance(_prof_csv.empirical_model, freq,
                                               w, best.cp_len_m)
-                _unused_arg = None
-                cos2 = 0.0   # kept so the historical note below still reads
                 # Sign convention: X = -1500·sin(2π·L/λ½), identical to
                 # score_candidate() (both branches), find_best_unun() and the
                 # X_no_cp column a few lines below.  The bare +1500 that used
