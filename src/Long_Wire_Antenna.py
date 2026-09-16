@@ -14553,6 +14553,23 @@ def main() -> None:
             and args.wire_min > args.wire_max:
         _bad.append(f"--wire-min ({args.wire_min}) must be ≤ --wire-max ({args.wire_max})")
 
+    # --wire-len is the seed the auto-window (--wire-len ± --margin) is built
+    # from, further down, whenever --wire-min/--wire-max are not given
+    # explicitly. That derivation floors wire_min at WIRE_LEN_FLOOR_M but
+    # applies no floor to wire_max, so a non-physical --wire-len (<= 0) does
+    # not fail here — it produces an inverted window instead (e.g. --wire-len
+    # -5 --margin 2 gives wire_min = max(1.0, -7) = 1.0 but wire_max = -3.0)
+    # and only surfaces later as an opaque "wire_min > wire_max" arithmetic
+    # error, with no indication that --wire-len itself was the problem.
+    # Reject it here, at the source, while --wire-len is still in view.
+    if args.wire_len is not None and args.wire_len < WIRE_LEN_FLOOR_M:
+        _bad.append(
+            f"--wire-len must be ≥ {WIRE_LEN_FLOOR_M} m (got {args.wire_len}); "
+            f"a radiator shorter than that is not a physical antenna, and an "
+            f"invalid starting length also produces a degenerate/inverted "
+            f"auto-derived search window (--wire-min/--wire-max) further on"
+        )
+
     # The 1.0 m clamp below only applies to the AUTO-derived window
     # (--wire-len ± --margin); an explicit --wire-min bypassed it entirely.
     # In NEC2 mode a zero-length radiator at least fails loudly (nec2c errors
