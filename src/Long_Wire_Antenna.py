@@ -15479,24 +15479,38 @@ def main() -> None:
         with tempfile.TemporaryDirectory(prefix="nec2opt_unun_") as _td:
             _nec = os.path.join(_td, "best_antenna.nec")
             _out = os.path.join(_td, "best_antenna.out")
-            write_nec_deck(
-                nec_path=_nec,
-                wire_len_m=cand.wire_len_m,
-                cp_len_m=cand.cp_len_m,
-                freqs_mhz=all_freqs,
-                wire_height_m=_h,
-                wire_slope_end_m=_slope,
-                cp_height_m=_h,
-                cp_end_height_m=cp_end_height,
-                ground_cond=args.ground_cond,
-                ground_diel=args.ground_diel,
-                wire_radius_m=WIRE_RADIUS_M,
-                use_counterpoise=use_counterpoise,
-                no_cp_return=args.no_cp_return,
-                cp_stub_len_m=args.cp_stub_len,
-                ground_model=args.ground_model,
-                segs_per_half_wave=segs_final,
-            )
+            try:
+                write_nec_deck(
+                    nec_path=_nec,
+                    wire_len_m=cand.wire_len_m,
+                    cp_len_m=cand.cp_len_m,
+                    freqs_mhz=all_freqs,
+                    wire_height_m=_h,
+                    wire_slope_end_m=_slope,
+                    cp_height_m=_h,
+                    cp_end_height_m=cp_end_height,
+                    ground_cond=args.ground_cond,
+                    ground_diel=args.ground_diel,
+                    wire_radius_m=WIRE_RADIUS_M,
+                    use_counterpoise=use_counterpoise,
+                    no_cp_return=args.no_cp_return,
+                    cp_stub_len_m=args.cp_stub_len,
+                    ground_model=args.ground_model,
+                    segs_per_half_wave=segs_final,
+                )
+            except ValueError as _geom_err:
+                # Same fate as every other _full_band_run() failure mode:
+                # record the reason and let the caller treat this pass as
+                # "no full-band run available" instead of propagating.
+                # FeedpointHeightError (raised by build_deck_geometry() for
+                # a Carolina Windom vertical radiator that does not clear
+                # the ground floor at this candidate's height) is a
+                # ValueError subclass and is caught here on purpose: the
+                # sweep loop above already treats this exact exception this
+                # way, but this refinement path used to call write_nec_deck()
+                # unguarded and let it crash the whole run.
+                _refine_fail_reasons.append(f"deck geometry invalid: {_geom_err}")
+                return None
             # This is the LARGEST deck the program builds — every band, at
             # the publishing density — and it used to inherit run_nec2c()'s
             # 60 s default while the pattern pass got 180 s and the
