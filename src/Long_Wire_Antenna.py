@@ -3284,6 +3284,17 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "{0}  Elevación @ φ={1:.0f}° / {2:.0f}°",
         "it": '{0}  Elevazione @ φ={1:.0f}° / {2:.0f}°',
     },
+    "feed_model_fallback": {
+        "en": ("This geometry is not collinear, so the straddle feed does not apply to "
+               "it: the deck falls back to the junction model and R/X carry the larger "
+               "segmentation error."),
+        "es": ("Esta geometría no es colineal, así que el modelo straddle no se le "
+               "aplica: el deck vuelve al modelo de unión y R/X arrastran el error de "
+               "segmentación mayor."),
+        "it": ("Questa geometria non è collineare, quindi il modello straddle non le si applica: "
+               "il deck torna al modello a giunzione e R/X portano l'errore di segmentazione "
+               "maggiore."),
+    },
 }
 
 
@@ -10786,7 +10797,14 @@ def plot_results(
     ax2.set_xlabel(T("plot_vswr_xlabel"))
     ax2.set_ylabel(T("plot_avoidance_ylabel"))
     ax2.set_title(T("plot_pareto_title"))
-    ax2.legend(fontsize=7)
+    # Placed outside the axes, like ax1's legend above: with the data
+    # clustered near a corner (low VSWR score / high avoidance score),
+    # any in-axes loc (including "best") tends to land the legend box
+    # directly on top of the Pareto-front star or Best diamond near
+    # that corner. bbox_inches="tight" on the savefig() call below
+    # expands the saved PNG to fit, so this never gets clipped.
+    ax2.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0),
+               framealpha=0.85, borderaxespad=0.0)
     ax2.grid(True, alpha=0.3)
 
     top10 = ranked[:10]
