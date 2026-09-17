@@ -1534,6 +1534,17 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "  NEC2 {0:4d}/{1}  hilo={2:.2f} m  cp={3:.2f} m  ({4})",
         "it": '  NEC2 {0:4d}/{1}  filo={2:.2f} m  cp={3:.2f} m  ({4})',
     },
+    # Appended after "({4})" ONLY when the candidate being evaluated carries a
+    # vertical-radiator length (Carolina Windom with --cw-vert-len[-min/-max]).
+    # Kept as a separate suffix key, rather than a 6th positional slot on
+    # sweep_nec2_progress, so every existing .format(done, total, w, c, label)
+    # call site keeps working untouched; callers that DO have a vertical
+    # length simply concatenate this suffix onto the same line.
+    "sweep_nec2_progress_vert": {
+        "en": "  v={0:.2f} m",
+        "es": "  v={0:.2f} m",
+        "it": '  v={0:.2f} m',
+    },
     "sweep_nec2_done": {
         "en": "  NEC2 sweep complete. {0} runs processed.           ",
         "es": "  Barrido NEC2 completado. {0} ejecuciones procesadas.",
@@ -7773,19 +7784,33 @@ def nec2_sweep(
                 for _i, _pt in enumerate(grid):
                     _w, _c = _pt[0], _pt[1]
                     _v = _pt[2] if _has_vert_axis else None
-                    _futs[_executor.submit(_eval_point, _w, _c, _v)] = _i
+                    _futs[_executor.submit(_eval_point, _w, _c, _v)] = (_i, _v)
                 # Iterating in submission order keeps the progress counter
                 # monotonic and the error surfaced first deterministic; the
                 # pool itself is still fully concurrent.
-                for _fut, _i in _futs.items():
+                for _fut, (_i, _submitted_v) in _futs.items():
                     _cand, _msgs = _fut.result()
                     _slots[_i] = _cand
                     done += 1
                     _report_warnings(_msgs)
                     if verbose:
-                        print(T("sweep_nec2_progress").format(
+                        _line = T("sweep_nec2_progress").format(
                             done, total, _cand.wire_len_m, _cand.cp_len_m,
-                            _angle_label(_cand)), end="\r")
+                            _angle_label(_cand))
+                        if _has_vert_axis:
+                            # Print the vertical length actually SUBMITTED for
+                            # this grid point, not _cand.vert_len_m: that field
+                            # is only populated on the success path inside
+                            # score_candidate() (has_vertical_radiator gate) —
+                            # every failure-path CandidateResult (geometry
+                            # error, NEC2 failure) leaves it at the dataclass
+                            # default of 0.0, which previously made long runs
+                            # of failed candidates all print "v=0.00 m"
+                            # regardless of the vertical length they were
+                            # actually testing.
+                            if _submitted_v is not None:
+                                _line += T("sweep_nec2_progress_vert").format(_submitted_v)
+                        print(_line, end="\r")
             finally:
                 # cancel_futures keeps a Nec2WorkspaceError from having to wait
                 # for every queued deck to be solved first.
@@ -7806,9 +7831,12 @@ def nec2_sweep(
                         _pv_label = f"{_pv_z:.2f} m / {_pv_a:.1f}°"
                     else:
                         _pv_label = "—"
-                    print(T("sweep_nec2_progress").format(
+                    _line = T("sweep_nec2_progress").format(
                         done, total, w, (c if use_counterpoise else 0.0),
-                        _pv_label), end="\r")
+                        _pv_label)
+                    if _has_vert_axis and v is not None:
+                        _line += T("sweep_nec2_progress_vert").format(v)
+                    print(_line, end="\r")
                 _cand, _msgs = _eval_point(w, c, v)
                 _report_warnings(_msgs)
                 results.append(_cand)
@@ -17511,6 +17539,7 @@ def _launch_gui() -> None:
             "rs_l_kind":          "Pass kind",
             "rs_l_progress":      "Progress",
             "rs_l_candidate":     "Candidate now",
+            "rs_l_vert_now":      "Vertical radiator now",
             "rs_l_elapsed":       "Elapsed",
             "rs_l_rate":          "Rate",
             "rs_l_eta":           "ETA (this pass)",
@@ -18069,6 +18098,7 @@ def _launch_gui() -> None:
             "rs_l_kind":          "Tipo de pasada",
             "rs_l_progress":      "Progreso",
             "rs_l_candidate":     "Candidato actual",
+            "rs_l_vert_now":      "Radiador vertical actual",
             "rs_l_elapsed":       "Transcurrido",
             "rs_l_rate":          "Ritmo",
             "rs_l_eta":           "ETA (esta pasada)",
@@ -18611,6 +18641,7 @@ def _launch_gui() -> None:
             "rs_l_kind": 'Tipo di passata',
             "rs_l_progress": 'Avanzamento',
             "rs_l_candidate": 'Candidato attuale',
+            "rs_l_vert_now": 'Radiatore verticale attuale',
             "rs_l_elapsed": 'Trascorso',
             "rs_l_rate": 'Ritmo',
             "rs_l_eta": 'ETA (questa passata)',
@@ -19298,9 +19329,13 @@ def _launch_gui() -> None:
             r"(\d{1,3})\s*%\s*\((\d+)\s*/\s*(\d+)\)\s*\w+\s*=\s*([\d.,]+)\s*m"
             r"\s+cp\s*=\s*([\d.,]+)\s*m", re.I),
         # "  NEC2  312/495  wire=12.40 m  cp=6.20 m  (20m)"
+        # Carolina Windom vertical-radiator sweeps append "  v=3.20 m" after
+        # the closing ")" — group(6) is None whenever that suffix is absent
+        # (non-CW profiles, or CW with a fixed vertical length).
         "nec_prog": re.compile(
             r"NEC2\s+(\d+)\s*/\s*(\d+)\s+\w+\s*=\s*([\d.,]+)\s*m"
-            r"\s+cp\s*=\s*([\d.,]+)\s*m\s*\(([^)]*)\)", re.I),
+            r"\s+cp\s*=\s*([\d.,]+)\s*m\s*\(([^)]*)\)"
+            r"(?:\s+v\s*=\s*([\d.,]+)\s*m)?", re.I),
         # "  Grid size     : 25 (wire) × 17 (cp) = 425 pairs"
         "grid": re.compile(
             r"(\d+)\s*\([^)]*\)\s*[×x]\s*(\d+)\s*\([^)]*\)\s*=\s*(\d+)"),
@@ -19402,6 +19437,7 @@ def _launch_gui() -> None:
             self.done = self.total = None
             self.pct      = None
             self.cur_wire = self.cur_cp = None
+            self.cur_v    = None          # vertical radiator length being tested right now
             self.cur_band = ""
             self.candidates = None
             self.pareto     = None
@@ -19619,6 +19655,12 @@ def _launch_gui() -> None:
                 p.cur_wire = _rs_f(m.group(3))
                 p.cur_cp   = _rs_f(m.group(4))
                 p.cur_band = m.group(5).strip()
+                # group(6) is only present for a Carolina Windom whose
+                # vertical radiator is being swept per-candidate; a fixed
+                # vertical length never appears on the progress line, so
+                # cur_v naturally stays None for that case (section 2/3 of
+                # the resume pane already shows the fixed value).
+                p.cur_v    = _rs_f(m.group(6)) if m.group(6) else None
                 self.phase = "sweep"
                 return
 
@@ -21662,13 +21704,17 @@ def _launch_gui() -> None:
                 return
 
             # ── 1. what is running now ────────────────────────────────────
-            # By design this block never reports the CW vertical-radiator
-            # tested length (v_min/v_max/v_fixed). That belongs only to
-            # section 2 ("variables in play") and section 3 ("result of the
-            # last pass"), gated behind st.is_carolina_windom. Do not add an
-            # _rs_vert(...)/rs_l_vert_win row below — "now" is stage +
-            # progress + candidate wire/cp/band + rate/ETA + elapsed, and
-            # nothing else.
+            # Section 2 ("variables in play") and section 3 ("result of the
+            # last pass") still show the CW vertical-radiator WINDOW/fixed
+            # value via _rs_vert(...) / rs_l_vert_win, gated behind
+            # st.is_carolina_windom. This section additionally reports the
+            # actual vertical-radiator length being tested on the CANDIDATE
+            # IN FLIGHT right now (cur.cur_v), parsed straight from the same
+            # "NEC2 …  v=…" console line as cur_wire/cur_cp — so "now" and
+            # the console can never disagree. It only appears for a Carolina
+            # Windom pass that is actually sweeping the vertical axis; a
+            # fixed vertical length is not a "candidate value" and is left
+            # to section 2/3 instead.
             add("■ " + self.t("rs_hdr_now") + "\n", "h")
             k_title, k_expl = self._rs_phase_keys(st)
             add(self._rs_row("rs_l_stage", self.t(k_title)), "k")
@@ -21690,6 +21736,14 @@ def _launch_gui() -> None:
                         "rs_l_candidate",
                         f"wire = {self._rs_m(cur.cur_wire, 2)}"
                         f"   cp = {self._rs_m(cur.cur_cp, 2)}{band}"))
+                    # Only shown while a Carolina Windom pass is actually
+                    # sweeping the vertical radiator per-candidate (cur_v is
+                    # parsed from the console's own "v=…" token); a fixed
+                    # vertical length has nothing to vary candidate-to-
+                    # candidate and stays out of "now" (see section 2/3).
+                    if st.is_carolina_windom and cur.cur_v is not None:
+                        add(self._rs_row(
+                            "rs_l_vert_now", self._rs_m(cur.cur_v, 2)))
                 # A rate measured over the first fraction of a second is
                 # noise, so both it and the ETA derived from it stay hidden
                 # until the pass has been running for a couple of seconds.
