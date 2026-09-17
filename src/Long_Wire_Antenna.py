@@ -152,6 +152,16 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "Optimizador de Longitud de Antena NEC2",
         "it": 'Ottimizzatore di Lunghezza Antenna NEC2',
     },
+    "err_tkinter_missing": {
+        "en": "ERROR: tkinter is not available in this Python installation.",
+        "es": "ERROR: tkinter no está disponible en esta instalación de Python.",
+        "it": "ERRORE: tkinter non è disponibile in questa installazione di Python.",
+    },
+    "err_tkinter_install": {
+        "en": "Install it (e.g. 'sudo apt install python3-tk') and retry.",
+        "es": "Instálelo (p. ej. 'sudo apt install python3-tk') y vuelva a intentarlo.",
+        "it": "Installalo (es. 'sudo apt install python3-tk') e riprova.",
+    },
     # ── segmentation / convergence ───────────────────────────────────────
     # NOTE: the segmentation constants are defined further down, so these
     # strings carry {0}/{1} placeholders and are formatted at the call site.
@@ -503,9 +513,14 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "it": "Tipo di antenna: {0}",
     },
     "cw_vert_msg": {
-        "en": "Carolina Windom vertical radiator: {0:.2f} m, line isolator {1}",
-        "es": "Radiador vertical Carolina Windom: {0:.2f} m, aislador de línea {1}",
-        "it": "Radiatore verticale Carolina Windom: {0:.2f} m, isolatore di linea {1}",
+        "en": "Carolina Windom vertical radiator: {0:.2f} m (fixed, not swept), line isolator {1}",
+        "es": "Radiador vertical Carolina Windom: {0:.2f} m (fijo, sin barrido), aislador de línea {1}",
+        "it": "Radiatore verticale Carolina Windom: {0:.2f} m (fisso, senza scansione), isolatore di linea {1}",
+    },
+    "cw_vert_msg_swept": {
+        "en": "Carolina Windom vertical radiator: swept {0:.2f}-{1:.2f} m (step {2:.2f} m), line isolator {3}",
+        "es": "Radiador vertical Carolina Windom: barrido {0:.2f}-{1:.2f} m (paso {2:.2f} m), aislador de línea {3}",
+        "it": "Radiatore verticale Carolina Windom: scansione {0:.2f}-{1:.2f} m (passo {2:.2f} m), isolatore di linea {3}",
     },
     "dipole_grid_size": {
         "en": "Dipole grid: {0} total lengths x {1} offsets = {2} candidates",
@@ -1107,6 +1122,42 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "balun y el aislador de línea (por defecto {0} m)."),
         "it": ("Solo Carolina Windom: lunghezza del radiatore verticale tra il "
                "balun e l\'isolatore di linea (predefinito {0} m)."),
+    },
+    "help_cw_vert_len_min": {
+        "en": ("Minimum vertical-radiator length to sweep, in metres (carolina-windom "
+               "only). Passing this, --cw-vert-len-max, or --cw-vert-len-step switches "
+               "the vertical radiator from a fixed length to a swept third axis; "
+               "--cw-vert-len alone keeps the previous fixed-length behaviour unchanged."),
+        "es": ("Longitud mínima del radiador vertical a barrer, en metros (sólo "
+               "carolina-windom). Indicar esto, --cw-vert-len-max, o --cw-vert-len-step "
+               "cambia el radiador vertical de longitud fija a un tercer eje barrido; "
+               "--cw-vert-len solo mantiene el comportamiento anterior de longitud fija."),
+        "it": ("Lunghezza minima del radiatore verticale da spazzare, in metri (solo "
+               "carolina-windom). Specificare questo, --cw-vert-len-max, o "
+               "--cw-vert-len-step passa il radiatore verticale da lunghezza fissa a "
+               "un terzo asse spazzato; --cw-vert-len da solo mantiene invariato il "
+               "comportamento precedente a lunghezza fissa."),
+    },
+    "help_cw_vert_len_max": {
+        "en": ("Maximum vertical-radiator length to sweep, in metres (carolina-windom "
+               "only). Clamped down to the physical ceiling for --height/the active "
+               "bands if it exceeds it."),
+        "es": ("Longitud máxima del radiador vertical a barrer, en metros (sólo "
+               "carolina-windom). Se recorta al límite físico según --height/las "
+               "bandas activas si lo excede."),
+        "it": ("Lunghezza massima del radiatore verticale da spazzare, in metri (solo "
+               "carolina-windom). Viene limitata al tetto fisico per --height/le "
+               "bande attive se lo supera."),
+    },
+    "help_cw_vert_len_step": {
+        "en": ("Step size, in metres, for the vertical-radiator sweep (default: "
+               "0.25 m). Only used when --cw-vert-len-min/-max is given."),
+        "es": ("Tamaño de paso, en metros, para el barrido del radiador vertical "
+               "(por defecto: 0.25 m). Sólo se usa cuando se indica "
+               "--cw-vert-len-min/-max."),
+        "it": ("Dimensione del passo, in metri, per la scansione del radiatore "
+               "verticale (predefinito: 0.25 m). Usato solo quando viene indicato "
+               "--cw-vert-len-min/-max."),
     },
     "help_cw_isolator_z": {
         "en": ("Carolina Windom only: model the line isolator as a finite "
@@ -1973,6 +2024,41 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "en": "  ⚠  No bands produced usable radiation pattern data — skipping plot.",
         "es": "  ⚠  Ninguna banda produjo datos de patrón utilizables — omitiendo gráfico.",
         "it": '  ⚠  Nessuna banda ha prodotto dati di diagramma di radiazione utilizzabili — grafico omesso.',
+    },
+    "warn_mpl_unavailable": {
+        "en": "  matplotlib not available — skipping radiation diagrams.",
+        "es": "  matplotlib no disponible — omitiendo diagramas de radiación.",
+        "it": "  matplotlib non disponibile — diagrammi di radiazione omessi.",
+    },
+    "warn_no_active_bands_rad": {
+        "en": "  No active bands — skipping radiation diagrams.",
+        "es": "  Sin bandas activas — omitiendo diagramas de radiación.",
+        "it": "  Nessuna banda attiva — diagrammi di radiazione omessi.",
+    },
+    "warn_rad_deck_invalid": {
+        "en": "  ⚠  Radiation deck geometry invalid: {0}",
+        "es": "  ⚠  Geometría del deck de radiación inválida: {0}",
+        "it": "  ⚠  Geometria del deck di radiazione non valida: {0}",
+    },
+    "warn_nec2_rad_failed": {
+        "en": "  ⚠  NEC2 radiation run failed — skipping radiation diagrams.",
+        "es": "  ⚠  La corrida NEC2 de radiación falló — omitiendo diagramas de radiación.",
+        "it": "  ⚠  L'esecuzione NEC2 di radiazione è fallita — diagrammi di radiazione omessi.",
+    },
+    "warn_cannot_read_nec2_output": {
+        "en": "  ⚠  Cannot read NEC2 output: {0}",
+        "es": "  ⚠  No se puede leer la salida de NEC2: {0}",
+        "it": "  ⚠  Impossibile leggere l'output NEC2: {0}",
+    },
+    "warn_no_rp_section": {
+        "en": "  ⚠  NEC2 output contains no RADIATION PATTERN section.",
+        "es": "  ⚠  La salida de NEC2 no contiene una sección RADIATION PATTERN.",
+        "it": "  ⚠  L'output NEC2 non contiene una sezione RADIATION PATTERN.",
+    },
+    "warn_parse_rad_failed": {
+        "en": "  ⚠  Failed to parse NEC2 radiation output: {0}",
+        "es": "  ⚠  Fallo al parsear la salida de radiación de NEC2: {0}",
+        "it": "  ⚠  Impossibile analizzare l'output di radiazione NEC2: {0}",
     },
     # ── plot labels ──────────────────────────────────────────────────────
     "plot_title": {
@@ -2923,6 +3009,20 @@ _STRINGS: Dict[str, Dict[str, str]] = {
                "El contrapeso va recto desde el punto de alimentación hasta esa altura; su inclinación "
                "resulta de la longitud del CP. Omitir para dejarlo a la altura de la antena."),
         "it": "Altezza dell'estremo lontano (non alimentato) del contrappeso sopra il suolo, in metri. Il contrappeso va dritto dal punto di alimentazione fino a questa altezza; la sua inclinazione deriva dalla lunghezza del CP. Omettere per mantenerlo a livello dell'altezza dell'antenna.",
+    },
+    "ap_wire_slope_end_height": {
+        "en": ("Height of the far (non-feedpoint) wire end above ground in metres. "
+               "0.0 = wire end at ground level (sloping/diagonal wire). "
+               "Omit to keep the default horizontal flat wire. "
+               "When set, NEC2 mode is forced; empirical formulas do not apply."),
+        "es": ("Altura del extremo lejano (no alimentado) del hilo radiante sobre el suelo en metros. "
+               "0.0 = extremo del hilo a nivel del suelo (hilo inclinado/diagonal). "
+               "Omitir para mantener el hilo horizontal plano por defecto. "
+               "Al establecerlo, se fuerza el modo NEC2; las fórmulas empíricas no aplican."),
+        "it": ("Altezza dell'estremo lontano (non alimentato) del filo radiante sopra il suolo, in metri. "
+               "0.0 = estremo del filo a livello del suolo (filo inclinato/diagonale). "
+               "Omettere per mantenere il filo orizzontale piatto predefinito. "
+               "Se impostato, viene forzata la modalità NEC2; le formule empiriche non si applicano."),
     },
     "ap_ground_cond": {
         "en": "Ground conductivity S/m (default {0}).",
@@ -9928,12 +10028,12 @@ def plot_radiation_diagrams(
     so the number on the picture always matches the number in the text.
     """
     if not HAS_MPL:
-        print("  matplotlib not available — skipping radiation diagrams.")
+        print(T("warn_mpl_unavailable"))
         return
 
     active = [r for r in calc_rows if r.active]
     if not active:
-        print("  No active bands — skipping radiation diagrams.")
+        print(T("warn_no_active_bands_rad"))
         return
 
     _cp_end_req = (cp_end_height_m if cp_end_height_m is not None
@@ -9984,7 +10084,7 @@ def plot_radiation_diagrams(
                 segs_per_half_wave=_spw_rad,
             )
         except ValueError as _rad_err:
-            print(f"  ⚠  Radiation deck geometry invalid: {_rad_err}")
+            print(T("warn_rad_deck_invalid").format(_rad_err))
             return
 
         with open(nec_path, "w") as fh:
@@ -10010,14 +10110,14 @@ def plot_radiation_diagrams(
 
         ok = run_nec2c(nec2c_bin, nec_path, out_path_nec, timeout=120)
         if not ok:
-            print("  ⚠  NEC2 radiation run failed — skipping radiation diagrams.")
+            print(T("warn_nec2_rad_failed"))
             return
 
         try:
             with open(out_path_nec, "r", errors="replace") as fh:
                 raw = fh.read()
         except Exception as e:
-            print(f"  ⚠  Cannot read NEC2 output: {e}")
+            print(T("warn_cannot_read_nec2_output").format(e))
             return
 
         _has_rp_section = any(
@@ -10028,7 +10128,7 @@ def plot_radiation_diagrams(
             for _ln in raw.splitlines()
         )
         if not _has_rp_section:
-            print("  ⚠  NEC2 output contains no RADIATION PATTERN section.")
+            print(T("warn_no_rp_section"))
             return
 
         # Delegate to parse_nec2_output() instead of re-parsing the RP table
@@ -10050,7 +10150,7 @@ def plot_radiation_diagrams(
         try:
             _rp_run = parse_nec2_output(out_path_nec)
         except Exception as e:
-            print(f"  ⚠  Failed to parse NEC2 radiation output: {e}")
+            print(T("warn_parse_rad_failed").format(e))
             return
 
         _active_freqs = [cr.freq_mhz for cr in active]
@@ -14531,12 +14631,7 @@ def _build_parser() -> argparse.ArgumentParser:
                    default=None, dest="height",
                    help=T("ap_height").format(DEFAULT_HEIGHT_M))
     p.add_argument("--wire-slope-end-height", metavar="M", type=float, default=None,
-                   help=(
-                       "Height of the far (non-feedpoint) wire end above ground in metres. "
-                       "0.0 = wire end at ground level (sloping/diagonal wire). "
-                       "Omit to keep the default horizontal flat wire. "
-                       "When set, NEC2 mode is forced; empirical formulas do not apply."
-                   ))
+                   help=T("ap_wire_slope_end_height"))
     p.add_argument("--cp-end-height", metavar="M", type=float, default=None,
                    help=T("ap_cp_end_height"))
     p.add_argument("--no-counterpoise", action="store_true",
@@ -14589,24 +14684,13 @@ def _build_parser() -> argparse.ArgumentParser:
                        help=T("help_cw_vert_len").format(CW_DEFAULT_VERT_LEN_M))
     g_ant.add_argument("--cw-vert-len-min", metavar="M", type=float,
                        default=None, dest="cw_vert_len_min",
-                       help="Minimum vertical-radiator length to sweep, in "
-                            "metres (carolina-windom only). Passing this, "
-                            "--cw-vert-len-max, or --cw-vert-len-step "
-                            "switches the vertical radiator from a fixed "
-                            "length to a swept third axis; --cw-vert-len "
-                            "alone keeps the previous fixed-length behaviour "
-                            "unchanged.")
+                       help=T("help_cw_vert_len_min"))
     g_ant.add_argument("--cw-vert-len-max", metavar="M", type=float,
                        default=None, dest="cw_vert_len_max",
-                       help="Maximum vertical-radiator length to sweep, in "
-                            "metres (carolina-windom only). Clamped down to "
-                            "the physical ceiling for --height/the active "
-                            "bands if it exceeds it.")
+                       help=T("help_cw_vert_len_max"))
     g_ant.add_argument("--cw-vert-len-step", metavar="M", type=float,
                        default=0.25, dest="cw_vert_len_step",
-                       help="Step size, in metres, for the vertical-radiator "
-                            "sweep (default: 0.25 m). Only used when "
-                            "--cw-vert-len-min/-max is given.")
+                       help=T("help_cw_vert_len_step"))
     g_ant.add_argument("--cw-isolator-z", metavar="R,X", default=None,
                        dest="cw_isolator_z",
                        help=T("help_cw_isolator_z"))
@@ -15518,10 +15602,21 @@ def main() -> None:
     if ANTENNA_TYPE != DEFAULT_ANTENNA_TYPE:
         print("  " + T("antenna_type_msg").format(_prof_run.key))
         if _prof_run.has_vertical_radiator:
-            print("  " + T("cw_vert_msg").format(
-                CW_VERT_LEN_M,
-                "ideal (open)" if CW_ISOLATOR_Z is None
-                else f"{CW_ISOLATOR_Z[0]:.0f}+j{CW_ISOLATOR_Z[1]:.0f} ohm"))
+            _iso_s = ("ideal (open)" if CW_ISOLATOR_Z is None
+                      else f"{CW_ISOLATOR_Z[0]:.0f}+j{CW_ISOLATOR_Z[1]:.0f} ohm")
+            # One line, always printed for a Carolina Windom run, stating
+            # unambiguously whether the vertical radiator is fixed or swept.
+            # Previously this always reported the fixed scalar CW_VERT_LEN_M
+            # — even while a sweep was active — so the run log never showed
+            # that the vertical axis was (or was not) being tested; the
+            # min/max/step line above only ever fires when the sweep IS on,
+            # leaving the "deliberately fixed" case silent. This line covers
+            # both cases explicitly so neither is silent.
+            if _cw_vert_sweep_on:
+                print("  " + T("cw_vert_msg_swept").format(
+                    _cw_vmin, _cw_vmax, _cw_vstep_arg, _iso_s))
+            else:
+                print("  " + T("cw_vert_msg").format(CW_VERT_LEN_M, _iso_s))
 
     if mode == "nec2":
         print("  " + T("feed_model_msg").format(FEED_MODEL))
@@ -17193,8 +17288,8 @@ def _launch_gui() -> None:
     try:
         import tkinter  # probe availability first
     except ImportError:
-        print("ERROR: tkinter is not available in this Python installation.")
-        print("Install it (e.g. 'sudo apt install python3-tk') and retry.")
+        print(T("err_tkinter_missing"))
+        print(T("err_tkinter_install"))
         sys.exit(1)
 
     # ── All GUI code is inlined below so the file is self-contained ──────
