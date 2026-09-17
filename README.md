@@ -18,7 +18,13 @@ Author: **LU3VEA** · License: **CC0 1.0** (public domain, script and documentat
 
 ## What it does
 
-If you're building a multi-band end-fed or sloping wire antenna, the eternal question is: *how long should the wire be?* This tool answers that question empirically instead of by rule of thumb.
+If you're building a multi-band wire antenna, the eternal question is: *how long should the wire be?* This tool answers that question empirically instead of by rule of thumb.
+
+It models three topologies, selected with `--antenna-type`:
+
+- **`long-wire`** (default) — an end-fed or sloping radiator with an optional counterpoise, ground rod or coax stub as the RF return path. Matched with an **UnUn**.
+- **`ocfd`** — an off-centre-fed dipole (Windom): both arms radiate, the dipole is its own return path, and `--wire-len` / `--cp-len` become the long and short arms. Matched with a **balun**.
+- **`carolina-windom`** — an OCFD with an extra radiating vertical section between the balun and a line isolator.
 
 It sweeps a grid of candidate **radiator lengths** and **counterpoise lengths** *(the counterpoise is the secondary wire or ground reference that provides the RF return path for an end-fed antenna — see [Glossary](#glossary))*, and for every combination:
 
@@ -35,6 +41,7 @@ It can also recommend the best standard **UnUn transformation ratio** (e.g. 9:1,
 
 ## Highlights
 
+- 📐 **Three antenna topologies** — end-fed long wire (default), off-centre-fed dipole (Windom), and Carolina Windom, each with its own matching device, empirical fallback model and geometry-quality metric (`--antenna-type`).
 - 🎯 **Multi-band optimization** — optimize for any combination of bands simultaneously (e.g. `40m,20m,17m,15m,10m`), not just one.
 - 📡 **Real NEC-2 physics** — uses method-of-moments simulation (`nec2c`) rather than closed-form approximations, including realistic ground models (Sommerfeld/Norton or perfect ground).
 - ⚡ **Fast empirical mode** — an `--mode empirical` fallback using closed-form formulas when you don't have `nec2c` installed or just want a quick estimate; `--mode auto` picks the best available.
@@ -71,6 +78,8 @@ There is currently **no packaged installer for macOS**. macOS users should use [
 | `others/windows_installer/payload/post_install_setup.py`       | Runs once, automatically, at the end of installation (using the just-installed Python interpreter) to `pip install` the required packages and finish setting up the NEC2 engine. See the [Windows installer note](#option-a--windows-easiest) below. |
 | `others/build_appimage.sh`                                     | Build script that produces the portable, self-contained Linux AppImage (bundled Python + Tk + statically-built `nec2c`, no host dependencies).             |
 | `LICENSE`                                                       | CC0 1.0 Universal (public domain dedication) — applies to this project's own script and documentation, not to bundled third-party binaries.                |
+
+> ⚠️ **Note on file paths:** the table above describes the reorganised layout (`src/`, `documentation/`, `others/`). Until that reorganisation lands on `main`, the published repository still uses flat, legacy names — `nec2_length_optimizer.py`, `NEC2_Length_Optimizer_Manual_EN.md`, `README.es.md` / `README.it.md`, `NEC2_Length_Optimizer_Setup.exe`, `nec2-optimizer-x86_64.AppImage`, `nec2_optimizer_installer.nsi`, `build_appimage.sh` and `nec2c.exe`, all at the repository root. If a path in this document 404s, look for its legacy name at the root, and read `python src/Long_Wire_Antenna.py` in every command example as `python nec2_length_optimizer.py`.
 
 > **Note on binary files in this repository:** the Windows installer (`Setup_Long_Wire_Antenna.exe`), the installer's bundled `nec2c.exe`, and the Linux AppImage (`Long_Wire_Antenna-x86_64.AppImage`) are committed directly to this git repository rather than published as separate GitHub Releases. This is convenient for direct download but means the repository history includes binary blobs. No SHA-256 checksums are currently published for these files in this README; if you need to verify integrity, compute the hash yourself after download (`sha256sum <file>` on Linux/macOS, `certutil -hashfile <file> SHA256` on Windows) and compare against a checksum obtained from a trusted channel, since none is published here yet.
 
@@ -196,8 +205,13 @@ Supported band presets span LF through UHF: `2200m, 630m, 160m, 80m, 60m, 40m, 3
 | `--ground-model {sommerfeld,perfect}`                                                                    | Ground model used by NEC-2.                                                                                                                                                              |
 | `--ground-cond`, `--ground-diel`                                                                         | Ground conductivity (S/m) and dielectric constant.                                                                                                                                        |
 | `--wire-diameter`, `--wire-material`                                                                     | Physical wire diameter (mm) and material (`copper`, `aluminium`/`aluminum`, `brass`, `silver`, `steel`, `perfect`).                                                                      |
-| `--feed-model {straddle,junction}`                                                                       | Where the NEC-2 source card sits relative to the radiator/counterpoise junction. `straddle` (default) converges far faster; `junction` reproduces older results.                          |
-| `--fast-run`, `--jobs N`                                                                                 | Acceleration policy (concurrent `nec2c` solves, coarse sweep, shorter refinement/re-rank lists). `--jobs` is **ignored without `--fast-run`**. Published impedances stay at fine density.  |
+| `--feed-model {straddle,junction}`                                                                       | Where the NEC-2 source card sits relative to the radiator/counterpoise junction. `straddle` (default) converges far faster; `junction` reproduces older results, and is forced for `carolina-windom`. |
+| `--antenna-type {long-wire,ocfd,carolina-windom}`                                                        | Antenna topology. `long-wire` (default) is the end-fed radiator described above. The dipole types turn `--wire-len` / `--cp-len` into the **long and short arms** of an off-centre-fed dipole, reject `--no-counterpoise`, and design a **balun** instead of an UnUn. `carolina-windom` adds a radiating vertical section and forces `--feed-model junction`. |
+| `--total-len`, `--offset`, `--offset-min/max/step`                                                       | Off-centre-fed types: total length of both arms, and the short-arm fraction (default `0.3333`, the classic Windom third; valid range `0.10`–`0.49`) — the usual way to specify a Windom. The `-min/max/step` trio bounds the offset sweep. |
+| `--balun-ratio`, `--balun-kind`, `--balun-core`, `--balun-turns`                                         | Balun design for the dipole types: ratio (`auto`, or one of 2/4/6/9 — a transmission-line balun exists at those ratios and not in between), topology (`guanella` current balun by default, or `ruthroff`), toroid core and turns per line. |
+| `--cw-vert-len`, `--cw-isolator-z`                                                                       | Carolina Windom only: length of the radiating vertical section (default 3.0 m), and the line isolator modelled as a finite series impedance (e.g. `1000,2000`) instead of an ideal open — useful for studying what an inadequate choke costs you. |
+| `--feed-choke`, `--match-model {ideal,real}`                                                             | Also design a feedline common-mode choke (always designed for `carolina-windom`, where it *is* the line isolator); and whether VSWR through the matching device is idealised or includes the balun's finite magnetising reactance. |
+| `--fast-run`, `--jobs N`                                                                                 | `--fast-run` is the acceleration *policy* (coarse sweep, shorter refinement/re-rank lists, one convergence arm) — a cheaper answer. `--jobs N` runs independent `nec2c` solves concurrently and is honoured **with or without** `--fast-run`: it only shortens the wall clock, never changes a published number. Defaults: 1 (serial), or one per core capped at 16 under `--fast-run`. Published impedances stay at fine density. |
 | `--retry N`, `--test-window`, `--refine-top N`                                                           | Re-run the sweep up to N extra times: shifting the window outwards by default, or — with `--test-window` — refining it around the best `--refine-top` candidates at half the grid step.    |
 | `--converge`                                                                                             | Re-simulate the winner at 0.5× and 2× the working segmentation and report how far R and X still move. NEC2 mode only.                                                                     |
 | `--target-toa`                                                                                           | Target radiation take-off angle (degrees) used in scoring.                                                                                                                               |

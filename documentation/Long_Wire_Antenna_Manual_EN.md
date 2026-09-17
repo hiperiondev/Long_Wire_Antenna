@@ -1,7 +1,7 @@
 # NEC2 Antenna Length Optimizer — Complete User Manual
 
 **Author of the software:** LU3VEA (released CC0 v1.0)
-**Manual version:** 1.5 (code-audited against the current source). Changes since 1.4: the `--converge` self-check is documented with its real segmentation factors (0.5× and 2×, not 2× and 4×); the previously undocumented `--fast-run`, `--jobs`, `--test-window`, `--refine-top` and `--feed-model` options are covered; the GUI walkthrough gains the Run tab's third check box ("Fast"), its Resume pane, the Physics tab's Feed model section, the Search Range tab's Test All / Test Window control and the UnUn tab's Core/Air and Compensate/Ratio toggles; the Transmatch compensation table's last column is corrected from "5 Ω-tolerant" to a 5 % residual; the CSV column list is completed; and every table-of-contents anchor is corrected (headings of the form `## N — Title` produce a *double* hyphen in the generated anchor).
+**Manual version:** 1.6 (code-audited against the current source). Changes since 1.5: the entire **antenna-type** feature set is documented for the first time — the three topologies (`long-wire`, `ocfd`, `carolina-windom`), the GUI group that selects them ([6.1](#61-antenna-type-section)) and the fourteen previously undocumented CLI options that go with them; `--jobs` is corrected throughout — it is now honoured in **both** normal and `--fast-run` mode, and the GUI *does* emit it from a field on the Run tab; the CSV schema gains its six dipole-only columns; and the Python requirement is stated as 3.8+. Changes in 1.5: the `--converge` self-check is documented with its real segmentation factors (0.5× and 2×, not 2× and 4×); the previously undocumented `--fast-run`, `--jobs`, `--test-window`, `--refine-top` and `--feed-model` options are covered; the GUI walkthrough gains the Run tab's third check box ("Fast"), its Resume pane, the Physics tab's Feed model section, the Search Range tab's Test All / Test Window control and the UnUn tab's Core/Air and Compensate/Ratio toggles; the Transmatch compensation table's last column is corrected from "5 Ω-tolerant" to a 5 % residual; the CSV column list is completed; and every table-of-contents anchor is corrected (headings of the form `## N — Title` produce a *double* hyphen in the generated anchor).
 **Scope of this manual:** installation, concepts, the Graphical User Interface (GUI) in full detail, the command‑line interface (CLI), the output files produced, and troubleshooting.
 
 ---
@@ -35,7 +35,13 @@
 
 ## 1. What this software does
 
-The **NEC2 Antenna Length Optimizer** is a design tool for wire antennas (a sloping radiator with an optional sloping counterpoise) that are fed against a single feedpoint — the classic "random wire" / end-fed configuration used by many amateur radio operators.
+The **NEC2 Antenna Length Optimizer** is a design tool for multi-band wire antennas. It models three topologies, selected with `--antenna-type` (or the dropdown described in [6.1](#61-antenna-type-section)):
+
+- **`long-wire`** (default) — a sloping or horizontal radiator fed against a single feedpoint, with an optional counterpoise, ground rod or coax stub as the RF return path: the classic "random wire" / end-fed configuration used by many amateur radio operators. Matched with an **UnUn**.
+- **`ocfd`** — an off-centre-fed dipole (Windom), where the two arms *are* the antenna and no return conductor is needed. Matched with a **balun**.
+- **`carolina-windom`** — an OCFD with an additional radiating vertical section between the balun and a line isolator.
+
+The antenna type changes what the length inputs mean, which matching device is designed, which empirical model is used when NEC2 is unavailable, and which geometry-quality metric the report prints. Everything below applies to all three unless a section says otherwise.
 
 Given:
 
@@ -78,7 +84,7 @@ Both matching-network tools can automatically read the antenna impedances found 
 
 The tool is a single Python 3 script. It requires:
 
-- **Python 3** (any reasonably current version).
+- **Python 3.8 or newer.**
 - The **Tkinter** GUI toolkit, if you intend to use the graphical interface. Tkinter ships with most desktop Python installations; on some Linux distributions it must be installed separately:
   ```bash
   sudo apt install python3-tk
@@ -194,9 +200,26 @@ Every text field, checkbox, radio button, and dropdown in the six tabs is descri
 
 ## 6. Tab 1 — Band / Source
 
-This tab defines **what** you are designing for: the operating bands, the frequencies (if needed), and the initial guess for wire and counterpoise length.
+This tab defines **what** you are designing for: the antenna topology, the operating bands, the frequencies (if needed), and the initial guess for the two lengths.
 
-### 6.1 "Band(s)" field
+### 6.1 "Antenna type" section
+
+This is the **first control group on the tab**, and deliberately so: it changes what every other field in the program *means*. It is the only place in the GUI where the antenna topology itself is chosen.
+
+- **Antenna type (dropdown)** — `long-wire` (default), `ocfd`, or `carolina-windom`. CLI: `--antenna-type`.
+  - **`long-wire`** — the classic end-fed radiator plus a return conductor (counterpoise, ground rod, or coax stub). "Wire length" and "Counterpoise length" mean exactly what their names say, every counterpoise control on the Search Range tab applies, and the matching device is an **UnUn** whose ratio the optimizer searches for automatically.
+  - **`ocfd`** — an **off-centre-fed dipole** (Windom). Both arms radiate and the dipole is its own return path, so **"Wire length" and "Counterpoise length" become the long arm and the short arm**; `--no-counterpoise` is rejected outright, the "No-counterpoise return path" section stops applying, and the matching device becomes a **balun** restricted to buildable ratios.
+  - **`carolina-windom`** — an OCFD plus a **radiating vertical section** between the balun and a line isolator. Three conductors meet at the feed node, so the straddle feed is geometrically impossible and the feed model is **forced to `junction`** (the program says so on startup and recommends `--converge`). Expect slower convergence and a larger published uncertainty on X.
+- **Offset** — short arm ÷ total length, dipole types only. Default `0.3333` (the classic Windom third); valid range `0.10`–`0.49`. At `0.50` it would be an ordinary centre-fed dipole; below `0.10` it is effectively an end feed. CLI: `--offset`. Greyed out for `long-wire`.
+- **Balun kind** — `guanella` (default) or `ruthroff`: the transmission-line balun topology. Guanella is a current balun and is the correct choice for a balanced feed across all of HF. CLI: `--balun-kind`. Dipole types only.
+- **Vertical length (m)** — Carolina Windom only: the length of the radiating vertical section between the balun and the line isolator. Default `3.0` m, minimum `0.5` m. CLI: `--cw-vert-len`.
+- **Isolator Z (R,X)** — Carolina Windom only: model the line isolator as a **finite** series impedance (e.g. `1000,2000`) instead of an ideal open circuit. Leave blank for the ideal case; fill it in to study what an inadequate choke actually does to the antenna. CLI: `--cw-isolator-z`.
+
+Controls the selected type cannot use are greyed out automatically. On the command line the equivalent combinations are **rejected with an explicit error** rather than silently ignored, so a run can never report a different antenna from the one your flags describe — for example, `--antenna-type ocfd --no-counterpoise` stops with an error instead of quietly modelling something else.
+
+> The CLI carries several further antenna-type options that have no GUI control of their own: `--total-len`, `--offset-min` / `--offset-max` / `--offset-step`, `--balun-ratio`, `--balun-core`, `--balun-turns`, `--feed-choke` and `--match-model`. See [Section 14](#14-the-command-line-interface-cli--full-reference).
+
+### 6.2 "Band(s)" field
 
 - **What it is:** a comma-separated list of band names, e.g. `40m,20m,15m`.
 - **Default:** `40m,20m,15m`.
@@ -204,34 +227,34 @@ This tab defines **what** you are designing for: the operating bands, the freque
 - Band names may be one of the **known amateur bands** (see [Appendix, Section 18](#18-appendix-known-amateur-radio-bands)) or an arbitrary custom name of your choosing (e.g. `mySpecialBand`).
 - Directly beneath the field, a hint line lists every recognized band name, for reference.
 
-### 6.2 "Frequencies (MHz)" field
+### 6.3 "Frequencies (MHz)" field
 
 - **What it is:** a comma-separated list of centre frequencies in MHz, one per band, in the *same order* as the Bands field, e.g. `7.1,14.2,21.2`.
 - **When it is optional:** if every name typed into "Band(s)" is a *recognized* band (see the list under the field, or [Section 18](#18-appendix-known-amateur-radio-bands)), you may leave this field empty — the program automatically substitutes the standard centre frequency for each recognized band.
 - **When it is required:** if you use any custom/unrecognized band name, you **must** supply a matching frequency for it here, or the program will stop with an error (in interactive command-line use it may prompt for it; the GUI will pass whatever you typed, so fill it in).
 - A hint line under the field reminds you of this rule.
 
-### 6.3 "Wire length (m)" field
+### 6.4 "Wire length (m)" field
 
 - **What it is:** the starting length, in metres, of the sloping radiator wire — the centre point that the search window is built around.
 - **Default:** `21.0`.
 - **Required:** yes.
 - A colored hint to the right of the field gives a short reminder of its role.
 
-### 6.4 "Counterpoise length (m)" field
+### 6.5 "Counterpoise length (m)" field
 
 - **What it is:** the starting length, in metres, of the counterpoise wire — again, the centre of the search window.
 - **Default:** `5.0`.
 - **Required:** yes, **unless** you have unchecked "Use counterpoise" on the Search Range tab (see [7.3](#73-use-counterpoise-checkbox)), in which case this field is disabled (greyed out) because there is no counterpoise to size.
 
-### 6.5 "Active Bands" section
+### 6.6 "Active Bands" section
 
-- **Purpose:** lets you tell the optimizer to *evaluate* a geometry across every band you listed in 6.1, but only *score* (rank candidates by) a subset of those bands.
+- **Purpose:** lets you tell the optimizer to *evaluate* a geometry across every band you listed in 6.2, but only *score* (rank candidates by) a subset of those bands.
 - **Field:** a comma-separated list of band names, which must be a subset of the names in "Band(s)".
 - **Default:** empty, meaning **all** bands listed under "Band(s)" are treated as active and used for scoring.
 - **Example use case:** you want the report to also show you how a design performs on 10 m out of curiosity, but you only actually operate on 40 m and 20 m — set Band(s) to `40m,20m,10m` and Active Bands to `40m,20m`.
 
-### 6.6 "Optimizer language" (report language)
+### 6.7 "Optimizer language" (report language)
 
 - **Purpose:** chooses which language the *optimizer's own console output and generated report/PDF* are written in — independent from the GUI's own display language (see [12.3](#123-language-switch)).
 - **Options:** `auto` (detect from your system locale), `en`, `es`, `it`.
@@ -480,13 +503,15 @@ This is where you launch the optimizer, watch its progress, and jump straight to
 
 ### 10.1 "Miscellaneous" section
 
-Three checkboxes:
+Three checkboxes and one numeric field:
 
 - **Fast** — adds `--fast-run`, the program's whole acceleration policy. **Default in the GUI: unchecked**, so an existing workflow keeps exactly the behaviour — and exactly the numbers — it had before this box existed. When enabled it: solves independent `nec2c` decks concurrently (in the sweep, the fine refinement pass and the radiation re-ranking pass); runs the sweep at the coarse segmentation, like `--fast`; recomputes fewer candidates at the publishing density (the winner and the Pareto front always are, but the tail of the TOP-N table keeps its sweep-density tag, which the report prints per row); shortens the radiation re-ranking shortlist to 3; and keeps only the 0.5× arm of the convergence self-check. Every one of those trade-offs stays visible in the report — the published impedances of the winner are **not** affected, since the final density is unchanged. Note that `--fast-run` is *not* the same thing as `--fast`, which only sets the sweep segmentation and is wired to the Segmentation radio buttons on the Physics tab ([8.6](#86-accuracy--segmentation-section)).
 - **Quiet** — adds `--quiet` to the command, suppressing verbose progress/detail messages while retaining important results and warnings. **Default in the GUI: checked.** Uncheck for maximum diagnostic detail.
 - **No interactive prompts** — adds `--no-interactive`, telling the optimizer to fail immediately if a required input is missing instead of prompting on the terminal. **Default in the GUI: checked.**
 
-> **On the command line only:** `--jobs N` / `-j N` sets how many `nec2c` processes run concurrently. It has **no effect on its own** — the acceleration policy is opt-in as a whole, so without `--fast-run` the flag is ignored and the program prints a note saying so. With `--fast-run` and no `--jobs`, the worker count defaults to one per CPU core, capped at 16. The GUI never emits `--jobs`; edit the copied command line by hand if you need it.
+- **Jobs** — a numeric field, **blank by default**, that adds `--jobs N`: how many `nec2c` processes are solved concurrently. Left blank the GUI emits no flag at all, which means serial in normal mode and one worker per core (capped at 16) under **Fast** — exactly what every previously-saved command line already does.
+
+> **`--jobs` and `--fast-run` are orthogonal, and `--jobs` works on its own.** `--jobs N` buys you the *same answer, sooner*: results are stored by grid index and reassembled in grid order, so the candidate list, the ranking, the Pareto front and every published impedance are bit-identical to a serial run — only the wall clock changes. `--fast-run` buys speed by computing a *different, cheaper* answer. `--jobs` is therefore honoured in **both** modes; earlier versions forced it to 1 unless `--fast-run` was also given, and that restriction has been removed (it cost the most in normal mode, which is precisely where the expensive work lives). Defaults: `1` (serial) without `--fast-run`, and one worker per CPU core capped at 16 with `--fast-run` and no `--jobs`. The program prints a note if `N` exceeds the number of cores it detects, and another if the engine is itself an MPI build (`nec2c-mpich`), where N workers × M ranks oversubscribes the machine badly.
 
 ### 10.2 "Command preview" box
 
@@ -659,7 +684,7 @@ Two small buttons (`−` and `+`) next to a numeric label let you shrink or enla
 
 A button in the header toggles the **GUI's own display language** between English, Spanish, and Italian. This is separate from:
 
-- The "Optimizer language" setting on the Band/Source tab (Section 6.6), which controls the language of the **optimizer's own console output and generated report/PDF**, not the GUI's menus and labels.
+- The "Optimizer language" setting on the Band/Source tab (Section 6.7), which controls the language of the **optimizer's own console output and generated report/PDF**, not the GUI's menus and labels.
 - The `--lang` CLI flag, which affects only command-line runs of the script without the GUI.
 
 Switching languages relabels every tab, field, dropdown, and hint text in place, without losing anything you have typed — including the Wire Material dropdown, which is internally tracked by its canonical (English) value regardless of what label is currently displayed, so the underlying command line is never affected by a language switch.
@@ -689,7 +714,7 @@ A heat-map/scatter representation of the entire search grid (wire length × coun
 
 ### 13.3 The CSV (`optimizer_best.csv`)
 
-Machine-readable per-band results for the *winning* candidate only, one row per band, with these twenty columns:
+Machine-readable per-band results for the *winning* candidate only, one row per band. A `long-wire` run writes these twenty columns:
 
 | Column | Meaning |
 |---|---|
@@ -708,6 +733,8 @@ Machine-readable per-band results for the *winning* candidate only, one row per 
 | `unun_ratio` | The UnUn ratio the evaluation used |
 | `avoidance_score`, `quality_rating` | How comfortably the geometry sits away from an awkward resonance class, and its star rating |
 | `cp_len_m`, `cp_height_m`, `num_radials` | Winning counterpoise length, antenna height, radial count |
+
+For an **off-centre-fed dipole or Carolina Windom** run (`--antenna-type ocfd|carolina-windom`) the file carries **six additional columns** after those twenty, so a consumer can tell the two schemas apart without guessing from the numbers: `antenna_type`, `total_len_m`, `offset_frac`, `short_arm_m`, `long_arm_m` and `vert_len_m` (the last is non-zero only for a Carolina Windom). In that schema `wire_len_m` and `cp_len_m` are the **long and short arms** of the dipole, not a radiator and a counterpoise — read `antenna_type` before interpreting them.
 
 `R_wire_source` is worth a second look before you wind anything: it is derived from the provenance the report and PDF print, not from the mere presence of a number, so a run made without `nec2c` can never claim `nec2` here. **This is the file the UnUn/Transmatch tab automatically reads** to pre-populate its band dropdown and tap table — and the tab uses this very column to warn you when a matching network is about to be sized from empirical estimates.
 
@@ -770,14 +797,28 @@ Every one of these flags corresponds to a GUI control described above; this tabl
 | `--ground-model {sommerfeld,perfect}` | choice | `sommerfeld` | Ground electromagnetic model. |
 | `--ground-cond S/M` | float | `0.005` | Ground conductivity, S/m. |
 | `--ground-diel EPS` | float | `13.0` | Ground relative permittivity. |
-| `--feed-model {straddle,junction}` | choice | `straddle` | Where the NEC-2 source card sits relative to the radiator/counterpoise junction. See [8.7](#87-feed-model-section). |
+| `--feed-model {straddle,junction}` | choice | `straddle` | Where the NEC-2 source card sits relative to the radiator/counterpoise junction. See [8.7](#87-feed-model-section). Forced to `junction` for `carolina-windom`. |
+| `--antenna-type {long-wire,ocfd,carolina-windom}` | choice | `long-wire` | Antenna topology. The dipole types turn `--wire-len` / `--cp-len` into the **long and short arms** of a dipole. See [6.1](#61-antenna-type-section). |
+| `--total-len M` | float | *(unset)* | Dipole types only: total length of **both** arms. With `--offset` it derives `--wire-len` and `--cp-len` — the usual way to specify an OCFD. |
+| `--offset F` | float | `0.3333` | Dipole types only: short arm ÷ total length. Valid range `0.10`–`0.49`. |
+| `--offset-min F` | float | `0.20` | Dipole types only: low end of the offset sweep. |
+| `--offset-max F` | float | `0.45` | Dipole types only: high end of the offset sweep. |
+| `--offset-step F` | float | `0.01` | Dipole types only: offset sweep step. |
+| `--balun-ratio N` | `auto` or choice | `auto` | Dipole types only: `auto`, or one of `2` / `4` / `6` / `9`. A balun ratio is a hardware choice, so the search is restricted to buildable values. Rejected for `long-wire`, whose UnUn ratio is searched automatically. |
+| `--balun-kind {guanella,ruthroff}` | choice | `guanella` | Transmission-line balun topology. Guanella is a current balun, correct for a balanced feed across all of HF. |
+| `--cw-vert-len M` | float | `3.0` | Carolina Windom only: vertical radiator length between the balun and the line isolator (minimum `0.5` m). |
+| `--cw-isolator-z R,X` | two floats | *(unset = ideal open)* | Carolina Windom only: model the line isolator as a finite series impedance, e.g. `1000,2000`. |
+| `--balun-core CORE` | choice | `FT-240-31` | Toroid used for the balun **and** the line isolator, from the core database in [Section 19](#19-appendix-toroid-core-database-unun-tab). |
+| `--balun-turns N` | int | `10` | Turns per transmission line on the balun. |
+| `--feed-choke` | flag | off | Also design a feedline common-mode choke. Always designed for `carolina-windom`, where it *is* the line isolator. |
+| `--match-model {ideal,real}` | choice | `ideal` | VSWR through the matching device: `ideal` divides R and X by the ratio; `real` also applies the finite magnetising reactance from the balun design. |
 | `--wire-diameter MM` | float | `2.0` mm | Conductor diameter in millimetres. |
 | `--wire-material {...}` | choice | `copper` | One of: `copper`, `aluminium`, `aluminum`, `brass`, `silver`, `steel`, `perfect`. |
 | `--wire-conductivity S/M` | float | *(from material)* | Manual override of conductor conductivity. |
 | `--segs-per-half-wave N` | int | *(45 sweep / 180 fine)* | Overrides both the sweep and final-run segmentation densities. Clamped to `5`–`400`. |
 | `--fast` | flag | off | Sweep at coarse (21 seg/half-wave) density; the winner is still recomputed fine regardless. Sets segmentation only — it is not `--fast-run`. |
 | `--fast-run` | flag | off | The whole acceleration policy: concurrent `nec2c` solves, coarse sweep segmentation, a shorter refined TOP-N tail (≤ 5), a shorter radiation re-rank shortlist (≤ 3), and only the 0.5× arm of `--converge`. Published impedances stay at the fine density. See [10.1](#101-miscellaneous-section). |
-| `--jobs N` / `-j N` | int | one per core, capped at 16 | Concurrent `nec2c` processes. **Ignored unless `--fast-run` is also given** (the program prints a note when it ignores it). |
+| `--jobs N` / `-j N` | int | `1` (serial); one per core capped at 16 under `--fast-run` | Worker threads for independent `nec2c` decks (sweep, fine refinement, radiation re-ranking). Honoured in **both** normal and `--fast-run` mode — parallelism alone changes no published number. |
 | `--converge` | flag | off | Re-run the winner at 0.5× and 2× the working segmentation (0.5× only with `--fast-run`) and report how far R/X still move. NEC2 mode only. |
 | `--target-toa DEG` | float | `25.0` | Elevation angle (degrees) at which the gain bonus is evaluated. |
 | `--gain-weight W` | float | `0.20` | Score weight per dB of gain at the target take-off angle. |
@@ -833,6 +874,18 @@ python src/Long_Wire_Antenna.py --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0
 ```bash
 python src/Long_Wire_Antenna.py --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0 \
     --mode nec2 --fast-run --jobs 8
+```
+
+**An off-centre-fed dipole (Windom), specified the usual way — total length plus offset:**
+```bash
+python src/Long_Wire_Antenna.py --bands 40m,20m,10m --antenna-type ocfd \
+    --total-len 41.0 --offset 0.3333 --balun-ratio 4
+```
+
+**A Carolina Windom with a deliberately imperfect line isolator, to see what it costs:**
+```bash
+python src/Long_Wire_Antenna.py --bands 40m,20m,10m --antenna-type carolina-windom \
+    --total-len 41.0 --cw-vert-len 3.0 --cw-isolator-z 1000,2000 --converge
 ```
 
 **Zoom in on a promising region instead of widening the search:**
@@ -894,7 +947,9 @@ If the report warns that the wire (or counterpoise) length "may need to be longe
 | A Transmatch band shows a suspicious VSWR that doesn't seem to track the antenna's real reactance | The winding may be operating above its own self-resonant frequency (SRF) | Check the Winding results table for an SRF warning; with **Auto reference** checked, the tool already shortens the reference winding to keep the SRF above your highest band by margin, but a manually-entered reference winding can still be too long. |
 | No PNG output is produced | `matplotlib` (or, for radiation diagrams specifically, `numpy`) is not installed | `pip install matplotlib numpy`, then re-run. |
 | PDF is generated but a diagram section says "(unavailable)" | `Pillow` (`PIL`) is not installed | `pip install pillow`, then re-run — this does not require redoing the search, since it only affects PDF image embedding. |
-| `--jobs` seems to be ignored and the run is still serial | `--jobs` on its own never changes behaviour — the acceleration policy is opt-in as a whole | Add `--fast-run` (or tick **Fast** on the Run tab). The program prints a note whenever it ignores a `--jobs` value for this reason. |
+| `--jobs` seems to be ignored and the run is still serial | Either you are on a version older than the one this manual describes (where `--jobs` was forced to 1 without `--fast-run`), or the GUI's **Jobs** field is blank — blank means serial in normal mode | Type a worker count into **Jobs** on the Run tab, or pass `--jobs N` explicitly. In current versions the flag works with or without `--fast-run`. |
+| `--offset`, `--total-len` or `--balun-ratio` is rejected with an error | Those options apply only to the off-centre-fed types | Add `--antenna-type ocfd` (or `carolina-windom`). The program rejects the combination on purpose rather than ignoring the flag and reporting a different antenna. |
+| The report says the feed model was forced to `junction` | You selected `carolina-windom`, which has three conductors at the feed node, so the straddle feed is geometrically impossible | Expected, not an error. Add `--converge` for that run and check how far R and X still move before sizing anything. |
 | `--test-window` appears to do nothing | Refinement happens *on a retry*, and the retry budget defaults to zero | Set **Maximum retries** (`--retry N`) to at least 1. Refinement also stops once both grid steps reach the `0.01` m floor. |
 | GUI's command preview shows something unexpected | A field was left with stale text, or a checkbox state doesn't match what you intended | Everything shown in the command preview box is exactly what will be executed — inspect it before running, and adjust the corresponding field. |
 

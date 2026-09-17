@@ -6780,6 +6780,10 @@ def score_candidate(
     cp_reach_m: Optional[float] = None,
     nec2_strict: bool = False,
     antenna_type: Optional[str] = None,     # None → module ANTENNA_TYPE
+    vert_len_m: Optional[float] = None,     # None → module CW_VERT_LEN_M;
+                                             # pass explicitly once a caller
+                                             # sweeps the vertical per-candidate
+                                             # instead of holding it fixed.
 ) -> CandidateResult:
     """
     Compute the aggregate quality score for a candidate geometry.
@@ -7016,7 +7020,13 @@ def score_candidate(
     if not _prof.is_dipole:
         res.total_len_m = wire_len_m + cp_len_m
     if _prof.has_vertical_radiator:
-        res.vert_len_m = CW_VERT_LEN_M
+        # Previously always CW_VERT_LEN_M (a module-level constant set once
+        # per run), so every candidate reported the same vertical length
+        # regardless of what was actually modelled for it. Callers that
+        # sweep the vertical per candidate should pass vert_len_m; anything
+        # that still doesn't (every current caller) falls back to the
+        # global, so behaviour is unchanged until a caller opts in.
+        res.vert_len_m = CW_VERT_LEN_M if vert_len_m is None else float(vert_len_m)
 
     return res
 
@@ -15245,9 +15255,22 @@ def main() -> None:
         # --test-window refinement loop passes progressively halved values.
         _w_step  = args.wire_step if w_step  is None else w_step
         _cp_step = args.cp_step   if cp_step is None else cp_step
-        _grid = build_search_grid(w_min, w_max, _w_step,
-                                  cp_min, cp_max, _cp_step,
-                                  use_counterpoise=use_counterpoise)
+        # For dipole profiles (OCFD / Carolina Windom) the natural axes are
+        # TOTAL LENGTH and OFFSET, not two independent arms — see the grid
+        # build above main()'s initial banner. That grid must be the one
+        # actually swept; rebuilding an arm-pair grid here (as before)
+        # silently discarded the offset axis on every call to this closure,
+        # including both --test-window refinement passes, so an OCFD/CW run
+        # never searched the offset it claimed to.
+        if _p_at.is_dipole:
+            _grid = build_dipole_grid(w_min + cp_min, w_max + cp_max, _w_step,
+                                      float(args.offset_min),
+                                      float(args.offset_max),
+                                      float(args.offset_step))
+        else:
+            _grid = build_search_grid(w_min, w_max, _w_step,
+                                      cp_min, cp_max, _cp_step,
+                                      use_counterpoise=use_counterpoise)
         print()
         print(T("sweep_starting").format(mode.upper()))
         print()
@@ -15759,12 +15782,32 @@ def main() -> None:
                                            if _avoid_act else 0.0)
 
             _cp_avoid_scores = []
-            for _ar in _active_rows:
-                _lq = C_MHZ / (4.0 * _ar.freq_mhz)
-                _cp_ratio = _c.cp_len_m / _lq
-                _mod2 = _cp_ratio % 2.0
-                _dist = abs(_mod2 - 1.0)
-                _cp_avoid_scores.append(0.25 * math.cos(math.pi * _dist / 2.0) ** 2)
+            if _prof_rs.is_dipole:
+                # Match score_candidate(): a dipole's second axis is the feed
+                # OFFSET, not a return conductor, so the λ/4-proximity bonus
+                # below does not apply. Previously this branch was missing,
+                # so any re-score pass (--test-window refine, --retry, or
+                # the auto-balun convergence loop) silently swapped in the
+                # long-wire counterpoise bonus for OCFD/Carolina Windom
+                # candidates that were originally scored with the offset
+                # term — changing the ranking key mid-run.
+                _total_rs = _c.wire_len_m + _c.cp_len_m
+                _f_rs = (min(_c.wire_len_m, _c.cp_len_m) / _total_rs
+                         if _total_rs > 0 else 0.0)
+                if OCFD_OFFSET_MIN <= _f_rs <= OCFD_OFFSET_MAX:
+                    _span_rs = OCFD_OFFSET_MAX - OCFD_OFFSET_MIN
+                    _cp_avoid_scores.append(
+                        0.25 * math.cos(math.pi * (_f_rs - OCFD_DEFAULT_OFFSET_FRAC)
+                                        / _span_rs) ** 2)
+                else:
+                    _cp_avoid_scores.append(0.0)
+            else:
+                for _ar in _active_rows:
+                    _lq = C_MHZ / (4.0 * _ar.freq_mhz)
+                    _cp_ratio = _c.cp_len_m / _lq
+                    _mod2 = _cp_ratio % 2.0
+                    _dist = abs(_mod2 - 1.0)
+                    _cp_avoid_scores.append(0.25 * math.cos(math.pi * _dist / 2.0) ** 2)
             _cp_avoid_mean = (sum(_cp_avoid_scores) / len(_cp_avoid_scores)
                               if _cp_avoid_scores else 0.0)
             _new.score_combined = (_mean

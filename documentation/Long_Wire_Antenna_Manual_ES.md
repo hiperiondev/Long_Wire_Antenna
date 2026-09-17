@@ -1,7 +1,7 @@
 # NEC2 Antenna Length Optimizer — Manual de Usuario Completo
 
 **Autor del software:** LU3VEA (publicado bajo CC0 v1.0)
-**Versión del manual:** 1.5 (auditado contra el código actual). Cambios desde 1.4: se documenta el autochequeo `--converge` con sus factores reales de segmentación (0.5× y 2×, no 2× y 4×); se cubren las opciones `--fast-run`, `--jobs`, `--test-window`, `--refine-top` y `--feed-model`, antes no documentadas; el recorrido por la GUI incorpora la tercera casilla de la pestaña Ejecutar ("Rápido"), su panel Resumen, la sección Modelo de alimentación de la pestaña Física, el control Probar Todo / Probar Ventana de la pestaña Rango de búsqueda y los conmutadores Núcleo/Aire y Compensar/Relación de la pestaña UnUn; se corrige la última columna de la tabla de compensación del Transmatch, de «tolerancia de 5 Ω» a un residual del 5 %; se completa la lista de columnas del CSV; y se corrigen todos los anclajes del índice (los títulos del tipo `## N — Título` generan un anclaje con hyphen *doble*).
+**Versión del manual:** 1.6 (auditado contra el código actual). Cambios desde 1.5: se documenta por primera vez todo el conjunto de **tipos de antena** — las tres topologías (`long-wire`, `ocfd`, `carolina-windom`), el grupo de la GUI que las selecciona ([6.1](#61-sección-tipo-de-antena)) y las catorce opciones de CLI asociadas que faltaban; se corrige `--jobs` en todo el manual — ahora se respeta en **ambos** modos, normal y `--fast-run`, y la GUI *sí* lo emite desde un campo de la pestaña Ejecutar; el esquema del CSV suma sus seis columnas exclusivas de dipolo; y el requisito de Python se declara como 3.8+. Cambios en 1.5: se documenta el autochequeo `--converge` con sus factores reales de segmentación (0.5× y 2×, no 2× y 4×); se cubren las opciones `--fast-run`, `--jobs`, `--test-window`, `--refine-top` y `--feed-model`, antes no documentadas; el recorrido por la GUI incorpora la tercera casilla de la pestaña Ejecutar ("Rápido"), su panel Resumen, la sección Modelo de alimentación de la pestaña Física, el control Probar Todo / Probar Ventana de la pestaña Rango de búsqueda y los conmutadores Núcleo/Aire y Compensar/Relación de la pestaña UnUn; se corrige la última columna de la tabla de compensación del Transmatch, de «tolerancia de 5 Ω» a un residual del 5 %; se completa la lista de columnas del CSV; y se corrigen todos los anclajes del índice (los títulos del tipo `## N — Título` generan un anclaje con hyphen *doble*).
 **Alcance de este manual:** instalación, conceptos, la Interfaz Gráfica de Usuario (GUI) en detalle completo, la interfaz de línea de comandos (CLI), los archivos de salida generados, y solución de problemas.
 
 ---
@@ -34,7 +34,13 @@
 
 ## 1. Qué hace este software
 
-El **NEC2 Antenna Length Optimizer** es una herramienta de diseño para antenas de hilo (un radiador inclinado con un contrapeso inclinado opcional) alimentadas contra un único punto de alimentación — la clásica configuración "random wire" / alimentada por un extremo, usada por muchos radioaficionados.
+El **NEC2 Antenna Length Optimizer** es una herramienta de diseño para antenas de hilo multibanda. Modela tres topologías, elegidas con `--antenna-type` (o con el desplegable descrito en [6.1](#61-sección-tipo-de-antena)):
+
+- **`long-wire`** (predeterminado) — un radiador inclinado u horizontal alimentado contra un único punto de alimentación, con contrapeso, jabalina de tierra o stub de coaxial opcional como camino de retorno de RF: la clásica configuración "random wire" / alimentada por un extremo, usada por muchos radioaficionados. Se adapta con un **UnUn**.
+- **`ocfd`** — un dipolo alimentado fuera del centro (Windom), donde los dos brazos *son* la antena y no hace falta conductor de retorno. Se adapta con un **balun**.
+- **`carolina-windom`** — un OCFD con una sección vertical radiante adicional entre el balun y un aislador de línea.
+
+El tipo de antena cambia qué significan las longitudes de entrada, qué dispositivo de adaptación se diseña, qué modelo empírico se usa cuando NEC2 no está disponible, y qué métrica de calidad geométrica imprime el reporte. Todo lo que sigue se aplica a los tres salvo que una sección diga lo contrario.
 
 Dado:
 
@@ -77,7 +83,7 @@ Ambas herramientas de red de adaptación pueden leer automáticamente las impeda
 
 La herramienta está implementada en un único script de Python 3. Requiere:
 
-- **Python 3** (cualquier versión razonablemente actual).
+- **Python 3.8 o posterior.**
 - El kit de herramientas gráfico **Tkinter**, si se desea usar la interfaz gráfica. Tkinter viene incluido con la mayoría de las instalaciones de escritorio de Python; en algunas distribuciones de Linux debe instalarse por separado:
   ```bash
   sudo apt install python3-tk
@@ -193,9 +199,26 @@ Cada campo de texto, casilla de verificación, botón de opción y menú despleg
 
 ## 6. Pestaña 1 — Banda / Fuente
 
-Esta pestaña define **para qué** está diseñando: las bandas de operación, las frecuencias (si son necesarias), y la estimación inicial de la longitud de hilo y contrapeso.
+Esta pestaña define **para qué** está diseñando: la topología de la antena, las bandas de operación, las frecuencias (si son necesarias), y la estimación inicial de las dos longitudes.
 
-### 6.1 Campo "Banda(s)"
+### 6.1 Sección "Tipo de antena"
+
+Es el **primer grupo de controles de la pestaña**, y a propósito: cambia lo que *significan* todos los demás campos del programa. Es también el único lugar de la GUI donde se elige la topología de la antena.
+
+- **Tipo de antena (desplegable)** — `long-wire` (predeterminado), `ocfd` o `carolina-windom`. CLI: `--antenna-type`.
+  - **`long-wire`** — el clásico radiador alimentado por un extremo más un conductor de retorno (contrapeso, jabalina de tierra o stub de coaxial). "Longitud de hilo" y "Longitud de contrapeso" significan exactamente lo que dicen, todos los controles de contrapeso de la pestaña Rango de búsqueda se aplican, y el dispositivo de adaptación es un **UnUn** cuya relación busca automáticamente el optimizador.
+  - **`ocfd`** — un **dipolo alimentado fuera del centro** (Windom). Ambos brazos radian y el dipolo es su propio camino de retorno, así que **"Longitud de hilo" y "Longitud de contrapeso" pasan a ser el brazo largo y el brazo corto**; `--no-counterpoise` se rechaza de plano, la sección "Trayectoria de retorno sin contrapeso" deja de aplicarse, y el dispositivo de adaptación pasa a ser un **balun** restringido a relaciones construibles.
+  - **`carolina-windom`** — un OCFD más una **sección vertical radiante** entre el balun y un aislador de línea. En el nodo de alimentación concurren tres conductores, de modo que la alimentación *straddle* es geométricamente imposible y el modelo de alimentación queda **forzado a `junction`** (el programa lo avisa al arrancar y recomienda `--converge`). Espere una convergencia más lenta y una incertidumbre publicada mayor en X.
+- **Offset** — brazo corto ÷ longitud total, solo para los tipos dipolo. Predeterminado `0.3333` (el tercio clásico del Windom); rango válido `0.10`–`0.49`. En `0.50` sería un dipolo alimentado al centro; por debajo de `0.10` es en la práctica una alimentación por extremo. CLI: `--offset`. Deshabilitado para `long-wire`.
+- **Tipo de balun** — `guanella` (predeterminado) o `ruthroff`: la topología del balun de línea de transmisión. Guanella es un balun de corriente y es la elección correcta para una alimentación balanceada en todo HF. CLI: `--balun-kind`. Solo tipos dipolo.
+- **Longitud vertical (m)** — solo Carolina Windom: longitud de la sección vertical radiante entre el balun y el aislador de línea. Predeterminado `3.0` m, mínimo `0.5` m. CLI: `--cw-vert-len`.
+- **Z del aislador (R,X)** — solo Carolina Windom: modela el aislador de línea como una impedancia serie **finita** (p. ej. `1000,2000`) en lugar de un circuito abierto ideal. Déjelo vacío para el caso ideal; complételo para estudiar qué le hace realmente a la antena un choke insuficiente. CLI: `--cw-isolator-z`.
+
+Los controles que el tipo elegido no puede usar se deshabilitan automáticamente. En línea de comandos las combinaciones equivalentes se **rechazan con un error explícito** en lugar de ignorarse en silencio, de modo que una ejecución nunca puede reportar una antena distinta de la que describen sus banderas — por ejemplo, `--antenna-type ocfd --no-counterpoise` se detiene con un error en lugar de modelar calladamente otra cosa.
+
+> La CLI incluye varias opciones más de tipo de antena que no tienen control propio en la GUI: `--total-len`, `--offset-min` / `--offset-max` / `--offset-step`, `--balun-ratio`, `--balun-core`, `--balun-turns`, `--feed-choke` y `--match-model`. Ver la [Sección 14](#14-la-interfaz-de-línea-de-comandos-cli--referencia-completa).
+
+### 6.2 Campo "Banda(s)"
 
 - **Qué es:** una lista de nombres de banda separados por comas, p. ej. `40m,20m,15m`.
 - **Valor por defecto:** `40m,20m,15m`.
@@ -203,34 +226,34 @@ Esta pestaña define **para qué** está diseñando: las bandas de operación, l
 - Los nombres de banda pueden ser una de las **bandas de radioaficionado conocidas** (vea el [Apéndice, Sección 18](#18-apéndice-bandas-de-radioaficionado-conocidas)) o un nombre personalizado arbitrario de su elección (p. ej. `miBandaEspecial`).
 - Justo debajo del campo, una línea de ayuda lista todos los nombres de banda reconocidos, como referencia.
 
-### 6.2 Campo "Frecuencias (MHz)"
+### 6.3 Campo "Frecuencias (MHz)"
 
 - **Qué es:** una lista de frecuencias centrales en MHz separadas por comas, una por banda, en el *mismo orden* que el campo Bandas, p. ej. `7.1,14.2,21.2`.
 - **Cuándo es opcional:** si todos los nombres escritos en "Banda(s)" son bandas *reconocidas* (vea la lista bajo el campo, o la [Sección 18](#18-apéndice-bandas-de-radioaficionado-conocidas)), puede dejar este campo vacío — el programa sustituye automáticamente la frecuencia central estándar para cada banda reconocida.
 - **Cuándo es obligatorio:** si usa cualquier nombre de banda personalizado/no reconocido, **debe** proporcionar aquí una frecuencia correspondiente, o el programa se detendrá con un error (en uso interactivo por línea de comandos puede pedírsela; la GUI pasará lo que se haya escrito, así que complételo).
 - Una línea de ayuda bajo el campo le recuerda esta regla.
 
-### 6.3 Campo "Longitud de hilo (m)"
+### 6.4 Campo "Longitud de hilo (m)"
 
 - **Qué es:** la longitud inicial, en metros, del hilo radiador inclinado — el punto central alrededor del cual se construye la ventana de búsqueda.
 - **Valor por defecto:** `21.0`.
 - **Obligatorio:** sí.
 - Una pista coloreada a la derecha del campo da un breve recordatorio de su función.
 
-### 6.4 Campo "Longitud de contrapeso (m)"
+### 6.5 Campo "Longitud de contrapeso (m)"
 
 - **Qué es:** la longitud inicial, en metros, del hilo de contrapeso — nuevamente, el centro de la ventana de búsqueda.
 - **Valor por defecto:** `5.0`.
 - **Obligatorio:** sí, **a menos que** haya desmarcado "Usar contrapeso" en la pestaña Rango de búsqueda (vea [7.3](#73-casilla-usar-contrapeso)), en cuyo caso este campo está deshabilitado (en gris) porque no hay contrapeso que dimensionar.
 
-### 6.5 Sección "Bandas activas"
+### 6.6 Sección "Bandas activas"
 
-- **Propósito:** permite indicarle al optimizador que *evalúe* una geometría en todas las bandas listadas en 6.1, pero que solo *puntúe* (clasifique candidatos según) un subconjunto de esas bandas.
+- **Propósito:** permite indicarle al optimizador que *evalúe* una geometría en todas las bandas listadas en 6.2, pero que solo *puntúe* (clasifique candidatos según) un subconjunto de esas bandas.
 - **Campo:** una lista de nombres de banda separados por comas, que debe ser un subconjunto de los nombres en "Banda(s)".
 - **Valor por defecto:** vacío, lo que significa que **todas** las bandas listadas en "Banda(s)" se tratan como activas y se usan para la puntuación.
 - **Ejemplo de uso:** quiere que el reporte también le muestre cómo se desempeña un diseño en 10 m por curiosidad, pero solo opera realmente en 40 m y 20 m — configure Banda(s) como `40m,20m,10m` y Bandas activas como `40m,20m`.
 
-### 6.6 "Idioma del optimizador" (idioma del reporte)
+### 6.7 "Idioma del optimizador" (idioma del reporte)
 
 - **Propósito:** elige en qué idioma se escriben la *salida de consola propia del optimizador y el reporte/PDF generado* — independiente del idioma de visualización propio de la GUI (vea [12.3](#123-cambio-de-idioma)).
 - **Opciones:** `auto` (detectar desde la configuración regional del sistema), `en`, `es`, `it`.
@@ -479,13 +502,15 @@ Aquí es donde se lanza el optimizador, se observa su progreso, y se salta direc
 
 ### 10.1 Sección "Varios"
 
-Tres casillas de verificación:
+Tres casillas de verificación y un campo numérico:
 
 - **Rápido** — agrega `--fast-run`, la política de aceleración completa del programa. **Predeterminado en la GUI: desmarcada**, de modo que un flujo de trabajo existente conserva exactamente el comportamiento — y exactamente las cifras — que tenía antes de que existiera esta casilla. Al activarla: resuelve decks `nec2c` independientes en paralelo (en el barrido, en la pasada de refinamiento fino y en la reclasificación por patrón de radiación); ejecuta el barrido con la segmentación gruesa, igual que `--fast`; recalcula menos candidatos a la densidad de publicación (el ganador y el frente de Pareto siempre lo son, pero la cola de la tabla TOP-N conserva su etiqueta de densidad de barrido, que el reporte imprime fila por fila); acorta a 3 la lista corta de reclasificación por radiación; y conserva solo el brazo de 0.5× del autochequeo de convergencia. Todas esas concesiones quedan visibles en el reporte — las impedancias publicadas del ganador **no** se ven afectadas, porque la densidad final no cambia. Tenga en cuenta que `--fast-run` **no** es lo mismo que `--fast`, que solo fija la segmentación del barrido y está conectado a los botones de Segmentación de la pestaña Física ([8.6](#86-sección-precisión--segmentación)).
 - **Silencioso** — agrega `--quiet` al comando, suprimiendo los mensajes detallados de progreso mientras conserva los resultados y advertencias importantes. **Predeterminado en la GUI: marcado.** Desmárquela para obtener el máximo detalle de diagnóstico.
 - **Sin preguntas interactivas** — agrega `--no-interactive`, indicándole al optimizador que falle inmediatamente con un mensaje de error si falta una entrada requerida, en lugar de pausar para hacer una pregunta en la terminal (que de todos modos nunca sería visible desde dentro de la GUI — por lo que normalmente esto debería permanecer marcado al ejecutarse desde la GUI).
 
-> **Solo en línea de comandos:** `--jobs N` / `-j N` fija cuántos procesos `nec2c` corren en paralelo. **No tiene efecto por sí solo** — la política de aceleración se activa como un todo, así que sin `--fast-run` la bandera se ignora y el programa imprime una nota avisándolo. Con `--fast-run` y sin `--jobs`, la cantidad de workers es de uno por núcleo de CPU, con un tope de 16. La GUI nunca emite `--jobs`; edite a mano el comando copiado si lo necesita.
+- **Jobs** — un campo numérico, **vacío por omisión**, que agrega `--jobs N`: cuántos procesos `nec2c` se resuelven en paralelo. Si se deja vacío la GUI no emite bandera alguna, lo que significa serial en modo normal y un worker por núcleo (con tope de 16) bajo **Rápido** — exactamente lo que ya hace cualquier línea de comandos guardada previamente.
+
+> **`--jobs` y `--fast-run` son ortogonales, y `--jobs` funciona por sí solo.** `--jobs N` le da *la misma respuesta, antes*: los resultados se almacenan por índice de grilla y se reensamblan en orden de grilla, así que la lista de candidatos, la clasificación, el frente de Pareto y todas las impedancias publicadas son idénticos bit a bit a una ejecución serial — solo cambia el reloj de pared. `--fast-run` compra velocidad calculando una respuesta *distinta y más barata*. Por eso `--jobs` se respeta en **ambos** modos; las versiones anteriores lo forzaban a 1 salvo que también se diera `--fast-run`, y esa restricción fue eliminada (costaba más justamente en modo normal, que es donde está el trabajo caro). Valores por defecto: `1` (serial) sin `--fast-run`, y un worker por núcleo de CPU con tope de 16 con `--fast-run` y sin `--jobs`. El programa imprime una nota si `N` supera la cantidad de núcleos detectados, y otra si el motor es en sí una compilación MPI (`nec2c-mpich`), donde N workers × M ranks sobrecarga gravemente la máquina.
 
 ### 10.2 Cuadro "Vista previa del comando"
 
@@ -658,7 +683,7 @@ Dos pequeños botones (`−` y `+`) junto a una etiqueta numérica permiten redu
 
 Un botón en el encabezado alterna el **idioma de visualización propio de la GUI** entre inglés, español e italiano. Esto es independiente de:
 
-- El ajuste "Idioma del optimizador" en la pestaña Banda/Fuente (Sección 6.6), que controla el idioma de la **salida de consola propia del optimizador y del reporte/PDF generado**, no de los menús y etiquetas de la GUI.
+- El ajuste "Idioma del optimizador" en la pestaña Banda/Fuente (Sección 6.7), que controla el idioma de la **salida de consola propia del optimizador y del reporte/PDF generado**, no de los menús y etiquetas de la GUI.
 - El parámetro CLI `--lang`, que solo afecta a las ejecuciones del script por línea de comandos sin la GUI.
 
 Cambiar de idioma reetiqueta cada pestaña, campo, menú desplegable y texto de ayuda en su lugar, sin perder nada de lo que se haya escrito — incluyendo el menú desplegable de Material del hilo, que se rastrea internamente por su valor canónico (en inglés) sin importar qué etiqueta se muestre en ese momento, de modo que la línea de comandos subyacente nunca se ve afectada por un cambio de idioma.
@@ -688,7 +713,7 @@ Una representación de mapa de calor/dispersión de toda la cuadrícula de búsq
 
 ### 13.3 El CSV (`optimizer_best.csv`)
 
-Resultados por banda legibles por máquina, solo para el candidato *ganador*, una fila por banda, con estas veinte columnas:
+Resultados por banda legibles por máquina, solo para el candidato *ganador*, una fila por banda. Una ejecución `long-wire` escribe estas veinte columnas:
 
 | Columna | Significado |
 |---|---|
@@ -707,6 +732,8 @@ Resultados por banda legibles por máquina, solo para el candidato *ganador*, un
 | `unun_ratio` | La relación de UnUn que usó la evaluación |
 | `avoidance_score`, `quality_rating` | Cuán cómodamente se aleja la geometría de una clase de resonancia problemática, y su calificación en estrellas |
 | `cp_len_m`, `cp_height_m`, `num_radials` | Longitud del contrapeso ganador, altura de la antena, cantidad de radiales |
+
+En una ejecución de **dipolo alimentado fuera del centro o Carolina Windom** (`--antenna-type ocfd|carolina-windom`) el archivo lleva **seis columnas adicionales** después de esas veinte, para que quien lo consuma pueda distinguir los dos esquemas sin adivinar a partir de los números: `antenna_type`, `total_len_m`, `offset_frac`, `short_arm_m`, `long_arm_m` y `vert_len_m` (esta última distinta de cero solo para un Carolina Windom). En ese esquema `wire_len_m` y `cp_len_m` son los **brazos largo y corto** del dipolo, no un radiador y un contrapeso — lea `antenna_type` antes de interpretarlos.
 
 Vale la pena mirar dos veces `R_wire_source` antes de devanar nada: se deriva de la procedencia que imprimen el reporte y el PDF, no de la mera existencia de un número, de modo que una ejecución hecha sin `nec2c` nunca puede declarar `nec2` aquí. **Este es el archivo que la pestaña UnUn/Transmatch lee automáticamente** para prepoblar su menú desplegable de banda y su tabla de derivaciones — y esa pestaña usa precisamente esta columna para advertirle cuando está a punto de dimensionar una adaptación a partir de estimaciones empíricas.
 
@@ -770,14 +797,28 @@ Esta tabla es la referencia autoritativa para los nombres exactos de los paráme
 | `--ground-model {sommerfeld,perfect}` | selección | `sommerfeld` | Modelo electromagnético de tierra. |
 | `--ground-cond S/M` | flotante | `0.005` | Conductividad del suelo, S/m. |
 | `--ground-diel EPS` | flotante | `13.0` | Permitividad relativa del suelo. |
-| `--feed-model {straddle,junction}` | opción | `straddle` | Dónde se ubica la tarjeta fuente de NEC-2 respecto de la unión radiador/contrapeso. Ver [8.7](#87-sección-modelo-de-alimentación). |
+| `--feed-model {straddle,junction}` | opción | `straddle` | Dónde se ubica la tarjeta fuente de NEC-2 respecto de la unión radiador/contrapeso. Ver [8.7](#87-sección-modelo-de-alimentación). Forzado a `junction` para `carolina-windom`. |
+| `--antenna-type {long-wire,ocfd,carolina-windom}` | opción | `long-wire` | Topología de la antena. Los tipos dipolo convierten `--wire-len` / `--cp-len` en los **brazos largo y corto** de un dipolo. Ver [6.1](#61-sección-tipo-de-antena). |
+| `--total-len M` | float | *(sin definir)* | Solo tipos dipolo: longitud total de **ambos** brazos. Junto con `--offset` deriva `--wire-len` y `--cp-len` — la forma habitual de especificar un OCFD. |
+| `--offset F` | float | `0.3333` | Solo tipos dipolo: brazo corto ÷ longitud total. Rango válido `0.10`–`0.49`. |
+| `--offset-min F` | float | `0.20` | Solo tipos dipolo: extremo inferior del barrido de offset. |
+| `--offset-max F` | float | `0.45` | Solo tipos dipolo: extremo superior del barrido de offset. |
+| `--offset-step F` | float | `0.01` | Solo tipos dipolo: paso del barrido de offset. |
+| `--balun-ratio N` | `auto` u opción | `auto` | Solo tipos dipolo: `auto`, o una de `2` / `4` / `6` / `9`. Una relación de balun es una decisión de hardware, así que la búsqueda se restringe a valores construibles. Se rechaza para `long-wire`, cuya relación de UnUn se busca automáticamente. |
+| `--balun-kind {guanella,ruthroff}` | opción | `guanella` | Topología del balun de línea de transmisión. Guanella es un balun de corriente, correcto para alimentación balanceada en todo HF. |
+| `--cw-vert-len M` | float | `3.0` | Solo Carolina Windom: longitud del radiador vertical entre el balun y el aislador de línea (mínimo `0.5` m). |
+| `--cw-isolator-z R,X` | dos floats | *(sin definir = abierto ideal)* | Solo Carolina Windom: modela el aislador de línea como impedancia serie finita, p. ej. `1000,2000`. |
+| `--balun-core CORE` | opción | `FT-240-31` | Toroide usado para el balun **y** el aislador de línea, de la base de núcleos de la [Sección 19](#19-apéndice-base-de-datos-de-núcleos-toroidales-pestaña-unun). |
+| `--balun-turns N` | entero | `10` | Vueltas por línea de transmisión en el balun. |
+| `--feed-choke` | bandera | off | Diseñar además un choke de modo común para la línea de alimentación. Siempre se diseña para `carolina-windom`, donde *es* el aislador de línea. |
+| `--match-model {ideal,real}` | opción | `ideal` | VSWR a través del dispositivo de adaptación: `ideal` divide R y X por la relación; `real` aplica además la reactancia magnetizante finita del diseño del balun. |
 | `--wire-diameter MM` | flotante | `2.0` mm | Diámetro del conductor en milímetros. |
 | `--wire-material {...}` | selección | `copper` | Uno de: `copper`, `aluminium`, `aluminum`, `brass`, `silver`, `steel`, `perfect`. |
 | `--wire-conductivity S/M` | flotante | *(del material)* | Anulación manual de la conductividad del conductor. |
 | `--segs-per-half-wave N` | entero | *(45 barrido / 180 fina)* | Anula tanto las densidades de segmentación de barrido como las de la ejecución final. Acotado a `5`–`400`. |
 | `--fast` | bandera | desactivado | Barre a densidad gruesa (21 seg/media onda); el ganador de todos modos se recalcula fino. Solo fija la segmentación — no es `--fast-run`. |
 | `--fast-run` | bandera | desactivado | La política de aceleración completa: resolución concurrente de `nec2c`, barrido con segmentación gruesa, cola TOP-N refinada más corta (≤ 5), lista corta de reclasificación por radiación más corta (≤ 3) y solo el brazo de 0.5× de `--converge`. Las impedancias publicadas siguen calculándose a la densidad fina. Ver [10.1](#101-sección-varios). |
-| `--jobs N` / `-j N` | entero | uno por núcleo, tope 16 | Procesos `nec2c` concurrentes. **Se ignora salvo que también se dé `--fast-run`** (el programa imprime una nota cuando lo ignora). |
+| `--jobs N` / `-j N` | entero | `1` (serial); uno por núcleo con tope 16 bajo `--fast-run` | Hilos de trabajo para decks `nec2c` independientes (barrido, refinamiento fino, reclasificación por radiación). Se respeta en **ambos** modos, normal y `--fast-run` — el paralelismo por sí solo no cambia ningún número publicado. |
 | `--converge` | bandera | desactivado | Vuelve a ejecutar el ganador a 0.5× y 2× la segmentación de trabajo (solo 0.5× con `--fast-run`) y reporta cuánto se mueven todavía R/X. Solo en modo NEC2. |
 | `--target-toa DEG` | flotante | `25.0` | Ángulo de elevación (grados) en el que se evalúa la bonificación de ganancia. |
 | `--gain-weight W` | flotante | `0.20` | Peso de la puntuación por dB de ganancia en el ángulo de despegue objetivo. |
@@ -827,6 +868,18 @@ python src/Long_Wire_Antenna.py --bands 40m,20m --wire-len 21.0 \
 ```bash
 python src/Long_Wire_Antenna.py --bands 40m,20m,15m --wire-len 21.0 --cp-len 5.0 \
     --mode nec2 --fast-run --jobs 8
+```
+
+**Un dipolo alimentado fuera del centro (Windom), especificado como es habitual — longitud total más offset:**
+```bash
+python src/Long_Wire_Antenna.py --bands 40m,20m,10m --antenna-type ocfd \
+    --total-len 41.0 --offset 0.3333 --balun-ratio 4
+```
+
+**Un Carolina Windom con un aislador de línea deliberadamente imperfecto, para ver cuánto cuesta:**
+```bash
+python src/Long_Wire_Antenna.py --bands 40m,20m,10m --antenna-type carolina-windom \
+    --total-len 41.0 --cw-vert-len 3.0 --cw-isolator-z 1000,2000 --converge
 ```
 
 **Afinar sobre una región prometedora en lugar de ampliar la búsqueda:**
@@ -894,7 +947,9 @@ Si el reporte advierte que la longitud del hilo (o del contrapeso) "puede necesi
 | Una banda del Transmatch muestra una ROE sospechosa que no parece corresponder con la reactancia real de la antena | El devanado puede estar operando por encima de su propia frecuencia de autorresonancia (SRF) | Verifique la tabla de resultados "Devanado" en busca de una advertencia de SRF; con **Referencia automática** marcada, la herramienta ya acorta el devanado de referencia para mantener la SRF por encima de su banda más alta con margen, pero un devanado de referencia introducido manualmente aún puede ser demasiado largo. |
 | No se producen salidas PNG | `matplotlib` (o, para los diagramas de radiación en particular, `numpy`) no está instalado | `pip install matplotlib numpy`, luego vuelva a ejecutar. |
 | El PDF se genera pero una sección de diagrama dice "no disponible" | `Pillow` (`PIL`) no está instalado | `pip install pillow`, luego vuelva a ejecutar — esto no requiere repetir la búsqueda, ya que solo afecta la incrustación de imágenes en el PDF. |
-| `--jobs` parece ignorarse y la ejecución sigue siendo serial | `--jobs` por sí solo nunca cambia el comportamiento — la política de aceleración se activa como un todo | Agregue `--fast-run` (o marque **Rápido** en la pestaña Ejecutar). El programa imprime una nota cada vez que ignora un valor de `--jobs` por este motivo. |
+| `--jobs` parece ignorarse y la ejecución sigue siendo serial | O está usando una versión anterior a la que describe este manual (donde `--jobs` se forzaba a 1 sin `--fast-run`), o el campo **Jobs** de la GUI está vacío — vacío significa serial en modo normal | Escriba una cantidad de workers en **Jobs** en la pestaña Ejecutar, o pase `--jobs N` explícitamente. En las versiones actuales la bandera funciona con o sin `--fast-run`. |
+| `--offset`, `--total-len` o `--balun-ratio` se rechaza con un error | Esas opciones solo se aplican a los tipos alimentados fuera del centro | Agregue `--antenna-type ocfd` (o `carolina-windom`). El programa rechaza la combinación a propósito, en lugar de ignorar la bandera y reportar otra antena. |
+| El reporte dice que el modelo de alimentación fue forzado a `junction` | Eligió `carolina-windom`, que tiene tres conductores en el nodo de alimentación, así que la alimentación *straddle* es geométricamente imposible | Es lo esperado, no un error. Agregue `--converge` en esa ejecución y verifique cuánto se mueven todavía R y X antes de dimensionar nada. |
 | `--test-window` parece no hacer nada | El refinamiento ocurre *en un reintento*, y el presupuesto de reintentos vale cero por defecto | Ponga **Reintentos máximos** (`--retry N`) en al menos 1. El refinamiento también se detiene cuando ambos pasos de grilla llegan al piso de `0.01` m. |
 | La vista previa del comando de la GUI muestra algo inesperado | Un campo quedó con texto obsoleto, o el estado de una casilla no coincide con lo que se pretendía | Todo lo que se muestra en el cuadro de vista previa del comando es exactamente lo que se ejecutará — inspecciónelo antes de ejecutar, y ajuste el campo correspondiente. |
 
