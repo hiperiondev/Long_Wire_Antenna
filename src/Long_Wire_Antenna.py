@@ -17516,6 +17516,7 @@ def _launch_gui() -> None:
             "rs_l_eta":           "ETA (this pass)",
             "rs_l_wire_win":      "Wire window",
             "rs_l_cp_win":        "CP window",
+            "rs_l_vert_win":      "Vertical radiator",
             "rs_l_grid":          "Grid",
             "rs_l_step":          "step",
             "rs_l_engine":        "Engine",
@@ -17537,6 +17538,7 @@ def _launch_gui() -> None:
             "rs_l_lasterr":       "Last error",
             "rs_l_files":         "Files written",
             "rs_k_initial":       "initial sweep (the window you configured)",
+            "rs_k_fixed":         "fixed",
             "rs_k_expand":        "retry / expansion (--retry: the window is pushed outwards)",
             "rs_k_refine":        "refinement (--test-window: the window zooms in, steps halved)",
             "rs_v_better":        "improved on the previous best \u2713",
@@ -18072,6 +18074,7 @@ def _launch_gui() -> None:
             "rs_l_eta":           "ETA (esta pasada)",
             "rs_l_wire_win":      "Ventana de hilo",
             "rs_l_cp_win":        "Ventana de CP",
+            "rs_l_vert_win":      "Radiador vertical",
             "rs_l_grid":          "Grilla",
             "rs_l_step":          "paso",
             "rs_l_engine":        "Motor",
@@ -18093,6 +18096,7 @@ def _launch_gui() -> None:
             "rs_l_lasterr":       "Último error",
             "rs_l_files":         "Archivos escritos",
             "rs_k_initial":       "barrido inicial (la ventana que usted configuró)",
+            "rs_k_fixed":         "fijo",
             "rs_k_expand":        "reintento / expansión (--retry: la ventana se empuja hacia afuera)",
             "rs_k_refine":        "refinamiento (--test-window: la ventana hace zoom, pasos a la mitad)",
             "rs_v_better":        "mejoró al mejor anterior \u2713",
@@ -18612,6 +18616,7 @@ def _launch_gui() -> None:
             "rs_l_eta": 'ETA (questa passata)',
             "rs_l_wire_win": 'Finestra del filo',
             "rs_l_cp_win": 'Finestra del CP',
+            "rs_l_vert_win": 'Radiatore verticale',
             "rs_l_grid": 'Griglia',
             "rs_l_step": 'passo',
             "rs_l_engine": 'Motore',
@@ -18633,6 +18638,7 @@ def _launch_gui() -> None:
             "rs_l_lasterr": 'Ultimo errore',
             "rs_l_files": 'File scritti',
             "rs_k_initial": 'scansione iniziale (la finestra configurata)',
+            "rs_k_fixed": 'fisso',
             "rs_k_expand": 'tentativo / espansione (--retry: la finestra viene spinta verso fuori)',
             "rs_k_refine": 'raffinamento (--test-window: la finestra fa zoom, passi dimezzati)',
             "rs_v_better": 'migliorato il migliore precedente \u2713',
@@ -19389,6 +19395,9 @@ def _launch_gui() -> None:
             self.w_min = self.w_max = None
             self.c_min = self.c_max = None
             self.w_step = self.c_step = None
+            self.v_min = self.v_max = None      # CW vertical radiator (m)
+            self.v_step = None
+            self.v_fixed = None                 # fixed --cw-vert-len (m)
             self.n_wire = self.n_cp = self.n_pairs = None
             self.done = self.total = None
             self.pct      = None
@@ -19479,6 +19488,10 @@ def _launch_gui() -> None:
         def last_pass(self):
             return self.passes[-1] if self.passes else None
 
+        @property
+        def is_carolina_windom(self):
+            return self.args.get("--antenna-type", "") == "carolina-windom"
+
         def elapsed(self):
             return (self.t_end or _time.time()) - self.t0
 
@@ -19501,6 +19514,15 @@ def _launch_gui() -> None:
                 self.cur.c_min  = self._arg_f("--cp-min")
                 self.cur.c_max  = self._arg_f("--cp-max")
                 self.cur.c_step = self._arg_f("--cp-step")
+                # Carolina Windom's vertical radiator is a third, independent
+                # axis (see --cw-vert-len / --cw-vert-len-min/-max/-step).
+                # It is only meaningful for --antenna-type carolina-windom,
+                # but seeding it unconditionally here is harmless for other
+                # profiles: the renderer below gates on the profile anyway.
+                self.cur.v_min   = self._arg_f("--cw-vert-len-min")
+                self.cur.v_max   = self._arg_f("--cw-vert-len-max")
+                self.cur.v_step  = self._arg_f("--cw-vert-len-step")
+                self.cur.v_fixed = self._arg_f("--cw-vert-len")
             # A refine/expand pass inherits the window it was announced with.
             return self.cur
 
@@ -21583,6 +21605,18 @@ def _launch_gui() -> None:
                 out += f"   {self.t('rs_l_step')} = {step:.3f} m"
             return out
 
+        def _rs_vert(self, p) -> str:
+            """Render a pass's CW vertical-radiator parameter: swept window
+            when --cw-vert-len-min/-max was used, else the fixed length, else
+            a dash if neither was ever seeded (non-CW profile / no data)."""
+            if p is None:
+                return self._rs_dash()
+            if p.v_min is not None or p.v_max is not None:
+                return self._rs_win(p.v_min, p.v_max, p.v_step)
+            if p.v_fixed is not None:
+                return f"{p.v_fixed:.3f} m ({self.t('rs_k_fixed')})"
+            return self._rs_dash()
+
         def _rs_row(self, key: str, value: str) -> str:
             lab = self.t(key)
             pad = " " * max(1, 24 - len(lab))
@@ -21675,6 +21709,8 @@ def _launch_gui() -> None:
                                  self._rs_win(cur.w_min, cur.w_max, cur.w_step)))
                 add(self._rs_row("rs_l_cp_win",
                                  self._rs_win(cur.c_min, cur.c_max, cur.c_step)))
+                if st.is_carolina_windom:
+                    add(self._rs_row("rs_l_vert_win", self._rs_vert(cur)))
                 if cur.n_pairs:
                     add(self._rs_row(
                         "rs_l_grid",
@@ -21715,6 +21751,8 @@ def _launch_gui() -> None:
                                  self._rs_win(last.w_min, last.w_max, last.w_step)))
                 add(self._rs_row("rs_l_cp_win",
                                  self._rs_win(last.c_min, last.c_max, last.c_step)))
+                if st.is_carolina_windom:
+                    add(self._rs_row("rs_l_vert_win", self._rs_vert(last)))
                 add(self._rs_row(
                     "rs_l_cands",
                     str(last.candidates if last.candidates is not None
