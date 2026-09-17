@@ -1943,6 +1943,16 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "es": "  ⚠  Diagrama constructivo omitido: {0}",
         "it": '  ⚠  Disegno costruttivo omesso: {0}',
     },
+    # Same class of failure as construction_plot_skipped, one call site
+    # later: by the time the NEC deck is exported the .txt report and the
+    # .csv are already on disk, so a geometry that cannot be turned into
+    # cards is reported and skipped, never unwound as a traceback over a
+    # run that otherwise finished.
+    "nec_deck_skipped": {
+        "en": "  ⚠  NEC2 deck not written: {0}",
+        "es": "  ⚠  Deck NEC2 no escrito: {0}",
+        "it": '  ⚠  Deck NEC2 non scritto: {0}',
+    },
     "done": {
         "en": "  Done.",
         "es": "  Listo.",
@@ -3986,6 +3996,18 @@ def parse_nec2_output(filepath: str, debug: bool = False,
                 m = _build_antinput_regex(offset).search(search_text)
             else:
                 m = _RE_ANTINPUT_FALLBACK.search(search_text)
+                if m:
+                    # No recognisable column-group header: R/X were bound by
+                    # position, assuming the classic nec2c order.  That is a
+                    # guess, and a wrong guess here returns a plausible number
+                    # rather than failing, so it is recorded instead of being
+                    # indistinguishable from a header-verified read.  nec2c
+                    # always prints the header, so this never fires for it.
+                    _fb_note = ("impedance columns read via fixed-layout "
+                                "fallback (no column header found) — verify "
+                                "against another engine's output")
+                    if _fb_note not in run.note:
+                        run.note = (run.note + " " + _fb_note).strip()
             if m:
                 fp.R_ohm = _safe_float(m.group(1))
                 fp.X_ohm = _safe_float(m.group(2))
@@ -5544,6 +5566,49 @@ def validate_feedpoint_height(
             f"galvanic ground connection is intended."
         )
     return z
+
+
+def validate_vertical_radiator_height(
+    wire_height_m: float,
+    vert_len_m: float,
+    freqs_mhz: List[float],
+    ground_model: str = DEFAULT_GROUND_MODEL,
+) -> None:
+    """
+    Fail-fast twin of the Carolina Windom check inside build_deck_geometry().
+
+    validate_feedpoint_height() only knows about the feedpoint itself, so it
+    passes a height that the deck builder will later reject: the vertical
+    radiator hangs FROM the feedpoint down to the line isolator, which means
+    the feedpoint must clear the 0.05·λ floor by at least the length of that
+    vertical section.  Without this the builder's (correct) rejection only
+    fires candidate-by-candidate, in the middle of the sweep, where it is
+    swallowed as a generic "geometry invalid" and reported as VSWR 999.
+
+    This mirrors the builder exactly — same floor constant
+    (GROUND_CLEAR_FRAC_SAFE, NOT the 0.02·λ hard limit used for the
+    feedpoint), same minimum-length clamp, same feedpoint clamp, same
+    wording — so the two checks cannot drift apart.  Call it once, as soon
+    as CW_VERT_LEN_M is resolved from --cw-vert-len.
+    """
+    if ground_model == "perfect":
+        # GN 1: wire ends may sit at z=0, so there is no floor to clear.
+        return
+    floor_m = ground_clearance_floor_m(freqs_mhz)
+    v_req   = max(float(vert_len_m), CW_VERT_LEN_MIN_M)
+    # build_deck_geometry() validates the feedpoint first and raises it to
+    # the floor when it sits between the hard limit and the floor; the
+    # vertical-radiator test then runs against that resolved height, not the
+    # requested one, so the same clamp is applied here.
+    z_near = max(float(wire_height_m), floor_m)
+    if (z_near - v_req) < floor_m:
+        raise FeedpointHeightError(
+            f"A {v_req:.2f} m vertical radiator needs the feedpoint at "
+            f"least {floor_m + v_req:.2f} m up ({GROUND_CLEAR_FRAC_SAFE:.2f}"
+            f"*lambda floor = {floor_m:.2f} m plus the vertical section); "
+            f"the feedpoint is at {z_near:.2f} m.  Raise --height, shorten "
+            f"--cw-vert-len, or drop the lowest band."
+        )
 
 
 def _dirs_collinear_opposite(ax: float, az: float,
@@ -7321,12 +7386,24 @@ def nec2_sweep(
                     ) from _io_err
                 except ValueError as _geom_err:
                     # Wire too short to reach the sloped far-end height — skip silently.
+                    # FeedpointHeightError is a ValueError SUBCLASS and lands
+                    # here too (Carolina Windom vertical radiator that does
+                    # not clear the ground floor, ground-rod return collapsing
+                    # at z=0).  It is caught by the same handler on purpose —
+                    # the candidate has no valid deck either way — but it is
+                    # not a length problem, so it must not be filed under the
+                    # same label: an isinstance test keeps the two apart
+                    # without duplicating the CandidateResult, and without the
+                    # except-ordering trap a second handler would introduce.
+                    _note = (f"feedpoint height invalid: {_geom_err}"
+                             if isinstance(_geom_err, FeedpointHeightError)
+                             else f"geometry invalid: {_geom_err}")
                     cand = CandidateResult(
                         wire_len_m=w, cp_len_m=c, cp_angle_deg=cp_angle_deg,
                         score_combined=999.0, score_vswr_raw=999.0,
                         score_vswr=999.0, score_avoidance=0.0,
                         nec2_used=False, nec2_ok=False,
-                        note=f"geometry invalid: {_geom_err}",
+                        note=_note,
                         wire_slope_end_m=wire_slope_end_m,
                         cp_end_z_m=_cp_z, cp_reach_m=_cp_x,
                     )
@@ -15103,6 +15180,28 @@ def main() -> None:
                                           CW_DEFAULT_VERT_LEN_M)),
                             CW_VERT_LEN_MIN_M)
         CW_ISOLATOR_Z = _parse_isolator_z(getattr(args, "cw_isolator_z", None))
+        # Fail fast.  The feedpoint check above ran before this block and
+        # knows nothing about the vertical radiator, so a Windom whose
+        # feedpoint cannot clear the floor BY THE LENGTH OF THE VERTICAL
+        # SECTION used to sweep every candidate to VSWR 999 and only surface
+        # the real reason afterwards, from build_deck_geometry(), as an
+        # unhandled traceback.  _gm_feed is the same effective ground model
+        # build_deck_geometry() resolves.  Empirical mode is deliberately not
+        # rejected here: its numbers do not come from a deck, and the NEC
+        # export is guarded at its own call site instead.
+        if mode == "nec2":
+            try:
+                validate_vertical_radiator_height(
+                    args.wire_height,
+                    CW_VERT_LEN_M,
+                    [cr.freq_mhz for cr in calc_rows],
+                    _gm_feed,
+                )
+            except FeedpointHeightError as _cw_err:
+                # The wording lives in one place (the builder) and is reused
+                # verbatim, so the two paths can never disagree.
+                print(f"{Fore.RED}ERROR: {_cw_err}{Style.RESET_ALL}")
+                sys.exit(1)
     if ANTENNA_TYPE != DEFAULT_ANTENNA_TYPE:
         print("  " + T("antenna_type_msg").format(_prof_run.key))
         if _prof_run.has_vertical_radiator:
@@ -16539,23 +16638,35 @@ def main() -> None:
             print(T("construction_plot_skipped").format(_cd_err))
 
     if ranked:
-        write_best_nec_deck(
-            best=ranked[0],
-            calc_rows=calc_rows,
-            out_path=args.out_nec,
-            wire_height_m=_wh_out,
-            wire_slope_end_m=_slope,
-            cp_height_m=_cph_out,
-            cp_end_height_m=cp_end_height,
-            ground_cond=args.ground_cond,
-            ground_diel=args.ground_diel,
-            wire_radius_m=WIRE_RADIUS_M,
-            use_counterpoise=use_counterpoise,
-            no_cp_return=args.no_cp_return,
-            cp_stub_len_m=args.cp_stub_len,
-            ground_model=args.ground_model,
-            segs_per_half_wave=segs_final,
-        )
+        try:
+            write_best_nec_deck(
+                best=ranked[0],
+                calc_rows=calc_rows,
+                out_path=args.out_nec,
+                wire_height_m=_wh_out,
+                wire_slope_end_m=_slope,
+                cp_height_m=_cph_out,
+                cp_end_height_m=cp_end_height,
+                ground_cond=args.ground_cond,
+                ground_diel=args.ground_diel,
+                wire_radius_m=WIRE_RADIUS_M,
+                use_counterpoise=use_counterpoise,
+                no_cp_return=args.no_cp_return,
+                cp_stub_len_m=args.cp_stub_len,
+                ground_model=args.ground_model,
+                segs_per_half_wave=segs_final,
+            )
+        except ValueError as _nec_err:
+            # Last of the four build_deck_geometry() call sites to be
+            # guarded; the sweep, the refinement pass, the construction
+            # diagram and plot_radiation_diagrams() all already treat a
+            # FeedpointHeightError (a ValueError subclass, e.g. a Carolina
+            # Windom vertical radiator that does not clear the ground floor
+            # at this height) as "this geometry has no deck", not as a fatal
+            # error.  The builder raises before the output file is opened, so
+            # nothing half-written is left behind, and the .txt report and
+            # the .csv are already on disk at this point.
+            print(T("nec_deck_skipped").format(_nec_err))
 
     if ranked and mode == "nec2" and nec2c_bin:
         print(T("radiation_generating"))
