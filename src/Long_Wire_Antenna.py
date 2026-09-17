@@ -21662,6 +21662,13 @@ def _launch_gui() -> None:
                 return
 
             # ── 1. what is running now ────────────────────────────────────
+            # By design this block never reports the CW vertical-radiator
+            # tested length (v_min/v_max/v_fixed). That belongs only to
+            # section 2 ("variables in play") and section 3 ("result of the
+            # last pass"), gated behind st.is_carolina_windom. Do not add an
+            # _rs_vert(...)/rs_l_vert_win row below — "now" is stage +
+            # progress + candidate wire/cp/band + rate/ETA + elapsed, and
+            # nothing else.
             add("■ " + self.t("rs_hdr_now") + "\n", "h")
             k_title, k_expl = self._rs_phase_keys(st)
             add(self._rs_row("rs_l_stage", self.t(k_title)), "k")
