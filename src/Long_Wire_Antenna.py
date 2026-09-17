@@ -15250,11 +15250,21 @@ def main() -> None:
     # ── Helper: run one sweep and return (results, ranked, pareto_ranked) ─
     def _run_sweep(w_min: float, w_max: float, cp_min: float, cp_max: float,
                    w_step: "float | None" = None,
-                   cp_step: "float | None" = None):
+                   cp_step: "float | None" = None,
+                   off_min: "float | None" = None,
+                   off_max: "float | None" = None,
+                   off_step: "float | None" = None):
         # w_step / cp_step default to the command-line grid steps; the
         # --test-window refinement loop passes progressively halved values.
         _w_step  = args.wire_step if w_step  is None else w_step
         _cp_step = args.cp_step   if cp_step is None else cp_step
+        # off_min/off_max/off_step default to the CLI offset window; the
+        # refine loop narrows and halves these the same way it does the arm
+        # window, once _cur_off_* (below) is updated in lock-step with
+        # _cur_w_*/_cur_cp_*.
+        _off_min  = float(args.offset_min)  if off_min  is None else off_min
+        _off_max  = float(args.offset_max)  if off_max  is None else off_max
+        _off_step = float(args.offset_step) if off_step is None else off_step
         # For dipole profiles (OCFD / Carolina Windom) the natural axes are
         # TOTAL LENGTH and OFFSET, not two independent arms — see the grid
         # build above main()'s initial banner. That grid must be the one
@@ -15264,9 +15274,7 @@ def main() -> None:
         # never searched the offset it claimed to.
         if _p_at.is_dipole:
             _grid = build_dipole_grid(w_min + cp_min, w_max + cp_max, _w_step,
-                                      float(args.offset_min),
-                                      float(args.offset_max),
-                                      float(args.offset_step))
+                                      _off_min, _off_max, _off_step)
         else:
             _grid = build_search_grid(w_min, w_max, _w_step,
                                       cp_min, cp_max, _cp_step,
@@ -15360,6 +15368,15 @@ def main() -> None:
     _cur_w_max   = args.wire_max
     _cur_cp_min  = args.cp_min
     _cur_cp_max  = args.cp_max
+    # Offset-axis refine state (dipole profiles only). _run_sweep() always
+    # derives the (total, offset) grid it actually needs from these four
+    # values plus the arm window, so --retry / --test-window must track and
+    # narrow them the same way it already tracks the arm window — otherwise
+    # the offset axis stays pinned at its original CLI resolution through
+    # every refine pass while the arm/total-length axis keeps halving.
+    _cur_off_min  = float(args.offset_min)
+    _cur_off_max  = float(args.offset_max)
+    _cur_off_step = float(args.offset_step)
 
     _retry_used  = 0
 
@@ -15408,6 +15425,7 @@ def main() -> None:
         nonlocal results, ranked, pareto_ranked, pareto, _retry_used
         nonlocal _cur_w_min, _cur_w_max, _cur_cp_min, _cur_cp_max
         nonlocal _cur_w_step, _cur_cp_step
+        nonlocal _cur_off_min, _cur_off_max, _cur_off_step
         _improved = False
         if not ranked:
             return False
@@ -15416,8 +15434,15 @@ def main() -> None:
         while _retry_used < _retry_max:
             _new_w_step  = _halved_step(_cur_w_step)
             _new_cp_step = _halved_step(_cur_cp_step)
+            # The offset axis only exists for dipole profiles; for anything
+            # else it stays fixed at its CLI value and is never a limiting
+            # factor on the floor check below.
+            _new_off_step = (_halved_step(_cur_off_step) if _p_at.is_dipole
+                              else _cur_off_step)
             if (abs(_new_w_step - _cur_w_step) < 1e-12
-                    and abs(_new_cp_step - _cur_cp_step) < 1e-12):
+                    and abs(_new_cp_step - _cur_cp_step) < 1e-12
+                    and (not _p_at.is_dipole
+                         or abs(_new_off_step - _cur_off_step) < 1e-12)):
                 _hit_floor = True
                 print(f"\n  {Fore.GREEN}"
                       + T("refine_floor").format(REFINE_STEP_FLOOR_M, _retry_used)
@@ -15441,6 +15466,20 @@ def main() -> None:
             else:
                 _c_lo, _c_hi = _cur_cp_min, _cur_cp_max
 
+            # Offset window: same bounding-box-plus-pad treatment, over the
+            # top N's offset_frac, clamped to the offset range actually
+            # swept so far. Falls back to the unchanged CLI window for
+            # non-dipole profiles, where offset_frac is not meaningful.
+            if _p_at.is_dipole:
+                _off_lo = max(_cur_off_min,
+                              round(min(r.offset_frac for r in _top) - _cur_off_step, 6))
+                _off_hi = min(_cur_off_max,
+                              round(max(r.offset_frac for r in _top) + _cur_off_step, 6))
+                _off_lo = max(OCFD_OFFSET_MIN, _off_lo)
+                _off_hi = min(OCFD_OFFSET_MAX, max(_off_hi, _off_lo))
+            else:
+                _off_lo, _off_hi = _cur_off_min, _cur_off_max
+
             _retry_used += 1
             print(f"  {Fore.YELLOW}"
                   + T("refine_pass").format(_retry_used, _retry_max,
@@ -15454,6 +15493,7 @@ def main() -> None:
             _new_results, _new_ranked, _new_pareto_ranked = _run_sweep(
                 _w_lo, _w_hi, _c_lo, _c_hi,
                 w_step=_new_w_step, cp_step=_new_cp_step,
+                off_min=_off_lo, off_max=_off_hi, off_step=_new_off_step,
             )
 
             # The window and the resolution advance whatever the outcome; only
@@ -15461,6 +15501,7 @@ def main() -> None:
             _cur_w_min, _cur_w_max   = _w_lo, _w_hi
             _cur_cp_min, _cur_cp_max = _c_lo, _c_hi
             _cur_w_step, _cur_cp_step = _new_w_step, _new_cp_step
+            _cur_off_min, _cur_off_max, _cur_off_step = _off_lo, _off_hi, _new_off_step
 
             if (_new_ranked
                     and _new_ranked[0].score_combined < ranked[0].score_combined):
@@ -15589,7 +15630,10 @@ def main() -> None:
         The grid steps are published as well: in --test-window mode they shrink
         with every refine pass, and the report/plot legends must quote the
         resolution the winning candidate was actually found at, not the one
-        typed on the command line.
+        typed on the command line. The offset window/step is published the
+        same way for dipole profiles — otherwise a --test-window run that
+        genuinely narrowed the offset axis (see _refine_window()) would still
+        have the report and CSV quote the original, coarser CLI offset step.
         """
         args.wire_min  = _cur_w_min
         args.wire_max  = _cur_w_max
@@ -15597,6 +15641,10 @@ def main() -> None:
         args.cp_max    = _cur_cp_max
         args.wire_step = _cur_w_step
         args.cp_step   = _cur_cp_step
+        if _p_at.is_dipole:
+            args.offset_min  = _cur_off_min
+            args.offset_max  = _cur_off_max
+            args.offset_step = _cur_off_step
 
     _expand_window()
     _publish_bounds()
