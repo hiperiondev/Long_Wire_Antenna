@@ -5622,6 +5622,56 @@ def validate_vertical_radiator_height(
         )
 
 
+def vertical_ceiling_m(wire_height_m: float, freqs_mhz: List[float],
+                       ground_model: str = DEFAULT_GROUND_MODEL) -> float:
+    """Highest vertical-radiator length usable at this feedpoint height.
+
+    Mirrors the inequality validate_vertical_radiator_height() enforces
+    (feedpoint - vert_len >= ground_clearance_floor_m), solved for vert_len
+    instead of raised as an error.  Used to clamp/validate a swept vertical
+    window BEFORE launching the sweep, rather than discovering the same
+    limit one FeedpointHeightError at a time in the middle of a few thousand
+    NEC-2 solves.  Returns +inf for the perfect-ground model, where wire ends
+    may sit at z=0 and there is no floor to clear (same escape hatch
+    validate_vertical_radiator_height() takes).
+    """
+    if ground_model == "perfect":
+        return math.inf
+    floor_m = ground_clearance_floor_m(freqs_mhz)
+    z_near = max(float(wire_height_m), floor_m)
+    return z_near - floor_m
+
+
+def validate_vertical_sweep_range(vert_min: float, vert_max: float,
+                                  wire_height_m: float,
+                                  freqs_mhz: List[float],
+                                  ground_model: str = DEFAULT_GROUND_MODEL,
+                                  ) -> float:
+    """Fail fast if the requested vertical-sweep window has no valid point,
+    otherwise return vert_max clamped to the physical ceiling.
+
+    Raises ValueError with an actionable message (mirroring
+    validate_vertical_radiator_height()'s wording) when even the SHORTEST
+    requested vertical length cannot clear the ground floor at this
+    feedpoint height. A window whose upper end merely exceeds the ceiling is
+    not an error: it is silently (but audibly, via the returned value) clamped
+    so the caller can log the effective max before the sweep starts, exactly
+    as Section 5.3 of the design note describes.
+    """
+    ceiling_m = vertical_ceiling_m(wire_height_m, freqs_mhz, ground_model)
+    if vert_min > ceiling_m:
+        floor_m = (0.0 if ground_model == "perfect"
+                   else ground_clearance_floor_m(freqs_mhz))
+        raise FeedpointHeightError(
+            f"--cw-vert-len-min ({vert_min:.2f} m) exceeds the physical "
+            f"maximum vertical-radiator length for --height {wire_height_m:.2f} m "
+            f"in these bands ({ceiling_m:.2f} m, floor {floor_m:.2f} m). "
+            f"Raise --height, lower --cw-vert-len-min/--cw-vert-len-max, or "
+            f"drop the lowest band."
+        )
+    return min(vert_max, ceiling_m) if math.isfinite(ceiling_m) else vert_max
+
+
 def _dirs_collinear_opposite(ax: float, az: float,
                              bx: float, bz: float,
                              tol: float = FEED_COLLINEAR_TOL) -> bool:
@@ -7084,6 +7134,51 @@ def _parse_isolator_z(spec: Optional[str]) -> Optional[Tuple[float, float]]:
         )
 
 
+def build_dipole_grid_3d(total_min: float, total_max: float, total_step: float,
+                         off_min: float, off_max: float, off_step: float,
+                         vert_min: float, vert_max: float, vert_step: float,
+                         ) -> List[Tuple[float, float, float]]:
+    """(long_arm, short_arm, vert_len) triples for a Carolina-Windom-style
+    off-centre-fed dipole whose vertical radiator length is also swept.
+
+    Built on top of build_dipole_grid() rather than duplicating its dedup /
+    clamping logic: the (long, short) pairs are generated exactly as before,
+    then crossed with the vertical-length axis via _grid_axis(), the same
+    inclusive-endpoint sampler build_search_grid() already relies on.  A
+    degenerate vertical window (vert_min == vert_max, or vert_step >= the
+    window width) collapses to a single vertical value, which is exactly the
+    scalar-length behaviour --cw-vert-len has always had — so this function
+    is a strict superset, never a behaviour change, when the caller passes a
+    one-point vertical window.
+    """
+    pairs = build_dipole_grid(total_min, total_max, total_step,
+                               off_min, off_max, off_step)
+    verts = _grid_axis(vert_min, vert_max, vert_step)
+    if not verts:
+        raise ValueError("vertical-radiator search grid is empty")
+    return [(long_, short, v) for (long_, short) in pairs for v in verts]
+
+
+def build_search_grid_3d(wire_min: float, wire_max: float, wire_step: float,
+                         cp_min: float, cp_max: float, cp_step: float,
+                         vert_min: float, vert_max: float, vert_step: float,
+                         use_counterpoise: bool = True,
+                         ) -> List[Tuple[float, float, float]]:
+    """(wire_len, cp_len, vert_len) triples — the non-dipole-profile twin of
+    build_dipole_grid_3d(). Only meaningful for antenna types that actually
+    have a vertical radiator (Carolina Windom); kept separate from
+    build_search_grid() rather than adding an optional third axis to it, so
+    every existing (2-tuple) caller of build_search_grid() is untouched.
+    """
+    pairs = build_search_grid(wire_min, wire_max, wire_step,
+                              cp_min, cp_max, cp_step,
+                              use_counterpoise=use_counterpoise)
+    verts = _grid_axis(vert_min, vert_max, vert_step)
+    if not verts:
+        raise ValueError("vertical-radiator search grid is empty")
+    return [(w, c, v) for (w, c) in pairs for v in verts]
+
+
 def build_dipole_grid(total_min: float, total_max: float, total_step: float,
                       off_min: float, off_max: float, off_step: float
                       ) -> List[Tuple[float, float]]:
@@ -7190,7 +7285,7 @@ def build_search_grid(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def empirical_sweep(
-    grid: List[Tuple[float, float]],
+    grid: "List[Tuple[float, float]] | List[Tuple[float, float, float]]",
     calc_rows: List[CalcRow],
     unun_ratio: float,
     wire_height_m: float = DEFAULT_HEIGHT_M,
@@ -7200,7 +7295,13 @@ def empirical_sweep(
     use_counterpoise: bool = True,
     verbose: bool = False,
 ) -> List[CandidateResult]:
+    """Grid points are (wire, cp) 2-tuples, or (wire, cp, vert) 3-tuples for
+    a Carolina Windom whose vertical radiator is being swept.  The shape is
+    read off the first grid point rather than threaded through as a separate
+    flag, so every existing 2-tuple caller keeps working untouched.
+    """
     _prof_emp = antenna_profile()
+    _has_vert_axis = bool(grid) and len(grid[0]) == 3
     if _prof_emp.is_dipole:
         # The dipole model DOES depend on the offset, so the counterpoise
         # warning below is simply untrue here — and replacing it with a more
@@ -7211,6 +7312,23 @@ def empirical_sweep(
         if _prof_emp.has_vertical_radiator:
             print(f"  {Fore.YELLOW}WARNING: "
                   + T("warn_empirical_cw_vertical") + f"{Style.RESET_ALL}\n")
+            # Section 6.3: the empirical impedance formulas do not model a
+            # third, orthogonal conductor at all, so sweeping the vertical
+            # length here would silently score every value identically and
+            # let the run "discover" a fake optimum. Reject outright rather
+            # than let that happen quietly.
+            if _has_vert_axis:
+                _distinct_v = {round(pt[2], 3) for pt in grid}
+                if len(_distinct_v) > 1:
+                    raise ValueError(
+                        "--mode empirical cannot sweep --cw-vert-len-min/"
+                        "-max/-step: the empirical impedance formulas do not "
+                        "model the vertical radiator as a separate conductor, "
+                        "so every vertical length would score identically and "
+                        "any 'optimum' reported would not be real. Re-run "
+                        "with --mode nec2, or drop the vertical-sweep flags "
+                        "to fix the vertical length at a single value."
+                    )
     elif use_counterpoise:
         print(f"\n  {Fore.YELLOW}WARNING: the empirical impedance formulas depend only on "
               f"the radiator length and the frequency — the counterpoise is NOT modelled. "
@@ -7227,7 +7345,9 @@ def empirical_sweep(
     cp_z_target = _cp_end_z(wire_height_m, cp_end_height_m, cp_height_m, WIRE_RADIUS_M)
     results = []
     total = len(grid)
-    for i, (w, c) in enumerate(grid):
+    for i, _pt in enumerate(grid):
+        w, c = _pt[0], _pt[1]
+        v = _pt[2] if _has_vert_axis else None
         if verbose and i % max(1, total // 20) == 0:
             pct = i * 100 // total
             print(T("sweep_empirical_pct").format(pct, i, total, w, c), end="\r")
@@ -7243,6 +7363,7 @@ def empirical_sweep(
             cp_angle_deg=_cang,
             cp_end_z_m=_cz,
             cp_reach_m=_cx,
+            vert_len_m=v,
         )
         r.wire_slope_end_m = wire_slope_end_m
         results.append(r)
@@ -7256,7 +7377,7 @@ def empirical_sweep(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def nec2_sweep(
-    grid: List[Tuple[float, float]],
+    grid: "List[Tuple[float, float]] | List[Tuple[float, float, float]]",
     calc_rows: List[CalcRow],
     unun_ratio: float,
     nec2c_bin: str,
@@ -7278,7 +7399,15 @@ def nec2_sweep(
     Full NEC2 sweep.  For each (wire, cp) pair we run nec2c once on the deck
     built from the requested geometry (radiator far-end height + counterpoise
     far-end height), then score it with the NEC2 impedance data.
+
+    Grid points are (wire, cp) 2-tuples, or (wire, cp, vert) 3-tuples when
+    the vertical radiator of a Carolina Windom is being swept per-candidate
+    (build_search_grid_3d / build_dipole_grid_3d). The shape is detected once
+    from the first grid point; every 2-tuple caller keeps working exactly as
+    before, since a missing third element simply means "use the module-level
+    CW_VERT_LEN_M for every candidate", the pre-existing behaviour.
     """
+    _has_vert_axis = bool(grid) and len(grid[0]) == 3
     active = [r for r in calc_rows if r.active]
     if not active:
         raise ValueError("No active bands defined")
@@ -7319,8 +7448,15 @@ def nec2_sweep(
 
     with tempfile.TemporaryDirectory(prefix="nec2opt_") as tmpdir:
 
-        def _eval_point(w: float, c: float):
+        def _eval_point(w: float, c: float, v: Optional[float] = None):
             """Evaluate ONE grid point and return (candidate, geometry warnings).
+
+            `v`, when given, is the vertical-radiator length for THIS
+            candidate — it is threaded straight through to write_nec_deck()
+            and score_candidate(), which have accepted vert_len_m all along;
+            passing None (the default, used by every 2-axis grid) preserves
+            the old behaviour of falling back to the module-level
+            CW_VERT_LEN_M inside those two functions.
 
             The body is exactly the one that used to sit inline in the sweep
             loop; it was lifted into a function so that the serial path and the
@@ -7371,6 +7507,7 @@ def nec2_sweep(
                         cp_stub_len_m=cp_stub_len_m,
                         ground_model=ground_model,
                         segs_per_half_wave=segs_per_half_wave,
+                        vert_len_m=v,
                     )
                     # The geometry builder may have clamped a wire end away from
                     # the ground singularity.  The messages are handed back to
@@ -7483,6 +7620,7 @@ def nec2_sweep(
                     cp_end_z_m=_cp_z,
                     cp_reach_m=_cp_x,
                     nec2_strict=True,
+                    vert_len_m=v,
                 )
                 cand.wire_slope_end_m = wire_slope_end_m
                 cand.segs_per_half_wave = _geo.segs_per_half_wave
@@ -7532,8 +7670,10 @@ def nec2_sweep(
             _executor = ThreadPoolExecutor(max_workers=min(_jobs, total))
             try:
                 _futs = {}
-                for _i, (_w, _c) in enumerate(grid):
-                    _futs[_executor.submit(_eval_point, _w, _c)] = _i
+                for _i, _pt in enumerate(grid):
+                    _w, _c = _pt[0], _pt[1]
+                    _v = _pt[2] if _has_vert_axis else None
+                    _futs[_executor.submit(_eval_point, _w, _c, _v)] = _i
                 # Iterating in submission order keeps the progress counter
                 # monotonic and the error surfaced first deterministic; the
                 # pool itself is still fully concurrent.
@@ -7555,7 +7695,9 @@ def nec2_sweep(
                     _executor.shutdown(wait=True)
             results.extend([_c for _c in _slots if _c is not None])
         else:
-            for w, c in grid:
+            for _pt in grid:
+                w, c = _pt[0], _pt[1]
+                v = _pt[2] if _has_vert_axis else None
                 done += 1
                 if verbose:
                     if use_counterpoise:
@@ -7567,7 +7709,7 @@ def nec2_sweep(
                     print(T("sweep_nec2_progress").format(
                         done, total, w, (c if use_counterpoise else 0.0),
                         _pv_label), end="\r")
-                _cand, _msgs = _eval_point(w, c)
+                _cand, _msgs = _eval_point(w, c, v)
                 _report_warnings(_msgs)
                 results.append(_cand)
 
@@ -8757,6 +8899,7 @@ def write_report(
     target_toa_deg: float = DEFAULT_TARGET_TOA_DEG,
     jobs: int = 1,
     fast_run: bool = False,
+    vert_range: Optional[Tuple[float, float, float]] = None,
 ) -> str:
     active = [r for r in calc_rows if r.active]
     bands  = [cr.band for cr in active]
@@ -8802,6 +8945,14 @@ def write_report(
             ln(T("report_return_path").format(
                 "ground rod → z=0 (GN 1)" if no_cp_return == "ground-rod"
                 else f"coax-braid stub {cp_stub_len_m:.2f} m"))
+
+    # Vertical-radiator sweep range: only printed when the caller actually
+    # swept it (vert_range is None for the fixed-length, backward-compatible
+    # case — CW_VERT_LEN_M is already reported per-candidate further below
+    # via lbl_vertical_radiator, so a fixed run needs no extra line here).
+    if vert_range is not None and abs(vert_range[1] - vert_range[0]) > 1e-9:
+        ln(f"Vertical radiator sweep    : {vert_range[0]:.2f} - "
+           f"{vert_range[1]:.2f} m (step {vert_range[2]:.2f} m)")
 
     if mode == "nec2":
         _gm_eff = ("perfect" if (not use_counterpoise and no_cp_return == "ground-rod")
@@ -10756,14 +10907,36 @@ def plot_results(
 
     active = [r for r in calc_rows if r.active]
 
-    fig = plt.figure(figsize=(18, 14))
+    # Vertical-radiator sweep detection: a Carolina Windom run swept the
+    # vertical when more than one distinct vert_len_m shows up across the
+    # candidates. Section 5.6 option (1)+(3): the main scatter is SLICED to
+    # the winning candidate's vertical length (so it still reads as a clean
+    # 2-axis heatmap), and a marginal panel showing score vs. vertical length
+    # is added in its own row — this only grows the figure, it never
+    # reshuffles the panels a fixed-vertical run already had, so existing
+    # output is pixel-identical when the vertical was never swept.
+    _distinct_v = {round(r.vert_len_m, 3) for r in results
+                   if getattr(r, "vert_len_m", 0.0)}
+    _vert_swept = len(_distinct_v) > 1
+    _best_v = round(ranked[0].vert_len_m, 3) if (ranked and _vert_swept) else None
+    _plot_results_src = (
+        [r for r in results if round(r.vert_len_m, 3) == _best_v]
+        if _best_v is not None else results
+    )
+    _plot_pareto_src = (
+        [r for r in pareto if round(r.vert_len_m, 3) == _best_v]
+        if _best_v is not None else pareto
+    )
+
+    fig = plt.figure(figsize=(18, 14 + (4 if _vert_swept else 0)))
     fig.suptitle(T("plot_title"), fontsize=14, fontweight="bold")
-    gs = gridspec.GridSpec(3, 3, figure=fig, hspace=0.55, wspace=0.4)
+    _n_rows = 4 if _vert_swept else 3
+    gs = gridspec.GridSpec(_n_rows, 3, figure=fig, hspace=0.55, wspace=0.4)
 
     ax1 = fig.add_subplot(gs[0, :2])
-    ws = [r.wire_len_m for r in results]
-    cs = [r.cp_len_m   for r in results]
-    sc = [r.score_combined for r in results]
+    ws = [r.wire_len_m for r in _plot_results_src]
+    cs = [r.cp_len_m   for r in _plot_results_src]
+    sc = [r.score_combined for r in _plot_results_src]
     sc_clipped = [min(s, 5.0) for s in sc]
     # NOTE: if every candidate scores >= 5.0, sc_clipped is uniformly 5.0 and
     # vmin==vmax==5.0 here, which degenerates the color scale to a single
@@ -10774,8 +10947,8 @@ def plot_results(
     scatter = ax1.scatter(ws, cs, c=sc_clipped, cmap="RdYlGn_r",
                           s=20, alpha=0.6, vmin=min(sc_clipped), vmax=5.0)
     fig.colorbar(scatter, ax=ax1, label=T("plot_colorbar"))
-    pw = [r.wire_len_m for r in pareto]
-    pc = [r.cp_len_m   for r in pareto]
+    pw = [r.wire_len_m for r in _plot_pareto_src]
+    pc = [r.cp_len_m   for r in _plot_pareto_src]
     ax1.scatter(pw, pc, marker="*", s=120, c="blue", zorder=5, label=T("plot_pareto_label"))
     if ranked:
         ax1.scatter(ranked[0].wire_len_m, ranked[0].cp_len_m,
@@ -10786,7 +10959,9 @@ def plot_results(
                      annotation_clip=True)
     ax1.set_xlabel(T("plot_xlabel_wire"))
     ax1.set_ylabel(T("plot_ylabel_cp"))
-    ax1.set_title(T("plot_heatmap_title"))
+    ax1.set_title(T("plot_heatmap_title")
+                  + (f"  (vertical fixed at {_best_v:.2f} m — optimum)"
+                     if _best_v is not None else ""))
     # Legend placed outside the axes (to the right of the attached colorbar)
     # so it never sits on top of a data point on a coarse grid; framealpha
     # keeps it legible without fully hiding whatever is behind it.
@@ -10795,11 +10970,11 @@ def plot_results(
     ax1.grid(True, alpha=0.3)
 
     ax2 = fig.add_subplot(gs[0, 2])
-    ax2.scatter([r.score_vswr_raw for r in results],
-                [r.score_avoidance_active for r in results],
+    ax2.scatter([r.score_vswr_raw for r in _plot_results_src],
+                [r.score_avoidance_active for r in _plot_results_src],
                 s=10, alpha=0.4, color="gray", label="All")
-    ax2.scatter([r.score_vswr_raw for r in pareto],
-                [r.score_avoidance_active for r in pareto],
+    ax2.scatter([r.score_vswr_raw for r in _plot_pareto_src],
+                [r.score_avoidance_active for r in _plot_pareto_src],
                 s=60, marker="*", color="blue", label="Pareto")
     if ranked:
         ax2.scatter(ranked[0].score_vswr_raw, ranked[0].score_avoidance_active,
@@ -10850,6 +11025,32 @@ def plot_results(
         ax.set_ylabel(T("plot_vswr_ylabel"))
         ax.set_ylim(0.9, _vswr_top)
         ax.grid(True, alpha=0.3, axis="y")
+
+    # Marginal panel (Section 5.6 option 3): best achievable score for each
+    # swept vertical-radiator length, collapsing over (wire, cp). Answers
+    # "how sensitive is the result to the vertical length?" directly, rather
+    # than making the reader infer it from the sliced heatmap above. Only
+    # drawn when the vertical was actually swept — a fixed-length run has no
+    # extra row and its figure comes out unchanged from before this feature.
+    if _vert_swept:
+        axv = fig.add_subplot(gs[_n_rows - 1, :])
+        _v_vals = sorted(_distinct_v)
+        _v_best_score = []
+        for _v in _v_vals:
+            _at_v = [r.score_combined for r in results
+                     if round(r.vert_len_m, 3) == _v]
+            _v_best_score.append(min(_at_v) if _at_v else float("nan"))
+        axv.plot(_v_vals, [min(s, 5.0) for s in _v_best_score],
+                 marker="o", color="teal")
+        if _best_v is not None:
+            axv.axvline(_best_v, color="black", linestyle="--", linewidth=1,
+                       label=f"Best: {_best_v:.2f} m")
+            axv.legend(fontsize=8)
+        axv.set_xlabel("Vertical radiator length (m)")
+        axv.set_ylabel(T("plot_colorbar"))
+        axv.set_title("Best achievable score vs. vertical-radiator length "
+                      "(collapsed over wire/cp)")
+        axv.grid(True, alpha=0.3)
 
     plt.savefig(out_png, dpi=150, bbox_inches="tight")
     plt.close()
@@ -14386,6 +14587,26 @@ def _build_parser() -> argparse.ArgumentParser:
     g_ant.add_argument("--cw-vert-len", metavar="M", type=float,
                        default=CW_DEFAULT_VERT_LEN_M, dest="cw_vert_len",
                        help=T("help_cw_vert_len").format(CW_DEFAULT_VERT_LEN_M))
+    g_ant.add_argument("--cw-vert-len-min", metavar="M", type=float,
+                       default=None, dest="cw_vert_len_min",
+                       help="Minimum vertical-radiator length to sweep, in "
+                            "metres (carolina-windom only). Passing this, "
+                            "--cw-vert-len-max, or --cw-vert-len-step "
+                            "switches the vertical radiator from a fixed "
+                            "length to a swept third axis; --cw-vert-len "
+                            "alone keeps the previous fixed-length behaviour "
+                            "unchanged.")
+    g_ant.add_argument("--cw-vert-len-max", metavar="M", type=float,
+                       default=None, dest="cw_vert_len_max",
+                       help="Maximum vertical-radiator length to sweep, in "
+                            "metres (carolina-windom only). Clamped down to "
+                            "the physical ceiling for --height/the active "
+                            "bands if it exceeds it.")
+    g_ant.add_argument("--cw-vert-len-step", metavar="M", type=float,
+                       default=0.25, dest="cw_vert_len_step",
+                       help="Step size, in metres, for the vertical-radiator "
+                            "sweep (default: 0.25 m). Only used when "
+                            "--cw-vert-len-min/-max is given.")
     g_ant.add_argument("--cw-isolator-z", metavar="R,X", default=None,
                        dest="cw_isolator_z",
                        help=T("help_cw_isolator_z"))
@@ -14572,6 +14793,8 @@ def main() -> None:
             f"Use --antenna-type long-wire for a single-conductor antenna.")
     if not _p_at.has_vertical_radiator:
         for _flag, _dest in (("--cw-vert-len", "cw_vert_len"),
+                             ("--cw-vert-len-min", "cw_vert_len_min"),
+                             ("--cw-vert-len-max", "cw_vert_len_max"),
                              ("--cw-isolator-z", "cw_isolator_z")):
             _dflt = (CW_DEFAULT_VERT_LEN_M if _dest == "cw_vert_len" else None)
             if getattr(args, _dest, _dflt) != _dflt:
@@ -15230,6 +15453,68 @@ def main() -> None:
                 # verbatim, so the two paths can never disagree.
                 print(f"{Fore.RED}ERROR: {_cw_err}{Style.RESET_ALL}")
                 sys.exit(1)
+        # ── Vertical-radiator SWEEP window ──────────────────────────────
+        # Precedence: any of --cw-vert-len-min/-max/-step being explicitly
+        # given switches the vertical radiator from the fixed scalar length
+        # (CW_VERT_LEN_M, resolved above from --cw-vert-len) to a swept third
+        # axis. Passing --cw-vert-len alone, with none of the three sweep
+        # flags, is untouched: _cw_vert_sweep_on stays False and every
+        # sweep/refine call below builds the same 2-axis grid it always did,
+        # so existing scripts see byte-for-byte identical behaviour.
+        _cw_vmin_arg = getattr(args, "cw_vert_len_min", None)
+        _cw_vmax_arg = getattr(args, "cw_vert_len_max", None)
+        _cw_vstep_arg = float(getattr(args, "cw_vert_len_step", 0.25) or 0.25)
+        _cw_vert_sweep_on = (_cw_vmin_arg is not None or _cw_vmax_arg is not None)
+        if _cw_vert_sweep_on:
+            _cw_vmin = max(float(_cw_vmin_arg if _cw_vmin_arg is not None
+                                 else CW_VERT_LEN_MIN_M), CW_VERT_LEN_MIN_M)
+            _cw_vmax = float(_cw_vmax_arg if _cw_vmax_arg is not None
+                             else CW_VERT_LEN_M)
+            if _cw_vmin > _cw_vmax:
+                print(f"{Fore.RED}ERROR: --cw-vert-len-min ({_cw_vmin:.2f} m) "
+                      f"exceeds --cw-vert-len-max ({_cw_vmax:.2f} m)."
+                      f"{Style.RESET_ALL}")
+                sys.exit(1)
+            if mode == "nec2":
+                try:
+                    _cw_vmax = validate_vertical_sweep_range(
+                        _cw_vmin, _cw_vmax, args.wire_height,
+                        [cr.freq_mhz for cr in calc_rows], _gm_feed,
+                    )
+                except FeedpointHeightError as _cw_range_err:
+                    print(f"{Fore.RED}ERROR: {_cw_range_err}{Style.RESET_ALL}")
+                    sys.exit(1)
+            print("  " + f"Vertical-radiator sweep: {_cw_vmin:.2f}-"
+                  f"{_cw_vmax:.2f} m, step {_cw_vstep_arg:.2f} m"
+                  + (f" (clamped from --cw-vert-len-max "
+                     f"{float(_cw_vmax_arg):.2f} m to the physical ceiling)"
+                     if (_cw_vmax_arg is not None
+                         and abs(_cw_vmax - float(_cw_vmax_arg)) > 1e-6)
+                     else ""))
+            # Section 6.1: every vertical-length point MULTIPLIES the
+            # (wire, cp)/(total, offset) grid already reported above by
+            # _n_wire*_n_cp (or _n_tot*_n_off) — this is exactly the
+            # combinatorial-cost warning the design note calls for, printed
+            # as soon as N_v is known rather than only discovered once the
+            # sweep is already under way.
+            _n_v = int(round((_cw_vmax - _cw_vmin) / _cw_vstep_arg)) + 1 if _cw_vstep_arg > 0 else 1
+            _n_v = max(1, _n_v)
+            if _n_v > 1:
+                _n_base = (locals().get("_n_tot", 0) * locals().get("_n_off", 0)
+                           if _p_at.is_dipole
+                           else locals().get("_n_wire", 0) * locals().get("_n_cp", 0))
+                print(f"  {Fore.YELLOW}WARNING: the vertical-radiator axis "
+                      f"has {_n_v} points, multiplying the grid above by "
+                      f"{_n_v}x (roughly {_n_base * _n_v} total NEC-2 solves "
+                      f"for the initial pass). Use --jobs/--fast-run, or "
+                      f"narrow --cw-vert-len-min/-max/-step, if that is too "
+                      f"slow.{Style.RESET_ALL}")
+        else:
+            _cw_vmin = _cw_vmax = CW_VERT_LEN_M
+    else:
+        _cw_vert_sweep_on = False
+        _cw_vmin = _cw_vmax = 0.0
+        _cw_vstep_arg = 0.25
     if ANTENNA_TYPE != DEFAULT_ANTENNA_TYPE:
         print("  " + T("antenna_type_msg").format(_prof_run.key))
         if _prof_run.has_vertical_radiator:
@@ -15253,7 +15538,10 @@ def main() -> None:
                    cp_step: "float | None" = None,
                    off_min: "float | None" = None,
                    off_max: "float | None" = None,
-                   off_step: "float | None" = None):
+                   off_step: "float | None" = None,
+                   vert_min: "float | None" = None,
+                   vert_max: "float | None" = None,
+                   vert_step: "float | None" = None):
         # w_step / cp_step default to the command-line grid steps; the
         # --test-window refinement loop passes progressively halved values.
         _w_step  = args.wire_step if w_step  is None else w_step
@@ -15265,6 +15553,16 @@ def main() -> None:
         _off_min  = float(args.offset_min)  if off_min  is None else off_min
         _off_max  = float(args.offset_max)  if off_max  is None else off_max
         _off_step = float(args.offset_step) if off_step is None else off_step
+        # vert_min/vert_max/vert_step default to the CW vertical-radiator
+        # sweep window resolved above (_cw_vmin/_cw_vmax/_cw_vstep_arg);
+        # the --test-window refine loop narrows/halves these exactly like the
+        # arm and offset windows, once it starts tracking a third axis.
+        # When _cw_vert_sweep_on is False this window collapses to a single
+        # point (_cw_vmin == _cw_vmax == CW_VERT_LEN_M) and the grid builders
+        # below fall back to their 2-axis form untouched.
+        _v_min  = _cw_vmin if vert_min  is None else vert_min
+        _v_max  = _cw_vmax if vert_max  is None else vert_max
+        _v_step = _cw_vstep_arg if vert_step is None else vert_step
         # For dipole profiles (OCFD / Carolina Windom) the natural axes are
         # TOTAL LENGTH and OFFSET, not two independent arms — see the grid
         # build above main()'s initial banner. That grid must be the one
@@ -15272,7 +15570,21 @@ def main() -> None:
         # silently discarded the offset axis on every call to this closure,
         # including both --test-window refinement passes, so an OCFD/CW run
         # never searched the offset it claimed to.
-        if _p_at.is_dipole:
+        if _cw_vert_sweep_on and _prof_run.has_vertical_radiator:
+            if _p_at.is_dipole:
+                _grid = build_dipole_grid_3d(
+                    w_min + cp_min, w_max + cp_max, _w_step,
+                    _off_min, _off_max, _off_step,
+                    _v_min, _v_max, _v_step,
+                )
+            else:
+                _grid = build_search_grid_3d(
+                    w_min, w_max, _w_step,
+                    cp_min, cp_max, _cp_step,
+                    _v_min, _v_max, _v_step,
+                    use_counterpoise=use_counterpoise,
+                )
+        elif _p_at.is_dipole:
             _grid = build_dipole_grid(w_min + cp_min, w_max + cp_max, _w_step,
                                       _off_min, _off_max, _off_step)
         else:
@@ -15377,6 +15689,15 @@ def main() -> None:
     _cur_off_min  = float(args.offset_min)
     _cur_off_max  = float(args.offset_max)
     _cur_off_step = float(args.offset_step)
+    # Vertical-radiator refine state (carolina-windom with a swept vertical
+    # only). Same role as the offset-axis state above: _run_sweep() derives
+    # the 3-axis grid from these three values, so the refine loop must track
+    # and narrow them the same way, or the vertical axis would stay pinned at
+    # its original CLI resolution through every pass while wire/cp keep
+    # halving.
+    _cur_v_min  = _cw_vmin
+    _cur_v_max  = _cw_vmax
+    _cur_v_step = _cw_vstep_arg
 
     _retry_used  = 0
 
@@ -15426,6 +15747,7 @@ def main() -> None:
         nonlocal _cur_w_min, _cur_w_max, _cur_cp_min, _cur_cp_max
         nonlocal _cur_w_step, _cur_cp_step
         nonlocal _cur_off_min, _cur_off_max, _cur_off_step
+        nonlocal _cur_v_min, _cur_v_max, _cur_v_step
         _improved = False
         if not ranked:
             return False
@@ -15439,10 +15761,17 @@ def main() -> None:
             # factor on the floor check below.
             _new_off_step = (_halved_step(_cur_off_step) if _p_at.is_dipole
                               else _cur_off_step)
+            # The vertical axis only exists when the user opted into sweeping
+            # it; otherwise it stays fixed and, like the offset axis above,
+            # is never a limiting factor on the floor check.
+            _new_v_step = (_halved_step(_cur_v_step) if _cw_vert_sweep_on
+                            else _cur_v_step)
             if (abs(_new_w_step - _cur_w_step) < 1e-12
                     and abs(_new_cp_step - _cur_cp_step) < 1e-12
                     and (not _p_at.is_dipole
-                         or abs(_new_off_step - _cur_off_step) < 1e-12)):
+                         or abs(_new_off_step - _cur_off_step) < 1e-12)
+                    and (not _cw_vert_sweep_on
+                         or abs(_new_v_step - _cur_v_step) < 1e-12)):
                 _hit_floor = True
                 print(f"\n  {Fore.GREEN}"
                       + T("refine_floor").format(REFINE_STEP_FLOOR_M, _retry_used)
@@ -15480,6 +15809,20 @@ def main() -> None:
             else:
                 _off_lo, _off_hi = _cur_off_min, _cur_off_max
 
+            # Vertical window: same bounding-box-plus-pad treatment over the
+            # top N's vert_len_m, clamped to the window actually swept so
+            # far. Falls back to the unchanged (single-point) window when the
+            # vertical sweep was never turned on.
+            if _cw_vert_sweep_on:
+                _v_lo = max(_cur_v_min,
+                            round(min(r.vert_len_m for r in _top) - _cur_v_step, 6))
+                _v_hi = min(_cur_v_max,
+                            round(max(r.vert_len_m for r in _top) + _cur_v_step, 6))
+                _v_lo = max(CW_VERT_LEN_MIN_M, _v_lo)
+                _v_hi = max(_v_hi, _v_lo)
+            else:
+                _v_lo, _v_hi = _cur_v_min, _cur_v_max
+
             _retry_used += 1
             print(f"  {Fore.YELLOW}"
                   + T("refine_pass").format(_retry_used, _retry_max,
@@ -15489,11 +15832,15 @@ def main() -> None:
                   + T("refine_window").format(_w_lo, _w_hi, _c_lo, _c_hi,
                                               len(_top))
                   + f"{Style.RESET_ALL}")
+            if _cw_vert_sweep_on:
+                print(f"  {Fore.YELLOW}vertical window: {_v_lo:.2f}-{_v_hi:.2f} m, "
+                      f"step {_new_v_step:.2f} m{Style.RESET_ALL}")
 
             _new_results, _new_ranked, _new_pareto_ranked = _run_sweep(
                 _w_lo, _w_hi, _c_lo, _c_hi,
                 w_step=_new_w_step, cp_step=_new_cp_step,
                 off_min=_off_lo, off_max=_off_hi, off_step=_new_off_step,
+                vert_min=_v_lo, vert_max=_v_hi, vert_step=_new_v_step,
             )
 
             # The window and the resolution advance whatever the outcome; only
@@ -15502,6 +15849,7 @@ def main() -> None:
             _cur_cp_min, _cur_cp_max = _c_lo, _c_hi
             _cur_w_step, _cur_cp_step = _new_w_step, _new_cp_step
             _cur_off_min, _cur_off_max, _cur_off_step = _off_lo, _off_hi, _new_off_step
+            _cur_v_min, _cur_v_max, _cur_v_step = _v_lo, _v_hi, _new_v_step
 
             if (_new_ranked
                     and _new_ranked[0].score_combined < ranked[0].score_combined):
@@ -15645,6 +15993,10 @@ def main() -> None:
             args.offset_min  = _cur_off_min
             args.offset_max  = _cur_off_max
             args.offset_step = _cur_off_step
+        if _cw_vert_sweep_on:
+            args.cw_vert_len_min  = _cur_v_min
+            args.cw_vert_len_max  = _cur_v_max
+            args.cw_vert_len_step = _cur_v_step
 
     _expand_window()
     _publish_bounds()
@@ -16707,6 +17059,8 @@ def main() -> None:
         target_toa_deg=float(getattr(args, "target_toa", DEFAULT_TARGET_TOA_DEG)),
         jobs=_jobs,
         fast_run=_fast_run,
+        vert_range=((_cur_v_min, _cur_v_max, _cur_v_step)
+                    if _cw_vert_sweep_on else None),
     )
     print(T("report_saved").format(args.out_txt))
 
@@ -16890,6 +17244,10 @@ def _launch_gui() -> None:
             "offset_hint":        "0.3333 = the classic Windom third",
             "cw_vert_label":      "Vertical radiator (m):",
             "cw_vert_hint":       "Carolina Windom only: balun down to the line isolator",
+            "cw_vert_sweep_chk":  "Sweep vertical-radiator length",
+            "cw_vert_min_label":  "Min (m):",
+            "cw_vert_max_label":  "Max (m):",
+            "cw_vert_step_label": "Step (m):",
             "cw_iso_label":       "Line isolator R,X (ohm):",
             "cw_iso_hint":        "blank = ideal isolator (modelled as an open end)",
             "balun_kind_label":   "Balun type:",
@@ -17442,6 +17800,10 @@ def _launch_gui() -> None:
             "offset_hint":        "0.3333 = el tercio clásico de la Windom",
             "cw_vert_label":      "Radiador vertical (m):",
             "cw_vert_hint":       "Sólo Carolina Windom: del balun al aislador de línea",
+            "cw_vert_sweep_chk":  "Barrer longitud del radiador vertical",
+            "cw_vert_min_label":  "Mín (m):",
+            "cw_vert_max_label":  "Máx (m):",
+            "cw_vert_step_label": "Paso (m):",
             "cw_iso_label":       "Aislador de línea R,X (ohm):",
             "cw_iso_hint":        "vacío = aislador ideal (extremo abierto)",
             "balun_kind_label":   "Tipo de balun:",
@@ -17999,6 +18361,10 @@ def _launch_gui() -> None:
             "offset_hint": '0.3333 = il classico terzo della Windom',
             "cw_vert_label": 'Radiatore verticale (m):',
             "cw_vert_hint": 'Solo Carolina Windom: dal balun all\'isolatore di linea',
+            "cw_vert_sweep_chk": 'Spazzola lunghezza radiatore verticale',
+            "cw_vert_min_label": 'Min (m):',
+            "cw_vert_max_label": 'Max (m):',
+            "cw_vert_step_label": 'Passo (m):',
             "cw_iso_label": 'Isolatore di linea R,X (ohm):',
             "cw_iso_hint": 'vuoto = isolatore ideale (estremita aperta)',
             "balun_kind_label": 'Tipo di balun:',
@@ -20012,14 +20378,68 @@ def _launch_gui() -> None:
             self._reg(_vh, "cw_vert_hint")
             self._cw_widgets += [_vl, _v_ent, _vh]
 
+            # Vertical-radiator SWEEP (Section 5.7): a checkbox that, when
+            # ticked, hides the fixed-length entry above (single source of
+            # truth) and exposes min/max/step fields feeding
+            # --cw-vert-len-min/-max/-step instead of --cw-vert-len. Mirrors
+            # the pattern already used for the offset fields, which enable/
+            # disable based on prof.is_dipole.
+            self._cw_vert_sweep_var = tk.BooleanVar(value=False)
+
+            def _on_cw_vert_sweep_toggle():
+                _on = self._cw_vert_sweep_var.get()
+                for _w in self._cw_vert_sweep_widgets:
+                    _w.configure(state=("normal" if _on else "disabled"))
+                # The fixed-length entry becomes a dead field once the sweep
+                # is on (min/max/step drive --cw-vert-len-min/-max/-step
+                # instead), so disable it to make the single-source-of-truth
+                # precedence visible rather than just documented in --help.
+                _v_ent.configure(state=("disabled" if _on else "normal"))
+
+            _vsw_chk = ttk.Checkbutton(ant_lf, variable=self._cw_vert_sweep_var,
+                                       command=_on_cw_vert_sweep_toggle)
+            _vsw_chk.grid(row=11, column=0, columnspan=2, sticky="w", pady=(4, 0))
+            self._reg(_vsw_chk, "cw_vert_sweep_chk")
+            self._cw_widgets += [_vsw_chk]
+
+            _vsw_row = ttk.Frame(ant_lf)
+            _vsw_row.grid(row=12, column=0, columnspan=3, sticky="w", padx=(18, 0))
+            _vsw_min_lbl = ttk.Label(_vsw_row)
+            _vsw_min_lbl.grid(row=0, column=0, sticky="w")
+            self._reg(_vsw_min_lbl, "cw_vert_min_label")
+            self._cw_vert_min_var = tk.StringVar(value=f"{CW_VERT_LEN_MIN_M:g}")
+            self._cw_vert_min_ent = ttk.Entry(_vsw_row, textvariable=self._cw_vert_min_var, width=8)
+            self._cw_vert_min_ent.grid(row=0, column=1, padx=(4, 10))
+            _vsw_max_lbl = ttk.Label(_vsw_row)
+            _vsw_max_lbl.grid(row=0, column=2, sticky="w")
+            self._reg(_vsw_max_lbl, "cw_vert_max_label")
+            self._cw_vert_max_var = tk.StringVar(value=f"{CW_DEFAULT_VERT_LEN_M:g}")
+            self._cw_vert_max_ent = ttk.Entry(_vsw_row, textvariable=self._cw_vert_max_var, width=8)
+            self._cw_vert_max_ent.grid(row=0, column=3, padx=(4, 10))
+            _vsw_step_lbl = ttk.Label(_vsw_row)
+            _vsw_step_lbl.grid(row=0, column=4, sticky="w")
+            self._reg(_vsw_step_lbl, "cw_vert_step_label")
+            self._cw_vert_step_var = tk.StringVar(value="0.25")
+            self._cw_vert_step_ent = ttk.Entry(_vsw_row, textvariable=self._cw_vert_step_var, width=8)
+            self._cw_vert_step_ent.grid(row=0, column=5, padx=(4, 0))
+            self._cw_vert_sweep_widgets = [
+                _vsw_min_lbl, self._cw_vert_min_ent, _vsw_max_lbl,
+                self._cw_vert_max_ent, _vsw_step_lbl, self._cw_vert_step_ent,
+            ]
+            self._cw_widgets += [_vsw_row] + self._cw_vert_sweep_widgets
+            # Start disabled: --cw-vert-len (fixed length) is the default
+            # behaviour, matching the CLI's own precedence rule.
+            for _w in self._cw_vert_sweep_widgets:
+                _w.configure(state="disabled")
+
             _il = ttk.Label(ant_lf)
-            _il.grid(row=11, column=0, sticky="w", pady=(4, 0))
+            _il.grid(row=13, column=0, sticky="w", pady=(4, 0))
             self._reg(_il, "cw_iso_label")
             self._cw_iso_var = tk.StringVar(value="")
             _i_ent = ttk.Entry(ant_lf, textvariable=self._cw_iso_var, width=14)
-            _i_ent.grid(row=11, column=1, padx=6, pady=(4, 0), sticky="w")
+            _i_ent.grid(row=13, column=1, padx=6, pady=(4, 0), sticky="w")
             _ih = ttk.Label(ant_lf, style="Muted.TLabel")
-            _ih.grid(row=11, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
+            _ih.grid(row=13, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
             self._reg(_ih, "cw_iso_hint")
             self._cw_widgets += [_il, _i_ent, _ih]
 
@@ -22834,9 +23254,26 @@ def _launch_gui() -> None:
                 if _mm and _mm != "ideal":
                     cmd += ["--match-model", _mm]
                 if _prof_gui.has_vertical_radiator:
-                    _vv = self._cw_vert_var.get().strip()
-                    if _vv:
-                        cmd += ["--cw-vert-len", _vv]
+                    _vsw_on = bool(getattr(self, "_cw_vert_sweep_var", None)
+                                  and self._cw_vert_sweep_var.get())
+                    if _vsw_on:
+                        # Precedence matches the CLI: any of min/max/step
+                        # given switches to the sweep, and --cw-vert-len
+                        # (the fixed scalar) is omitted entirely so the two
+                        # sources of truth can never both be present.
+                        _vmn = self._cw_vert_min_var.get().strip()
+                        _vmx = self._cw_vert_max_var.get().strip()
+                        _vst = self._cw_vert_step_var.get().strip()
+                        if _vmn:
+                            cmd += ["--cw-vert-len-min", _vmn]
+                        if _vmx:
+                            cmd += ["--cw-vert-len-max", _vmx]
+                        if _vst:
+                            cmd += ["--cw-vert-len-step", _vst]
+                    else:
+                        _vv = self._cw_vert_var.get().strip()
+                        if _vv:
+                            cmd += ["--cw-vert-len", _vv]
                     _iv = self._cw_iso_var.get().strip()
                     if _iv:
                         cmd += ["--cw-isolator-z", _iv]
