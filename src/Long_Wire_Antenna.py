@@ -16893,6 +16893,16 @@ def _launch_gui() -> None:
             "cw_iso_label":       "Line isolator R,X (ohm):",
             "cw_iso_hint":        "blank = ideal isolator (modelled as an open end)",
             "balun_kind_label":   "Balun type:",
+            "total_len_label":    "Total length (both arms, m):",
+            "total_len_hint":     "optional — overrides wire-len/cp-len via offset",
+            "balun_ratio_label":  "Balun ratio:",
+            "balun_ratio_hint":   "auto = optimizer picks a buildable ratio",
+            "balun_core_label":   "Balun/choke core:",
+            "balun_turns_label":  "Balun turns:",
+            "feed_choke_chk":     "Also design feedline common-mode choke",
+            "match_model_label":  "Match model:",
+            "match_model_ideal":  "ideal",
+            "match_model_real":   "real",
             "band_source_lf":     "Band Source",
             "bands_label":        "Bands (comma-separated):",
             "known_prefix":       "Known: ",
@@ -16914,6 +16924,7 @@ def _launch_gui() -> None:
             "margin_hint":        "m   Applied around the wire & CP starting lengths.",
             "wire_range_lf":      "Wire Length Range  (overrides margin)",
             "leave_empty_wire":   "Leave min/max empty to use margin.",
+            "offset_range_lf":    "Offset Sweep  (dipole types only)",
             "use_cp_chk":         "Use counterpoise",
             "use_cp_hint":         "uncheck for an antenna with no counterpoise (radiator only)",
             "no_cp_return_lf":    "Return Path Without Counterpoise",
@@ -17155,6 +17166,9 @@ def _launch_gui() -> None:
             "hint_wire_min":      "minimum wire length to test",
             "hint_wire_max":      "maximum wire length to test",
             "hint_wire_step":     "grid step between wire lengths",
+            "hint_offset_min":    "low end of the offset sweep",
+            "hint_offset_max":    "high end of the offset sweep",
+            "hint_offset_step":   "offset sweep step",
             "hint_cp_min":        "minimum CP length to test",
             "hint_cp_max":        "maximum CP length to test",
             "hint_cp_step":       "grid step between CP lengths",
@@ -17431,6 +17445,16 @@ def _launch_gui() -> None:
             "cw_iso_label":       "Aislador de línea R,X (ohm):",
             "cw_iso_hint":        "vacío = aislador ideal (extremo abierto)",
             "balun_kind_label":   "Tipo de balun:",
+            "total_len_label":    "Longitud total (ambos brazos, m):",
+            "total_len_hint":     "opcional — reemplaza wire-len/cp-len vía offset",
+            "balun_ratio_label":  "Relación del balun:",
+            "balun_ratio_hint":   "auto = el optimizador elige una relación construible",
+            "balun_core_label":   "Núcleo balun/choke:",
+            "balun_turns_label":  "Espiras del balun:",
+            "feed_choke_chk":     "Diseñar también choke de modo común de línea",
+            "match_model_label":  "Modelo de acople:",
+            "match_model_ideal":  "ideal",
+            "match_model_real":   "real",
             "band_source_lf":     "Fuente de Bandas",
             "bands_label":        "Bandas (separadas por coma):",
             "known_prefix":       "Conocidas: ",
@@ -17452,6 +17476,7 @@ def _launch_gui() -> None:
             "margin_hint":        "m   Aplicado alrededor de las longitudes iniciales de hilo y CP.",
             "wire_range_lf":      "Rango de Longitud del Hilo  (anula margen)",
             "leave_empty_wire":   "Dejar mín/máx vacío para usar el margen.",
+            "offset_range_lf":    "Barrido de Desplazamiento  (sólo tipos dipolo)",
             "use_cp_chk":         "Usar Contrapeso",
             "use_cp_hint":         "desmarque para una antena sin contrapeso (sólo radiador)",
             "no_cp_return_lf":    "Camino de Retorno Sin Contrapeso",
@@ -17696,6 +17721,9 @@ def _launch_gui() -> None:
             "hint_wire_min":      "longitud mínima de hilo a probar",
             "hint_wire_max":      "longitud máxima de hilo a probar",
             "hint_wire_step":     "paso de grilla entre longitudes de hilo",
+            "hint_offset_min":    "extremo inferior del barrido de desplazamiento",
+            "hint_offset_max":    "extremo superior del barrido de desplazamiento",
+            "hint_offset_step":   "paso del barrido de desplazamiento",
             "hint_cp_min":        "longitud mínima de CP a probar",
             "hint_cp_max":        "longitud máxima de CP a probar",
             "hint_cp_step":       "paso de grilla entre longitudes de CP",
@@ -17974,6 +18002,16 @@ def _launch_gui() -> None:
             "cw_iso_label": 'Isolatore di linea R,X (ohm):',
             "cw_iso_hint": 'vuoto = isolatore ideale (estremita aperta)',
             "balun_kind_label": 'Tipo di balun:',
+            "total_len_label": 'Lunghezza totale (entrambi i bracci, m):',
+            "total_len_hint": 'opzionale — sostituisce wire-len/cp-len via offset',
+            "balun_ratio_label": 'Rapporto balun:',
+            "balun_ratio_hint": "auto = l'ottimizzatore sceglie un rapporto costruibile",
+            "balun_core_label": 'Nucleo balun/choke:',
+            "balun_turns_label": 'Spire balun:',
+            "feed_choke_chk": 'Progetta anche choke di modo comune di linea',
+            "match_model_label": 'Modello di adattamento:',
+            "match_model_ideal": 'ideal',
+            "match_model_real": 'real',
             "band_source_lf": 'Origine Banda',
             "bands_label": 'Bande (separate da virgola):',
             "known_prefix": 'Note: ',
@@ -17993,6 +18031,7 @@ def _launch_gui() -> None:
             "margin_hint": 'm   Applicato attorno alle lunghezze iniziali di filo e CP.',
             "wire_range_lf": 'Intervallo Lunghezza Filo  (sostituisce il margine)',
             "leave_empty_wire": 'Lasciare min/max vuoti per usare il margine.',
+            "offset_range_lf": 'Scansione Sfalsamento  (solo tipi dipolo)',
             "use_cp_chk": 'Usa contrappeso',
             "use_cp_hint": "deselezionare per un'antenna senza contrappeso (solo radiatore)",
             "no_cp_return_lf": 'Percorso di Ritorno Senza Contrappeso',
@@ -18216,6 +18255,9 @@ def _launch_gui() -> None:
             "hint_wire_min": 'lunghezza minima del filo da testare',
             "hint_wire_max": 'lunghezza massima del filo da testare',
             "hint_wire_step": 'passo della griglia tra le lunghezze del filo',
+            "hint_offset_min": "estremo inferiore della scansione di sfalsamento",
+            "hint_offset_max": "estremo superiore della scansione di sfalsamento",
+            "hint_offset_step": 'passo della scansione di sfalsamento',
             "hint_cp_min": 'lunghezza minima del CP da testare',
             "hint_cp_max": 'lunghezza massima del CP da testare',
             "hint_cp_step": 'passo della griglia tra le lunghezze del CP',
@@ -18476,6 +18518,16 @@ def _launch_gui() -> None:
             "help_bands": "Comma-separated list of ham bands to model, e.g. 40m,20m,15m. Names must match one of the known bands shown below, or you must also supply --freqs.",
             "help_freqs": "Optional comma-separated centre frequencies in MHz, one per band, in the same order as the bands list. Required only for bands not in the known-bands table.",
             "help_wire_len": "Total length of the sloping radiator wire, in meters. This is the starting point the optimizer sweeps around while searching for the best-performing length.",
+            "help_total_len": "Dipole types only (ocfd/carolina-windom): total length of BOTH arms. Combined with the feed offset it derives wire-len and cp-len, which is usually how an OCFD is specified. Leave empty to set wire-len/cp-len directly instead.",
+            "help_offset": "Dipole types only: short arm / total length (default 0.3333, the classic Windom third). Valid range 0.10-0.49.",
+            "help_offset_min": "Dipole types only: low end of the feed-offset sweep range used during the search.",
+            "help_offset_max": "Dipole types only: high end of the feed-offset sweep range used during the search.",
+            "help_offset_step": "Dipole types only: grid step between offset values tried during the search.",
+            "help_balun_ratio": "Dipole types only: 'auto' lets the optimizer pick a buildable transmission-line balun ratio (2, 4, 6 or 9); fixing one restricts the search to that hardware choice.",
+            "help_balun_core": "Toroid core used for the balun and, for carolina-windom, the line isolator/choke as well.",
+            "help_balun_turns": "Number of turns per transmission line wound on the balun core.",
+            "help_feed_choke": "Also design a feedline common-mode choke (always designed automatically for carolina-windom, where it doubles as the line isolator).",
+            "help_match_model": "How VSWR is computed through the matching device: 'ideal' simply divides R and X by the turns ratio; 'real' also accounts for the finite magnetising reactance of the actual balun design.",
             "help_cp_len": "Length of the counterpoise (ground) wire, in meters. Only used when 'Use counterpoise' is enabled; ignored for counterpoise-free configurations.",
             "help_active_bands": "Optional comma-separated subset of the bands list to actually optimize for (e.g. restrict a 3-band model to just 40m,20m). Leave empty to use all bands.",
             "help_optlang": "Language used for on-screen and report text generated by the optimizer itself (independent of this GUI's own language, set with the globe button).",
@@ -18553,6 +18605,16 @@ def _launch_gui() -> None:
             "help_bands": "Lista de bandas de radioaficionado separadas por comas, ej. 40m,20m,15m. Los nombres deben coincidir con una banda conocida, o bien debe indicar también --freqs.",
             "help_freqs": "Frecuencias centrales opcionales en MHz, separadas por comas, una por banda, en el mismo orden que la lista de bandas. Obligatorio solo para bandas que no están en la tabla de bandas conocidas.",
             "help_wire_len": "Longitud total del hilo radiante inclinado, en metros. Es el punto de partida que el optimizador varía al buscar la longitud de mejor rendimiento.",
+            "help_total_len": "Sólo tipos dipolo (ocfd/carolina-windom): longitud total de AMBOS brazos. Junto con el desplazamiento de alimentación deriva wire-len y cp-len, que es como se suele especificar una OCFD. Dejar vacío para fijar wire-len/cp-len directamente.",
+            "help_offset": "Sólo tipos dipolo: brazo corto / longitud total (por defecto 0.3333, el tercio clásico de la Windom). Rango válido 0.10-0.49.",
+            "help_offset_min": "Sólo tipos dipolo: extremo inferior del rango de barrido del desplazamiento de alimentación usado en la búsqueda.",
+            "help_offset_max": "Sólo tipos dipolo: extremo superior del rango de barrido del desplazamiento de alimentación usado en la búsqueda.",
+            "help_offset_step": "Sólo tipos dipolo: paso de grilla entre valores de desplazamiento probados en la búsqueda.",
+            "help_balun_ratio": "Sólo tipos dipolo: 'auto' permite que el optimizador elija una relación de balun de línea de transmisión construible (2, 4, 6 o 9); fijar una limita la búsqueda a esa opción de hardware.",
+            "help_balun_core": "Núcleo toroidal usado para el balun y, en carolina-windom, también para el aislador de línea/choke.",
+            "help_balun_turns": "Número de espiras por línea de transmisión bobinadas en el núcleo del balun.",
+            "help_feed_choke": "Diseña también un choke de modo común para la línea de alimentación (siempre se diseña automáticamente en carolina-windom, donde también actúa como aislador de línea).",
+            "help_match_model": "Cómo se calcula el ROE a través del dispositivo de acople: 'ideal' simplemente divide R y X por la relación de vueltas; 'real' también tiene en cuenta la reactancia de magnetización finita del diseño real del balun.",
             "help_cp_len": "Longitud del contrapeso (tierra), en metros. Solo se usa si 'Usar contrapeso' está activado; se ignora en configuraciones sin contrapeso.",
             "help_active_bands": "Subconjunto opcional, separado por comas, de la lista de bandas para el que realmente se optimiza (p. ej. restringir un modelo de 3 bandas a solo 40m,20m). Dejar vacío para usar todas las bandas.",
             "help_optlang": "Idioma usado para el texto en pantalla y de los informes que genera el propio optimizador (independiente del idioma de esta interfaz, definido con el botón del globo).",
@@ -18630,6 +18692,16 @@ def _launch_gui() -> None:
             "help_bands": "Elenco separato da virgole delle bande radioamatoriali, es. 40m,20m,15m. I nomi devono corrispondere a una banda nota, oppure occorre indicare anche --freqs.",
             "help_freqs": "Frequenze centrali opzionali in MHz, separate da virgole, una per banda, nello stesso ordine dell'elenco delle bande. Obbligatorio solo per bande non presenti nella tabella delle bande note.",
             "help_wire_len": "Lunghezza totale del filo radiante inclinato, in metri. È il punto di partenza che l'ottimizzatore fa variare cercando la lunghezza dalle prestazioni migliori.",
+            "help_total_len": "Solo tipi dipolo (ocfd/carolina-windom): lunghezza totale di ENTRAMBI i bracci. Insieme allo sfalsamento di alimentazione ricava wire-len e cp-len, il modo in cui di solito si specifica una OCFD. Lasciare vuoto per impostare wire-len/cp-len direttamente.",
+            "help_offset": "Solo tipi dipolo: braccio corto / lunghezza totale (predefinito 0.3333, il classico terzo della Windom). Intervallo valido 0.10-0.49.",
+            "help_offset_min": "Solo tipi dipolo: estremo inferiore dell'intervallo di scansione dello sfalsamento di alimentazione usato nella ricerca.",
+            "help_offset_max": "Solo tipi dipolo: estremo superiore dell'intervallo di scansione dello sfalsamento di alimentazione usato nella ricerca.",
+            "help_offset_step": "Solo tipi dipolo: passo della griglia tra i valori di sfalsamento provati nella ricerca.",
+            "help_balun_ratio": "Solo tipi dipolo: 'auto' lascia che l'ottimizzatore scelga un rapporto di balun a linea di trasmissione costruibile (2, 4, 6 o 9); fissarne uno limita la ricerca a quella scelta hardware.",
+            "help_balun_core": "Nucleo toroidale usato per il balun e, in carolina-windom, anche per l'isolatore di linea/choke.",
+            "help_balun_turns": "Numero di spire per linea di trasmissione avvolte sul nucleo del balun.",
+            "help_feed_choke": "Progetta anche un choke di modo comune per la linea di alimentazione (sempre progettato automaticamente per carolina-windom, dove funge anche da isolatore di linea).",
+            "help_match_model": "Come viene calcolato il ROS attraverso il dispositivo di adattamento: 'ideal' divide semplicemente R e X per il rapporto di spire; 'real' considera anche la reattanza di magnetizzazione finita del progetto reale del balun.",
             "help_cp_len": "Lunghezza del contrappeso (terra), in metri. Usata solo se 'Usa contrappeso' è attivo; ignorata per le configurazioni senza contrappeso.",
             "help_active_bands": "Sottoinsieme opzionale, separato da virgole, dell'elenco delle bande per cui ottimizzare effettivamente (es. limitare un modello a 3 bande solo a 40m,20m). Lasciare vuoto per usare tutte le bande.",
             "help_optlang": "Lingua usata per il testo a schermo e nei report generati dall'ottimizzatore stesso (indipendente dalla lingua di questa interfaccia, impostata con il pulsante del globo).",
@@ -19824,47 +19896,130 @@ def _launch_gui() -> None:
             self._dipole_widgets = []
             self._cw_widgets = []
 
+            _tl = ttk.Label(ant_lf)
+            _tl.grid(row=2, column=0, sticky="w", pady=(6, 0))
+            self._reg(_tl, "total_len_label")
+            self._total_len_var = tk.StringVar(value="")
+            _tl_ent = ttk.Entry(ant_lf, textvariable=self._total_len_var, width=12)
+            _tl_ent.grid(row=2, column=1, padx=6, pady=(6, 0), sticky="w")
+            _tlh = ttk.Label(ant_lf, style="Muted.TLabel")
+            _tlh.grid(row=2, column=2, sticky="w", padx=(4, 0), pady=(6, 0))
+            self._reg(_tlh, "total_len_hint")
+            self._help(ant_lf, "help_total_len").grid(
+                row=2, column=3, sticky="w", padx=(6, 0), pady=(6, 0))
+            self._dipole_widgets += [_tl, _tl_ent, _tlh]
+
             _ol = ttk.Label(ant_lf)
-            _ol.grid(row=2, column=0, sticky="w", pady=(6, 0))
+            _ol.grid(row=3, column=0, sticky="w", pady=(4, 0))
             self._reg(_ol, "offset_label")
             self._offset_var = tk.StringVar(
                 value=f"{OCFD_DEFAULT_OFFSET_FRAC:.4f}")
             _off_ent = ttk.Entry(ant_lf, textvariable=self._offset_var, width=12)
-            _off_ent.grid(row=2, column=1, padx=6, pady=(6, 0), sticky="w")
+            _off_ent.grid(row=3, column=1, padx=6, pady=(4, 0), sticky="w")
             _oh = ttk.Label(ant_lf, style="Muted.TLabel")
-            _oh.grid(row=2, column=2, sticky="w", padx=(4, 0), pady=(6, 0))
+            _oh.grid(row=3, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
             self._reg(_oh, "offset_hint")
+            self._help(ant_lf, "help_offset").grid(
+                row=3, column=3, sticky="w", padx=(6, 0), pady=(4, 0))
             self._dipole_widgets += [_ol, _off_ent, _oh]
 
             _bl = ttk.Label(ant_lf)
-            _bl.grid(row=3, column=0, sticky="w", pady=(4, 0))
+            _bl.grid(row=4, column=0, sticky="w", pady=(4, 0))
             self._reg(_bl, "balun_kind_label")
             self._balun_kind_var = tk.StringVar(value="guanella")
             _bk = ttk.Combobox(ant_lf, textvariable=self._balun_kind_var,
                                values=list(BALUN_KINDS), state="readonly",
                                width=14)
-            _bk.grid(row=3, column=1, padx=6, pady=(4, 0), sticky="w")
+            _bk.grid(row=4, column=1, padx=6, pady=(4, 0), sticky="w")
             self._dipole_widgets += [_bl, _bk]
 
+            _brl = ttk.Label(ant_lf)
+            _brl.grid(row=5, column=0, sticky="w", pady=(4, 0))
+            self._reg(_brl, "balun_ratio_label")
+            self._balun_ratio_var = tk.StringVar(value="auto")
+            _br_cb = ttk.Combobox(
+                ant_lf, textvariable=self._balun_ratio_var,
+                values=["auto"] + [f"{r:g}" for r in OCFD_BALUN_RATIOS],
+                state="readonly", width=14)
+            _br_cb.grid(row=5, column=1, padx=6, pady=(4, 0), sticky="w")
+            _brh = ttk.Label(ant_lf, style="Muted.TLabel")
+            _brh.grid(row=5, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
+            self._reg(_brh, "balun_ratio_hint")
+            self._help(ant_lf, "help_balun_ratio").grid(
+                row=5, column=3, sticky="w", padx=(6, 0), pady=(4, 0))
+            self._dipole_widgets += [_brl, _br_cb, _brh]
+
+            _bcl = ttk.Label(ant_lf)
+            _bcl.grid(row=6, column=0, sticky="w", pady=(4, 0))
+            self._reg(_bcl, "balun_core_label")
+            self._balun_core_var = tk.StringVar(value=DEFAULT_TOROID)
+            _bc_cb = ttk.Combobox(
+                ant_lf, textvariable=self._balun_core_var,
+                values=sorted(TOROID_DB), state="readonly", width=14)
+            _bc_cb.grid(row=6, column=1, padx=6, pady=(4, 0), sticky="w")
+            self._help(ant_lf, "help_balun_core").grid(
+                row=6, column=3, sticky="w", padx=(6, 0), pady=(4, 0))
+            self._dipole_widgets += [_bcl, _bc_cb]
+
+            _btl = ttk.Label(ant_lf)
+            _btl.grid(row=7, column=0, sticky="w", pady=(4, 0))
+            self._reg(_btl, "balun_turns_label")
+            self._balun_turns_var = tk.StringVar(value="10")
+            _bt_spin = ttk.Spinbox(ant_lf, from_=1, to=99,
+                                   textvariable=self._balun_turns_var, width=6)
+            _bt_spin.grid(row=7, column=1, padx=6, pady=(4, 0), sticky="w")
+            self._help(ant_lf, "help_balun_turns").grid(
+                row=7, column=3, sticky="w", padx=(6, 0), pady=(4, 0))
+            self._dipole_widgets += [_btl, _bt_spin]
+
+            _mml = ttk.Label(ant_lf)
+            _mml.grid(row=8, column=0, sticky="w", pady=(4, 0))
+            self._reg(_mml, "match_model_label")
+            self._match_model_var = tk.StringVar(value="ideal")
+            _mm_row = ttk.Frame(ant_lf)
+            _mm_row.grid(row=8, column=1, columnspan=2, sticky="w", padx=6, pady=(4, 0))
+            _mm_ideal = ttk.Radiobutton(_mm_row, value="ideal",
+                                        variable=self._match_model_var)
+            _mm_ideal.pack(side="left")
+            self._reg(_mm_ideal, "match_model_ideal")
+            _mm_real = ttk.Radiobutton(_mm_row, value="real",
+                                       variable=self._match_model_var)
+            _mm_real.pack(side="left", padx=(10, 0))
+            self._reg(_mm_real, "match_model_real")
+            self._help(ant_lf, "help_match_model").grid(
+                row=8, column=3, sticky="w", padx=(6, 0), pady=(4, 0))
+            self._dipole_widgets += [_mml, _mm_ideal, _mm_real]
+
+            self._feed_choke_var = tk.BooleanVar(value=False)
+            _fc_chk = ttk.Checkbutton(ant_lf, variable=self._feed_choke_var)
+            _fc_chk.grid(row=9, column=0, columnspan=2, sticky="w", pady=(4, 0))
+            self._reg(_fc_chk, "feed_choke_chk")
+            self._help(ant_lf, "help_feed_choke").grid(
+                row=9, column=3, sticky="w", padx=(6, 0), pady=(4, 0))
+            # Not appended to _dipole_widgets: a feedline choke is also
+            # meaningful for a plain long-wire (main() always designs one
+            # for carolina-windom regardless of this box), so it stays live
+            # for every antenna type.
+
             _vl = ttk.Label(ant_lf)
-            _vl.grid(row=4, column=0, sticky="w", pady=(4, 0))
+            _vl.grid(row=10, column=0, sticky="w", pady=(4, 0))
             self._reg(_vl, "cw_vert_label")
             self._cw_vert_var = tk.StringVar(value=f"{CW_DEFAULT_VERT_LEN_M:g}")
             _v_ent = ttk.Entry(ant_lf, textvariable=self._cw_vert_var, width=12)
-            _v_ent.grid(row=4, column=1, padx=6, pady=(4, 0), sticky="w")
+            _v_ent.grid(row=10, column=1, padx=6, pady=(4, 0), sticky="w")
             _vh = ttk.Label(ant_lf, style="Muted.TLabel")
-            _vh.grid(row=4, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
+            _vh.grid(row=10, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
             self._reg(_vh, "cw_vert_hint")
             self._cw_widgets += [_vl, _v_ent, _vh]
 
             _il = ttk.Label(ant_lf)
-            _il.grid(row=5, column=0, sticky="w", pady=(4, 0))
+            _il.grid(row=11, column=0, sticky="w", pady=(4, 0))
             self._reg(_il, "cw_iso_label")
             self._cw_iso_var = tk.StringVar(value="")
             _i_ent = ttk.Entry(ant_lf, textvariable=self._cw_iso_var, width=14)
-            _i_ent.grid(row=5, column=1, padx=6, pady=(4, 0), sticky="w")
+            _i_ent.grid(row=11, column=1, padx=6, pady=(4, 0), sticky="w")
             _ih = ttk.Label(ant_lf, style="Muted.TLabel")
-            _ih.grid(row=5, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
+            _ih.grid(row=11, column=2, sticky="w", padx=(4, 0), pady=(4, 0))
             self._reg(_ih, "cw_iso_hint")
             self._cw_widgets += [_il, _i_ent, _ih]
 
@@ -20049,6 +20204,40 @@ def _launch_gui() -> None:
             self._wire_empty_lbl = ttk.Label(wr_lf, style="Muted.TLabel")
             self._wire_empty_lbl.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
             self._reg(self._wire_empty_lbl, "leave_empty_wire")
+
+            # ── Offset sweep (dipole types only: ocfd / carolina-windom) ──
+            # --offset-min/--offset-max/--offset-step exist on the CLI (the
+            # optimizer sweeps the feed offset the same way it sweeps wire
+            # length) but had no GUI widgets at all, so a GUI run always used
+            # the argparse defaults (0.20-0.45 step 0.01) no matter what was
+            # typed anywhere else.
+            off_lf = ttk.LabelFrame(t, padding=8)
+            off_lf.pack(fill="x", pady=(0, 8))
+            self._reg(off_lf, "offset_range_lf")
+            self._offset_min_var  = tk.StringVar()
+            self._offset_max_var  = tk.StringVar()
+            self._offset_step_var = tk.StringVar()
+            for row_i, (flag, var, hk) in enumerate([
+                ("offset-min:",  self._offset_min_var,  "hint_offset_min"),
+                ("offset-max:",  self._offset_max_var,  "hint_offset_max"),
+                ("offset-step:", self._offset_step_var, "hint_offset_step"),
+            ]):
+                _ofl = ttk.Label(off_lf, text=flag)
+                _ofl.grid(row=row_i, column=0, sticky="w", pady=3)
+                _of_ent = ttk.Entry(off_lf, textvariable=var, width=10)
+                _of_ent.grid(row=row_i, column=1, padx=6, pady=3, sticky="w")
+                _h = ttk.Label(off_lf, foreground=_ACCENT)
+                _h.grid(row=row_i, column=2, sticky="w", padx=(8, 0))
+                self._reg(_h, hk)
+                _hb = self._help(off_lf, "help_offset_min" if "min" in hk
+                                 else "help_offset_max" if "max" in hk
+                                 else "help_offset_step")
+                _hb.grid(row=row_i, column=3, sticky="w", padx=(6, 0))
+                self._dipole_widgets += [_ofl, _of_ent, _h]
+            self._offset_empty_lbl = ttk.Label(off_lf, style="Muted.TLabel")
+            self._offset_empty_lbl.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
+            self._reg(self._offset_empty_lbl, "leave_empty_wire")
+            self._dipole_widgets.append(self._offset_empty_lbl)
 
             # ── Radiator geometry: feedpoint height + far-end height ─────
             # One height for the whole antenna: radiator and counterpoise both
@@ -22623,12 +22812,27 @@ def _launch_gui() -> None:
             _prof_gui = antenna_profile(_at)
             if _at and _at != DEFAULT_ANTENNA_TYPE:
                 cmd += ["--antenna-type", _at]
+                _tlen = self._total_len_var.get().strip()
+                if _tlen:
+                    cmd += ["--total-len", _tlen]
                 _off = self._offset_var.get().strip()
                 if _off:
                     cmd += ["--offset", _off]
                 _bk = self._balun_kind_var.get().strip()
                 if _bk and _bk != "guanella":
                     cmd += ["--balun-kind", _bk]
+                _brat = self._balun_ratio_var.get().strip()
+                if _brat and _brat != "auto":
+                    cmd += ["--balun-ratio", _brat]
+                _bcore = self._balun_core_var.get().strip()
+                if _bcore and _bcore != DEFAULT_TOROID:
+                    cmd += ["--balun-core", _bcore]
+                _bturns = self._balun_turns_var.get().strip()
+                if _bturns and _bturns != "10":
+                    cmd += ["--balun-turns", _bturns]
+                _mm = self._match_model_var.get().strip()
+                if _mm and _mm != "ideal":
+                    cmd += ["--match-model", _mm]
                 if _prof_gui.has_vertical_radiator:
                     _vv = self._cw_vert_var.get().strip()
                     if _vv:
@@ -22636,6 +22840,8 @@ def _launch_gui() -> None:
                     _iv = self._cw_iso_var.get().strip()
                     if _iv:
                         cmd += ["--cw-isolator-z", _iv]
+            if getattr(self, "_feed_choke_var", None) is not None and self._feed_choke_var.get():
+                cmd += ["--feed-choke"]
             bands = self._bands_var.get().strip()
             if bands:
                 cmd += ["--bands", bands]
@@ -22685,6 +22891,12 @@ def _launch_gui() -> None:
                     ("--cp-min",    self._cp_min_var),
                     ("--cp-max",    self._cp_max_var),
                     ("--cp-step",   self._cp_step_var),
+                ]
+            if _prof_gui.is_dipole:
+                _range_flags += [
+                    ("--offset-min",  self._offset_min_var),
+                    ("--offset-max",  self._offset_max_var),
+                    ("--offset-step", self._offset_step_var),
                 ]
             for flag, var in _range_flags:
                 v = var.get().strip()
